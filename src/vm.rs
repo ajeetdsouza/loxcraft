@@ -10,8 +10,8 @@ struct VM<'a> {
 }
 
 impl<'a> VM<'a> {
-    fn new(chunk: &'a Chunk) -> VM {
-        VM {
+    fn new(chunk: &'a Chunk) -> Self {
+        Self {
             chunk,
             ip: 0,
             stack: Vec::new(),
@@ -82,16 +82,11 @@ impl<'a> VM<'a> {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct Chunk {
     code: Vec<u8>,
     lines: Vec<usize>,
     constants: Vec<Value>,
-}
-
-#[derive(Clone, Debug)]
-enum Value {
-    Number(f64),
 }
 
 impl Chunk {
@@ -152,6 +147,11 @@ impl Chunk {
         println!("unknown opcode: {:#04x}", instruction);
         offset + 1
     }
+}
+
+#[derive(Clone, Debug)]
+enum Value {
+    Number(f64),
 }
 
 iota! {

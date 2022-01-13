@@ -1,20 +1,27 @@
-enum Expr {
+#[derive(Debug)]
+pub enum Expr {
     Literal(Literal),
     Infix(Box<InfixExpr>),
     Prefix(Box<PrefixExpr>),
 }
 
-struct Literal {
-    name: String,
+#[derive(Debug)]
+pub enum Literal {
+    Nil,
+    Bool(bool),
+    String(String),
+    Number(f64),
 }
 
-struct InfixExpr {
+#[derive(Debug)]
+pub struct InfixExpr {
     lt: Expr,
     op: InfixOp,
     rt: Expr,
 }
 
-enum InfixOp {
+#[derive(Debug)]
+pub enum InfixOp {
     Equal,
     NotEqual,
     Greater,
@@ -27,11 +34,14 @@ enum InfixOp {
     Divide,
 }
 
-struct PrefixExpr {
+#[derive(Debug)]
+pub struct PrefixExpr {
     op: PrefixOp,
     expr: Expr,
 }
 
-enum PrefixOp {
+#[derive(Debug)]
+pub enum PrefixOp {
     Negate,
+    Not,
 }

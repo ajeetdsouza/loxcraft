@@ -1,6 +1,6 @@
 use logos::Logos;
 
-#[derive(Clone, Copy, Debug, Eq, Hash, Logos, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Logos, PartialEq)]
 pub enum Token {
     // Single-character tokens.
     #[token("(")]

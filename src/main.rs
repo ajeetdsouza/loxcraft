@@ -1,12 +1,10 @@
 #![allow(dead_code)]
 mod app;
-mod ast;
-mod lexer;
-mod token;
+mod syntax;
 mod vm;
 
 use crate::app::App;
-use crate::lexer::Lexer;
+use crate::syntax::lexer::Lexer;
 
 use clap::Parser as _;
 use rustyline::error::ReadlineError;

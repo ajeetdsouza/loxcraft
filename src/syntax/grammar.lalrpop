@@ -1,0 +1,53 @@
+use crate::syntax::{ast, token};
+
+grammar;
+
+pub InfixOp: ast::InfixOp = {
+    "==" => ast::InfixOp::Equal,
+    "!=" => ast::InfixOp::NotEqual,
+    ">" => ast::InfixOp::Greater,
+    ">=" => ast::InfixOp::GreaterEqual,
+    "<" => ast::InfixOp::Less,
+    "<=" => ast::InfixOp::LessEqual,
+    "+" => ast::InfixOp::Add,
+    "-" => ast::InfixOp::Subtract,
+    "*" => ast::InfixOp::Multiply,
+    "/" => ast::InfixOp::Divide,
+}
+
+pub PrefixOp: ast::PrefixOp = {
+    "-" => ast::PrefixOp::Negate,
+    "!" => ast::PrefixOp::Not,
+}
+
+extern {
+    type Location = usize;
+    type Error = anyhow::Error;
+
+    enum token::Token {
+        // Single-character tokens.
+        "(" => token::Token::LtParen,
+        ")" => token::Token::RtParen,
+        "{" => token::Token::LtBrace,
+        "}" => token::Token::RtBrace,
+        "," => token::Token::Comma,
+        "." => token::Token::Dot,
+        "-" => token::Token::Minus,
+        "+" => token::Token::Plus,
+        ";" => token::Token::Semicolon,
+        "/" => token::Token::Slash,
+        "*" => token::Token::Asterisk,
+
+        // One or two character tokens.
+        "!" => token::Token::Bang,
+        "!=" => token::Token::BangEqual,
+        "=" => token::Token::Equal,
+        "==" => token::Token::EqualEqual,
+        ">" => token::Token::Greater,
+        ">=" => token::Token::GreaterEqual,
+        "<" => token::Token::Less,
+        "<=" => token::Token::LessEqual,
+
+        "NUMBER" => token::Token::Number,
+    }
+}
