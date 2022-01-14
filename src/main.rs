@@ -33,7 +33,7 @@ fn main() -> io::Result<()> {
                         chunk.compile(&expr);
 
                         let mut vm = VM::new(&chunk);
-                        vm.run();
+                        vm.run().unwrap();
                     }
                     Err(ReadlineError::Interrupted) => {
                         println!("CTRL-C");

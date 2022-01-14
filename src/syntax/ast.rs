@@ -9,8 +9,8 @@ pub enum Expr {
 pub enum ExprLiteral {
     Nil,
     Bool(bool),
-    String(String),
     Number(f64),
+    String(String),
 }
 
 #[derive(Debug)]

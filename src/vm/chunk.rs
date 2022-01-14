@@ -52,13 +52,20 @@ impl Chunk {
 
         let instruction = self.code[offset];
         match instruction {
-            op::CONSTANT => self.disassemble_instruction_constant("op::CONSTANT", offset),
-            op::ADD => self.disassemble_instruction_simple("op::ADD", offset),
-            op::SUBTRACT => self.disassemble_instruction_simple("op::SUBTRACT", offset),
-            op::MULTIPLY => self.disassemble_instruction_simple("op::MULTIPLY", offset),
-            op::DIVIDE => self.disassemble_instruction_simple("op::DIVIDE", offset),
-            op::NEGATE => self.disassemble_instruction_simple("op::NEGATE", offset),
-            op::RETURN => self.disassemble_instruction_simple("op::RETURN", offset),
+            op::CONSTANT => self.disassemble_instruction_constant("OP_CONSTANT", offset),
+            op::NIL => self.disassemble_instruction_simple("OP_NIL", offset),
+            op::FALSE => self.disassemble_instruction_simple("OP_FALSE", offset),
+            op::TRUE => self.disassemble_instruction_simple("OP_TRUE", offset),
+            op::EQUAL => self.disassemble_instruction_simple("OP_EQUAL", offset),
+            op::GREATER => self.disassemble_instruction_simple("OP_GREATER", offset),
+            op::LESS => self.disassemble_instruction_simple("OP_LESS", offset),
+            op::ADD => self.disassemble_instruction_simple("OP_ADD", offset),
+            op::SUBTRACT => self.disassemble_instruction_simple("OP_SUBTRACT", offset),
+            op::MULTIPLY => self.disassemble_instruction_simple("OP_MULTIPLY", offset),
+            op::DIVIDE => self.disassemble_instruction_simple("OP_DIVIDE", offset),
+            op::NOT => self.disassemble_instruction_simple("OP_NOT", offset),
+            op::NEGATE => self.disassemble_instruction_simple("OP_NEGATE", offset),
+            op::RETURN => self.disassemble_instruction_simple("OP_RETURN", offset),
             _ => self.disassemble_instruction_unknown(offset),
         }
     }
@@ -71,7 +78,7 @@ impl Chunk {
     fn disassemble_instruction_constant(&self, name: &str, offset: usize) -> usize {
         let constant_idx = self.code[offset + 1];
         let constant_val = &self.constants[constant_idx as usize];
-        println!("{:<24} {} '{:?}'", name, constant_idx, constant_val);
+        println!("{:<24} {} {:?}", name, constant_idx, constant_val);
         offset + 2
     }
 
@@ -86,11 +93,16 @@ impl Visitor for Chunk {
     type Result = Result<()>;
 
     fn visit_expr_literal(&mut self, expr: &ExprLiteral) -> Self::Result {
-        let value = match expr {
-            ExprLiteral::Number(number) => Value::Number(*number),
+        match expr {
+            ExprLiteral::Nil => self.emit_byte(op::NIL),
+            ExprLiteral::Bool(false) => self.emit_byte(op::FALSE),
+            ExprLiteral::Bool(true) => self.emit_byte(op::TRUE),
+            ExprLiteral::Number(number) => {
+                let value = Value::Number(*number);
+                self.emit_constant(value);
+            }
             _ => todo!(),
         };
-        self.emit_constant(value);
         Ok(())
     }
 
@@ -98,14 +110,27 @@ impl Visitor for Chunk {
         self.visit_expr(&expr.rt)?;
         self.visit_expr(&expr.lt)?;
 
-        let op = match expr.op {
-            OpInfix::Add => op::ADD,
-            OpInfix::Subtract => op::SUBTRACT,
-            OpInfix::Multiply => op::MULTIPLY,
-            OpInfix::Divide => op::DIVIDE,
-            _ => todo!(),
+        match expr.op {
+            OpInfix::Equal => self.emit_byte(op::EQUAL),
+            OpInfix::NotEqual => {
+                self.emit_byte(op::EQUAL);
+                self.emit_byte(op::NOT);
+            }
+            OpInfix::Greater => self.emit_byte(op::GREATER),
+            OpInfix::GreaterEqual => {
+                self.emit_byte(op::LESS);
+                self.emit_byte(op::NOT);
+            }
+            OpInfix::Less => self.emit_byte(op::LESS),
+            OpInfix::LessEqual => {
+                self.emit_byte(op::GREATER);
+                self.emit_byte(op::NOT);
+            }
+            OpInfix::Add => self.emit_byte(op::ADD),
+            OpInfix::Subtract => self.emit_byte(op::SUBTRACT),
+            OpInfix::Multiply => self.emit_byte(op::MULTIPLY),
+            OpInfix::Divide => self.emit_byte(op::DIVIDE),
         };
-        self.emit_byte(op);
 
         Ok(())
     }
@@ -113,11 +138,10 @@ impl Visitor for Chunk {
     fn visit_expr_prefix(&mut self, expr: &ExprPrefix) -> Self::Result {
         self.visit_expr(&expr.expr)?;
 
-        let op = match expr.op {
-            OpPrefix::Negate => op::NEGATE,
-            _ => todo!(),
+        match expr.op {
+            OpPrefix::Negate => self.emit_byte(op::NEGATE),
+            OpPrefix::Not => self.emit_byte(op::NOT),
         };
-        self.emit_byte(op);
 
         Ok(())
     }

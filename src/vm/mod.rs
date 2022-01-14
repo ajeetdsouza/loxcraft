@@ -5,7 +5,9 @@ mod value;
 pub use crate::vm::chunk::Chunk;
 use crate::vm::value::Value;
 
-use std::ops::{Add, Div, Mul, Neg, Sub};
+use anyhow::{bail, Context, Result};
+
+use std::ops::{Add, Div, Mul, Sub};
 
 pub struct VM<'a> {
     chunk: &'a Chunk,
@@ -24,10 +26,10 @@ impl<'a> VM<'a> {
         }
     }
 
-    pub fn run(&mut self) {
+    pub fn run(&mut self) -> Result<()> {
         loop {
             if self.debug {
-                print!("{:>10}", "");
+                print!("{:>5}", "");
                 for value in self.stack.iter() {
                     print!("[ {:?} ]", value);
                 }
@@ -38,20 +40,43 @@ impl<'a> VM<'a> {
             match self.read_byte() {
                 op::CONSTANT => {
                     let value = self.read_constant().clone();
-                    self.stack.push(value);
+                    self.push(value);
                 }
-                op::ADD => self.op_binary(Add::add),
-                op::SUBTRACT => self.op_binary(Sub::sub),
-                op::MULTIPLY => self.op_binary(Mul::mul),
-                op::DIVIDE => self.op_binary(Div::div),
-                op::NEGATE => self.op_unary(Neg::neg),
+                op::NIL => self.push(Value::Nil),
+                op::FALSE => self.push(Value::Bool(false)),
+                op::TRUE => self.push(Value::Bool(true)),
+                op::EQUAL => {
+                    let b = self.pop()?;
+                    let a = self.pop()?;
+                    self.push(Value::Bool(a == b));
+                }
+                op::GREATER => {
+                    let b = self.pop_number()?;
+                    let a = self.pop_number()?;
+                    self.push(Value::Bool(a > b));
+                }
+                op::LESS => {
+                    let b = self.pop_number()?;
+                    let a = self.pop_number()?;
+                    self.push(Value::Bool(a < b));
+                }
+                op::ADD => self.op_binary(Add::add)?,
+                op::SUBTRACT => self.op_binary(Sub::sub)?,
+                op::MULTIPLY => self.op_binary(Mul::mul)?,
+                op::DIVIDE => self.op_binary(Div::div)?,
+                op::NOT => {
+                    let value = self.pop()?;
+                    self.push(Value::Bool(value.is_truthy()));
+                }
+                op::NEGATE => {
+                    let value = self.pop_number()?;
+                    self.push(Value::Number(-value));
+                }
                 op::RETURN => {
-                    println!("{:?}", self.stack.pop());
-                    return;
+                    println!("{:?}", self.pop());
+                    return Ok(());
                 }
-                _ => {
-                    println!("unknown opcode");
-                }
+                _ => bail!("unknown opcode"),
             }
         }
     }
@@ -67,22 +92,25 @@ impl<'a> VM<'a> {
         &self.chunk.constants[constant_idx]
     }
 
-    fn op_binary<F: Fn(f64, f64) -> f64>(&mut self, f: F) {
-        let b = self.stack.pop().unwrap();
-        let a = self.stack.pop().unwrap();
-        let result = match (a, b) {
-            (Value::Number(a), Value::Number(b)) => Value::Number(f(a, b)),
-            _ => panic!("invalid operands to binary op"),
-        };
-        self.stack.push(result);
+    fn op_binary<F: Fn(f64, f64) -> f64>(&mut self, f: F) -> Result<()> {
+        let b = self.pop_number()?;
+        let a = self.pop_number()?;
+        self.push(Value::Number(f(a, b)));
+        Ok(())
     }
 
-    fn op_unary<F: Fn(f64) -> f64>(&mut self, f: F) {
-        let value = self.stack.pop().unwrap();
-        let result = match value {
-            Value::Number(n) => Value::Number(f(n)),
-            _ => panic!("invalid operand to unary op"),
-        };
-        self.stack.push(result);
+    fn pop(&mut self) -> Result<Value> {
+        self.stack.pop().context("stack underflow")
+    }
+
+    fn pop_number(&mut self) -> Result<f64> {
+        match self.pop()? {
+            Value::Number(n) => Ok(n),
+            value => bail!("expected a number, got a {:?}", value),
+        }
+    }
+
+    fn push(&mut self, value: Value) {
+        self.stack.push(value);
     }
 }
