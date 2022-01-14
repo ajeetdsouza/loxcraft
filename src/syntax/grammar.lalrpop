@@ -2,22 +2,61 @@ use crate::syntax::{ast, token};
 
 grammar;
 
-pub InfixOp: ast::InfixOp = {
-    "==" => ast::InfixOp::Equal,
-    "!=" => ast::InfixOp::NotEqual,
-    ">" => ast::InfixOp::Greater,
-    ">=" => ast::InfixOp::GreaterEqual,
-    "<" => ast::InfixOp::Less,
-    "<=" => ast::InfixOp::LessEqual,
-    "+" => ast::InfixOp::Add,
-    "-" => ast::InfixOp::Subtract,
-    "*" => ast::InfixOp::Multiply,
-    "/" => ast::InfixOp::Divide,
+pub Expr = ExprEquality;
+
+ExprEquality = ExprInfix<ExprEquality, OpEquality, ExprComparison>;
+OpEquality: ast::OpInfix = {
+    "==" => ast::OpInfix::Equal,
+    "!=" => ast::OpInfix::NotEqual,
 }
 
-pub PrefixOp: ast::PrefixOp = {
-    "-" => ast::PrefixOp::Negate,
-    "!" => ast::PrefixOp::Not,
+ExprComparison = ExprInfix<ExprComparison, OpComparison, ExprTerm>;
+OpComparison: ast::OpInfix = {
+    ">" => ast::OpInfix::Greater,
+    ">=" => ast::OpInfix::GreaterEqual,
+    "<" => ast::OpInfix::Less,
+    "<=" => ast::OpInfix::LessEqual,
+}
+
+ExprTerm = ExprInfix<ExprTerm, OpTerm, ExprFactor>;
+OpTerm: ast::OpInfix = {
+    "+" => ast::OpInfix::Add,
+    "-" => ast::OpInfix::Subtract,
+}
+
+ExprFactor = ExprInfix<ExprFactor, OpFactor, ExprPrefix>;
+OpFactor: ast::OpInfix = {
+    "*" => ast::OpInfix::Multiply,
+    "/" => ast::OpInfix::Divide,
+}
+
+ExprPrefix: ast::Expr = {
+    <op:OpPrefix> <expr:ExprPrefix> =>
+        ast::Expr::Prefix(Box::new(ast::ExprPrefix { <> })),
+    ExprPrimary,
+}
+OpPrefix: ast::OpPrefix = {
+    "-" => ast::OpPrefix::Negate,
+    "!" => ast::OpPrefix::Not,
+}
+
+ExprPrimary: ast::Expr = {
+    <Literal> => ast::Expr::Literal(<>),
+    "(" <Expr> ")",
+}
+
+ExprInfix<Lt, Op, Rt>: ast::Expr = {
+    <lt:Lt> <op:Op> <rt:Rt> =>
+        ast::Expr::Infix(Box::new(ast::ExprInfix { <> })),
+    Rt,
+}
+
+Literal: ast::Literal = {
+    "nil" => ast::Literal::Nil,
+    "false" => ast::Literal::Bool(false),
+    "true" => ast::Literal::Bool(true),
+    "string" => ast::Literal::String(<>),
+    "number" => ast::Literal::Number(<>),
 }
 
 extern {
@@ -48,6 +87,27 @@ extern {
         "<" => token::Token::Less,
         "<=" => token::Token::LessEqual,
 
-        "NUMBER" => token::Token::Number,
+        // Literals.
+        "identifier" => token::Token::Identifier(<String>),
+        "string" => token::Token::String(<String>),
+        "number" => token::Token::Number(<f64>),
+
+        // Keywords.
+        "and" => token::Token::And,
+        "class" => token::Token::Class,
+        "else" => token::Token::Else,
+        "false" => token::Token::False,
+        "for" => token::Token::For,
+        "fun" => token::Token::Fun,
+        "if" => token::Token::If,
+        "nil" => token::Token::Nil,
+        "or" => token::Token::Or,
+        "print" => token::Token::Print,
+        "return" => token::Token::Return,
+        "super" => token::Token::Super,
+        "this" => token::Token::This,
+        "true" => token::Token::True,
+        "var" => token::Token::Var,
+        "while" => token::Token::While,
     }
 }

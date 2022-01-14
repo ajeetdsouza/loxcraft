@@ -23,7 +23,11 @@ fn main() -> io::Result<()> {
                     Ok(line) => {
                         readline.add_history_entry(line.as_str());
                         let tokens = Lexer::new(&line).collect::<Vec<_>>();
-                        println!("{:?}", tokens)
+                        println!("{:?}", tokens);
+
+                        use crate::syntax::grammar::ExprParser;
+                        let result = ExprParser::new().parse(tokens.into_iter());
+                        println!("{:?}", result);
                     }
                     Err(ReadlineError::Interrupted) => {
                         println!("CTRL-C");

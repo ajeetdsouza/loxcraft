@@ -1,8 +1,8 @@
 #[derive(Debug)]
 pub enum Expr {
     Literal(Literal),
-    Infix(Box<InfixExpr>),
-    Prefix(Box<PrefixExpr>),
+    Infix(Box<ExprInfix>),
+    Prefix(Box<ExprPrefix>),
 }
 
 #[derive(Debug)]
@@ -14,14 +14,14 @@ pub enum Literal {
 }
 
 #[derive(Debug)]
-pub struct InfixExpr {
-    lt: Expr,
-    op: InfixOp,
-    rt: Expr,
+pub struct ExprInfix {
+    pub lt: Expr,
+    pub op: OpInfix,
+    pub rt: Expr,
 }
 
 #[derive(Debug)]
-pub enum InfixOp {
+pub enum OpInfix {
     Equal,
     NotEqual,
     Greater,
@@ -35,13 +35,13 @@ pub enum InfixOp {
 }
 
 #[derive(Debug)]
-pub struct PrefixExpr {
-    op: PrefixOp,
-    expr: Expr,
+pub struct ExprPrefix {
+    pub op: OpPrefix,
+    pub expr: Expr,
 }
 
 #[derive(Debug)]
-pub enum PrefixOp {
+pub enum OpPrefix {
     Negate,
     Not,
 }

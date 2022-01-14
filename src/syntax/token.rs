@@ -1,4 +1,5 @@
-use logos::Logos;
+use anyhow::{Context, Result};
+use logos::{Lexer, Logos};
 
 #[derive(Clone, Debug, Logos, PartialEq)]
 pub enum Token {
@@ -45,12 +46,12 @@ pub enum Token {
     LessEqual,
 
     // Literals.
-    #[regex("[a-zA-Z_][a-zA-Z0-9_]*")]
-    Identifier,
-    #[regex(r#""[^"]*""#)]
-    String,
-    #[regex(r#"[0-9]+(\.[0-9]*)?"#)]
-    Number,
+    #[regex("[a-zA-Z_][a-zA-Z0-9_]*", lex_identifier)]
+    Identifier(String),
+    #[regex(r#""[^"]*""#, lex_string)]
+    String(String),
+    #[regex(r#"[0-9]+(\.[0-9]*)?"#, lex_number)]
+    Number(f64),
 
     // Keywords.
     #[token("and")]
@@ -92,6 +93,23 @@ pub enum Token {
     Error,
 }
 
+fn lex_number(lexer: &mut Lexer<Token>) -> Result<f64> {
+    let slice = lexer.slice();
+    slice
+        .parse::<f64>()
+        .with_context(|| format!("failed to parse number: {}", slice))
+}
+
+fn lex_string(lexer: &mut Lexer<Token>) -> String {
+    let slice = lexer.slice();
+    slice[1..slice.len() - 1].to_string()
+}
+
+fn lex_identifier(lexer: &mut Lexer<Token>) -> String {
+    let slice = lexer.slice();
+    slice.to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -103,12 +121,12 @@ mod tests {
 
     #[test]
     fn test_number() {
-        check("123", Token::Number);
+        check("123", Token::Number(123.0));
     }
 
     #[test]
     fn test_number_decimal() {
-        check("123.456", Token::Number);
+        check("123.456", Token::Number(123.456));
     }
 
     #[test]
@@ -119,7 +137,7 @@ mod tests {
 
     #[test]
     fn test_string_comment() {
-        check(r#""// This is a comment""#, Token::String)
+        check(r#""// This is a comment""#, Token::String("".to_string()))
     }
 
     #[test]
