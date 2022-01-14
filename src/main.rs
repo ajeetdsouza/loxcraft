@@ -21,13 +21,19 @@ fn main() -> io::Result<()> {
                 let result = readline.readline(">>> ");
                 match result {
                     Ok(line) => {
-                        readline.add_history_entry(line.as_str());
-                        let tokens = Lexer::new(&line).collect::<Vec<_>>();
-                        println!("{:?}", tokens);
-
                         use crate::syntax::grammar::ExprParser;
-                        let result = ExprParser::new().parse(tokens.into_iter());
-                        println!("{:?}", result);
+                        use crate::vm::{Chunk, VM};
+
+                        readline.add_history_entry(line.as_str());
+
+                        let tokens = Lexer::new(&line);
+                        let expr = ExprParser::new().parse(tokens.into_iter()).unwrap();
+
+                        let mut chunk = Chunk::new();
+                        chunk.compile(&expr);
+
+                        let mut vm = VM::new(&chunk);
+                        vm.run();
                     }
                     Err(ReadlineError::Interrupted) => {
                         println!("CTRL-C");

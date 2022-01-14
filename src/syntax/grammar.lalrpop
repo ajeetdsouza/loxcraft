@@ -41,22 +41,22 @@ OpPrefix: ast::OpPrefix = {
 }
 
 ExprPrimary: ast::Expr = {
-    <Literal> => ast::Expr::Literal(<>),
+    <ExprLiteral> => ast::Expr::Literal(<>),
     "(" <Expr> ")",
+}
+
+ExprLiteral: ast::ExprLiteral = {
+    "nil" => ast::ExprLiteral::Nil,
+    "false" => ast::ExprLiteral::Bool(false),
+    "true" => ast::ExprLiteral::Bool(true),
+    "string" => ast::ExprLiteral::String(<>),
+    "number" => ast::ExprLiteral::Number(<>),
 }
 
 ExprInfix<Lt, Op, Rt>: ast::Expr = {
     <lt:Lt> <op:Op> <rt:Rt> =>
         ast::Expr::Infix(Box::new(ast::ExprInfix { <> })),
     Rt,
-}
-
-Literal: ast::Literal = {
-    "nil" => ast::Literal::Nil,
-    "false" => ast::Literal::Bool(false),
-    "true" => ast::Literal::Bool(true),
-    "string" => ast::Literal::String(<>),
-    "number" => ast::Literal::Number(<>),
 }
 
 extern {
