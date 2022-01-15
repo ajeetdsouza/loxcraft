@@ -2,7 +2,13 @@ use crate::syntax::{ast, token};
 
 grammar;
 
-pub Expr = ExprEquality;
+pub Expr = ExprLogicOr;
+
+ExprLogicOr = ExprInfix<ExprLogicOr, OpLogicOr, ExprLogicAnd>;
+OpLogicOr: ast::OpInfix = "or" => ast::OpInfix::LogicOr;
+
+ExprLogicAnd = ExprInfix<ExprLogicAnd, OpLogicAnd, ExprEquality>;
+OpLogicAnd: ast::OpInfix = "and" => ast::OpInfix::LogicAnd;
 
 ExprEquality = ExprInfix<ExprEquality, OpEquality, ExprComparison>;
 OpEquality: ast::OpInfix = {

@@ -5,9 +5,10 @@ mod value;
 pub use crate::vm::chunk::Chunk;
 use crate::vm::value::Value;
 
-use anyhow::{bail, Context, Result};
+use gc::Gc;
+use thiserror::Error;
 
-use std::ops::{Add, Div, Mul, Sub};
+use self::value::Object;
 
 pub struct VM<'a> {
     chunk: &'a Chunk,
@@ -26,14 +27,10 @@ impl<'a> VM<'a> {
         }
     }
 
-    pub fn run(&mut self) -> Result<()> {
-        loop {
+    pub fn run(&mut self) -> Result<(), RuntimeError> {
+        while self.ip < self.chunk.code.len() {
             if self.debug {
-                print!("{:>5}", "");
-                for value in self.stack.iter() {
-                    print!("[ {:?} ]", value);
-                }
-                println!();
+                self.print_stack();
                 self.chunk.disassemble_instruction(self.ip);
             }
 
@@ -46,39 +43,130 @@ impl<'a> VM<'a> {
                 op::FALSE => self.push(Value::Bool(false)),
                 op::TRUE => self.push(Value::Bool(true)),
                 op::EQUAL => {
-                    let b = self.pop()?;
-                    let a = self.pop()?;
+                    let b = self.pop();
+                    let a = self.pop();
                     self.push(Value::Bool(a == b));
                 }
                 op::GREATER => {
-                    let b = self.pop_number()?;
-                    let a = self.pop_number()?;
-                    self.push(Value::Bool(a > b));
+                    let b = self.pop();
+                    let a = self.pop();
+                    match (&a, &b) {
+                        (Value::Number(a), Value::Number(b)) => {
+                            self.push(Value::Bool(a > b));
+                        }
+                        _ => {
+                            return Err(RuntimeError::type_binary_op(
+                                "OP_GREATER",
+                                a.type_(),
+                                b.type_(),
+                            ))
+                        }
+                    }
                 }
                 op::LESS => {
-                    let b = self.pop_number()?;
-                    let a = self.pop_number()?;
-                    self.push(Value::Bool(a < b));
+                    let b = self.pop();
+                    let a = self.pop();
+                    match (&a, &b) {
+                        (Value::Number(a), Value::Number(b)) => {
+                            self.push(Value::Bool(a < b));
+                        }
+                        _ => {
+                            return Err(RuntimeError::type_binary_op(
+                                "OP_LESS",
+                                a.type_(),
+                                b.type_(),
+                            ))
+                        }
+                    }
                 }
-                op::ADD => self.op_binary(Add::add)?,
-                op::SUBTRACT => self.op_binary(Sub::sub)?,
-                op::MULTIPLY => self.op_binary(Mul::mul)?,
-                op::DIVIDE => self.op_binary(Div::div)?,
+                op::ADD => {
+                    let b = self.pop();
+                    let a = self.pop();
+                    match (&a, &b) {
+                        (Value::Number(a), Value::Number(b)) => self.push(Value::Number(a + b)),
+                        (Value::Object(Object::String(a)), Value::Object(Object::String(b))) => {
+                            let object = Object::String(Gc::new(a.to_string() + b.as_ref()));
+                            self.push(Value::Object(object));
+                        }
+                        (val1, val2) => {
+                            return Err(RuntimeError::type_binary_op(
+                                "OP_ADD",
+                                val1.type_(),
+                                val2.type_(),
+                            ))
+                        }
+                    }
+                }
+                op::SUBTRACT => {
+                    let b = self.pop();
+                    let a = self.pop();
+                    match (a, b) {
+                        (Value::Number(a), Value::Number(b)) => self.push(Value::Number(a - b)),
+                        (val1, val2) => {
+                            return Err(RuntimeError::type_binary_op(
+                                "OP_SUBTRACT",
+                                val1.type_(),
+                                val2.type_(),
+                            ))
+                        }
+                    }
+                }
+                op::MULTIPLY => {
+                    let b = self.pop();
+                    let a = self.pop();
+                    match (a, b) {
+                        (Value::Number(a), Value::Number(b)) => self.push(Value::Number(a * b)),
+                        (val1, val2) => {
+                            return Err(RuntimeError::type_binary_op(
+                                "OP_MULTIPLY",
+                                val1.type_(),
+                                val2.type_(),
+                            ))
+                        }
+                    }
+                }
+                op::DIVIDE => {
+                    let b = self.pop();
+                    let a = self.pop();
+                    match (a, b) {
+                        (Value::Number(a), Value::Number(b)) => self.push(Value::Number(a / b)),
+                        (val1, val2) => {
+                            return Err(RuntimeError::type_binary_op(
+                                "OP_DIVIDE",
+                                val1.type_(),
+                                val2.type_(),
+                            ))
+                        }
+                    }
+                }
                 op::NOT => {
-                    let value = self.pop()?;
+                    let value = self.pop();
                     self.push(Value::Bool(value.is_truthy()));
                 }
-                op::NEGATE => {
-                    let value = self.pop_number()?;
-                    self.push(Value::Number(-value));
-                }
+                op::NEGATE => match self.pop() {
+                    Value::Number(value) => self.push(Value::Number(-value)),
+                    value => return Err(RuntimeError::type_unary_op("OP_NEGATE", value.type_())),
+                },
                 op::RETURN => {
                     println!("{:?}", self.pop());
                     return Ok(());
                 }
-                _ => bail!("unknown opcode"),
+                op => panic!("encountered an unknown opcode: {:#04x}", op),
             }
         }
+
+        if self.debug {
+            self.print_stack();
+        }
+        Ok(())
+    }
+
+    fn print_stack(&self) {
+        print!("{:>5}", "");
+        for value in self.stack.iter() {
+            print!("[ {:?} ]", value);
+        }
+        println!();
     }
 
     fn read_byte(&mut self) -> u8 {
@@ -92,25 +180,31 @@ impl<'a> VM<'a> {
         &self.chunk.constants[constant_idx]
     }
 
-    fn op_binary<F: Fn(f64, f64) -> f64>(&mut self, f: F) -> Result<()> {
-        let b = self.pop_number()?;
-        let a = self.pop_number()?;
-        self.push(Value::Number(f(a, b)));
-        Ok(())
-    }
-
-    fn pop(&mut self) -> Result<Value> {
-        self.stack.pop().context("stack underflow")
-    }
-
-    fn pop_number(&mut self) -> Result<f64> {
-        match self.pop()? {
-            Value::Number(n) => Ok(n),
-            value => bail!("expected a number, got a {:?}", value),
-        }
+    fn pop(&mut self) -> Value {
+        self.stack
+            .pop()
+            .expect("stack underflow: tried to pop data, but the stack is empty")
     }
 
     fn push(&mut self, value: Value) {
         self.stack.push(value);
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum RuntimeError {
+    #[error("TypeError: {0}")]
+    TypeError(String),
+}
+
+impl RuntimeError {
+    fn type_binary_op(op: &str, type1: &str, type2: &str) -> Self {
+        RuntimeError::TypeError(format!(
+            "unsupported operand type(s) for {op}: '{type1}' and '{type2}'",
+        ))
+    }
+
+    fn type_unary_op(op: &str, type_: &str) -> Self {
+        RuntimeError::TypeError(format!("unsupported operand type for {op}: '{type_}'"))
     }
 }

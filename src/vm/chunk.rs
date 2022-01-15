@@ -1,8 +1,9 @@
 use crate::syntax::ast::{Expr, ExprInfix, ExprLiteral, ExprPrefix, OpInfix, OpPrefix, Visitor};
 use crate::vm::op;
-use crate::vm::value::Value;
+use crate::vm::value::{Object, Value};
 
 use anyhow::Result;
+use gc::Gc;
 
 #[derive(Debug)]
 pub struct Chunk {
@@ -101,16 +102,22 @@ impl Visitor for Chunk {
                 let value = Value::Number(*number);
                 self.emit_constant(value);
             }
-            _ => todo!(),
+            ExprLiteral::String(string) => {
+                let object = Object::String(Gc::new(string.to_string()));
+                let value = Value::Object(object);
+                self.emit_constant(value);
+            }
         };
         Ok(())
     }
 
     fn visit_expr_infix(&mut self, expr: &ExprInfix) -> Self::Result {
-        self.visit_expr(&expr.rt)?;
         self.visit_expr(&expr.lt)?;
+        self.visit_expr(&expr.rt)?;
 
         match expr.op {
+            OpInfix::LogicAnd => todo!(),
+            OpInfix::LogicOr => todo!(),
             OpInfix::Equal => self.emit_byte(op::EQUAL),
             OpInfix::NotEqual => {
                 self.emit_byte(op::EQUAL);

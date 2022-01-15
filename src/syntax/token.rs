@@ -50,7 +50,7 @@ pub enum Token {
     Identifier(String),
     #[regex(r#""[^"]*""#, lex_string)]
     String(String),
-    #[regex(r#"[0-9]+(\.[0-9]*)?"#, lex_number)]
+    #[regex(r#"[0-9]+(\.[0-9]+)?"#, lex_number)]
     Number(f64),
 
     // Keywords.

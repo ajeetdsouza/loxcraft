@@ -22,6 +22,8 @@ pub struct ExprInfix {
 
 #[derive(Debug)]
 pub enum OpInfix {
+    LogicOr,
+    LogicAnd,
     Equal,
     NotEqual,
     Greater,
