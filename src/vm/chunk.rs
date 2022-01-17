@@ -1,5 +1,6 @@
 use crate::syntax::ast::{
-    Expr, ExprInfix, ExprLiteral, ExprPrefix, OpInfix, OpPrefix, Stmt, StmtExpr, StmtPrint, StmtVar,
+    Expr, ExprAssign, ExprInfix, ExprLiteral, ExprPrefix, ExprVariable, OpInfix, OpPrefix, Stmt,
+    StmtExpr, StmtPrint, StmtVar,
 };
 use crate::vm::op;
 use crate::vm::value::{Object, Value};
@@ -69,7 +70,9 @@ impl Chunk {
             op::FALSE => self.dump_instruction_simple("OP_FALSE", offset),
             op::TRUE => self.dump_instruction_simple("OP_TRUE", offset),
             op::POP => self.dump_instruction_simple("OP_POP", offset),
+            op::GET_GLOBAL => self.dump_instruction_constant("OP_GET_GLOBAL", offset),
             op::DEFINE_GLOBAL => self.dump_instruction_constant("OP_DEFINE_GLOBAL", offset),
+            op::SET_GLOBAL => self.dump_instruction_constant("OP_SET_GLOBAL", offset),
             op::EQUAL => self.dump_instruction_simple("OP_EQUAL", offset),
             op::GREATER => self.dump_instruction_simple("OP_GREATER", offset),
             op::LESS => self.dump_instruction_simple("OP_LESS", offset),
@@ -124,7 +127,7 @@ impl Chunk {
     }
 
     fn compile_stmt_var(&mut self, var: &StmtVar) -> CompileResult {
-        self.compile_expr(&var.expr)?;
+        self.compile_expr(&var.value)?;
 
         self.emit_byte(op::DEFINE_GLOBAL);
 
@@ -137,10 +140,23 @@ impl Chunk {
 
     fn compile_expr(&mut self, expr: &Expr) -> CompileResult {
         match expr {
+            Expr::Assign(assign) => self.compile_expr_assign(assign),
             Expr::Literal(literal) => self.compile_expr_literal(literal),
             Expr::Infix(infix) => self.compile_expr_infix(infix),
             Expr::Prefix(prefix) => self.compile_expr_prefix(prefix),
+            Expr::Variable(variable) => self.compile_expr_variable(variable),
         }
+    }
+
+    fn compile_expr_assign(&mut self, assign: &ExprAssign) -> CompileResult {
+        self.compile_expr(&assign.value)?;
+
+        self.emit_byte(op::SET_GLOBAL);
+        let name = Value::Object(Object::String(Gc::new(assign.name.to_string())));
+        let idx = self.make_constant(name)?;
+        self.emit_byte(idx);
+
+        Ok(())
     }
 
     fn compile_expr_literal(&mut self, expr: &ExprLiteral) -> CompileResult {
@@ -199,6 +215,16 @@ impl Chunk {
             OpPrefix::Negate => self.emit_byte(op::NEGATE),
             OpPrefix::Not => self.emit_byte(op::NOT),
         };
+
+        Ok(())
+    }
+
+    fn compile_expr_variable(&mut self, variable: &ExprVariable) -> CompileResult {
+        self.emit_byte(op::GET_GLOBAL);
+
+        let name = Value::Object(Object::String(Gc::new(variable.name.to_string())));
+        let idx = self.make_constant(name)?;
+        self.emit_byte(idx);
 
         Ok(())
     }

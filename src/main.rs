@@ -16,23 +16,25 @@ fn main() -> io::Result<()> {
     let app = App::parse();
     match app {
         App::Repl => {
+            use crate::vm::{Chunk, VM};
+
             let mut readline = Editor::<()>::new();
+
+            let chunk = Chunk::new();
+            let mut vm = VM::new(chunk);
+
             loop {
                 let result = readline.readline(">>> ");
                 match result {
                     Ok(line) => {
                         use crate::syntax::grammar::StmtParser;
-                        use crate::vm::{Chunk, VM};
 
                         readline.add_history_entry(line.as_str());
 
                         let tokens = Lexer::new(&line);
                         let stmt = StmtParser::new().parse(tokens.into_iter()).unwrap();
 
-                        let mut chunk = Chunk::new();
-                        chunk.compile(&stmt);
-
-                        let mut vm = VM::new(&chunk);
+                        vm.chunk.compile(&stmt);
                         vm.run().unwrap();
                     }
                     Err(ReadlineError::Interrupted) => {
@@ -49,7 +51,9 @@ fn main() -> io::Result<()> {
                     }
                 }
             }
-            Ok(())
         }
+        App::Run { .. } => todo!(),
     }
+
+    Ok(())
 }

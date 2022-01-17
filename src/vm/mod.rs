@@ -12,16 +12,16 @@ use std::collections::HashMap;
 
 use self::value::Object;
 
-pub struct VM<'a> {
-    chunk: &'a Chunk,
+pub struct VM {
+    pub chunk: Chunk,
     ip: usize,
     stack: Vec<Value>,
     globals: HashMap<String, Value>,
     debug: bool,
 }
 
-impl<'a> VM<'a> {
-    pub fn new(chunk: &'a Chunk) -> Self {
+impl VM {
+    pub fn new(chunk: Chunk) -> Self {
         Self {
             chunk,
             ip: 0,
@@ -72,6 +72,23 @@ impl<'a> VM<'a> {
                     };
                     let value = self.pop();
                     self.globals.insert(name, value);
+                }
+                op::SET_GLOBAL => {
+                    let name = match self.read_constant() {
+                        Value::Object(Object::String(string)) => string.to_string(),
+                        value => panic!(
+                            "expected identifier of type 'string', got type '{}'",
+                            value.type_()
+                        ),
+                    };
+                    let value = self.peek().clone();
+
+                    #[allow(clippy::map_entry)]
+                    if self.globals.contains_key(&name) {
+                        self.globals.insert(name, value);
+                    } else {
+                        return Err(RuntimeError::name_not_defined(&name));
+                    }
                 }
                 op::EQUAL => {
                     let b = self.pop();
@@ -206,6 +223,12 @@ impl<'a> VM<'a> {
     fn read_constant(&mut self) -> &Value {
         let constant_idx = self.read_byte() as usize;
         &self.chunk.constants[constant_idx]
+    }
+
+    fn peek(&mut self) -> &Value {
+        self.stack
+            .last()
+            .expect("stack underflow: tried to peek data, but the stack is empty")
     }
 
     fn pop(&mut self) -> Value {

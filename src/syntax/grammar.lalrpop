@@ -15,10 +15,16 @@ StmtPrint: ast::Stmt =
     "print" <expr:Expr> ";" => ast::Stmt::Print(ast::StmtPrint { <> });
 
 StmtVar: ast::Stmt =
-    "var" <name:"identifier"> "=" <expr:Expr> ";" =>
+    "var" <name:"identifier"> "=" <value:Expr> ";" =>
         ast::Stmt::Var(ast::StmtVar { <> });
 
-pub Expr = ExprLogicOr;
+pub Expr = ExprAssign;
+
+ExprAssign = {
+    <name:"identifier"> "=" <value:Expr> =>
+        ast::Expr::Assign(Box::new(ast::ExprAssign { <> })),
+    ExprLogicOr,
+}
 
 ExprLogicOr = ExprInfix<ExprLogicOr, OpLogicOr, ExprLogicAnd>;
 OpLogicOr: ast::OpInfix = "or" => ast::OpInfix::LogicOr;
@@ -64,6 +70,7 @@ OpPrefix: ast::OpPrefix = {
 
 ExprPrimary: ast::Expr = {
     <ExprLiteral> => ast::Expr::Literal(<>),
+    <ExprVariable> => ast::Expr::Variable(<>),
     "(" <Expr> ")",
 }
 
@@ -74,6 +81,9 @@ ExprLiteral: ast::ExprLiteral = {
     "string" => ast::ExprLiteral::String(<>),
     "number" => ast::ExprLiteral::Number(<>),
 }
+
+ExprVariable: ast::ExprVariable =
+    <name:"identifier"> => ast::ExprVariable { <> };
 
 ExprInfix<Lt, Op, Rt>: ast::Expr = {
     <lt:Lt> <op:Op> <rt:Rt> =>

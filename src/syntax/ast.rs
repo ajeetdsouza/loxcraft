@@ -18,14 +18,22 @@ pub struct StmtPrint {
 #[derive(Debug)]
 pub struct StmtVar {
     pub name: String,
-    pub expr: Expr,
+    pub value: Expr,
 }
 
 #[derive(Debug)]
 pub enum Expr {
+    Assign(Box<ExprAssign>),
     Literal(ExprLiteral),
     Infix(Box<ExprInfix>),
     Prefix(Box<ExprPrefix>),
+    Variable(ExprVariable),
+}
+
+#[derive(Debug)]
+pub struct ExprAssign {
+    pub name: String,
+    pub value: Expr,
 }
 
 #[derive(Debug)]
@@ -69,4 +77,9 @@ pub struct ExprPrefix {
 pub enum OpPrefix {
     Negate,
     Not,
+}
+
+#[derive(Debug)]
+pub struct ExprVariable {
+    pub name: String,
 }
