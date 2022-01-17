@@ -48,6 +48,23 @@ impl VM {
                 op::POP => {
                     self.pop();
                 }
+                op::GET_LOCAL => {
+                    let slot = self.read_byte();
+                    let value = self
+                        .stack
+                        .get(slot as usize)
+                        .expect("tried to access a non-existent slot")
+                        .clone();
+                    self.push(value);
+                }
+                op::SET_LOCAL => {
+                    let slot = self.read_byte();
+                    let value = self.peek().clone();
+                    *self
+                        .stack
+                        .get_mut(slot as usize)
+                        .expect("tried to access a non-existent slot") = value;
+                }
                 op::GET_GLOBAL => {
                     let name = &match self.read_constant() {
                         Value::Object(Object::String(string)) => string.to_string(),

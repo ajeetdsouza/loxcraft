@@ -1,8 +1,14 @@
 #[derive(Debug)]
 pub enum Stmt {
+    Block(StmtBlock),
     Expr(StmtExpr),
     Print(StmtPrint),
     Var(StmtVar),
+}
+
+#[derive(Debug)]
+pub struct StmtBlock {
+    pub stmts: Vec<Stmt>,
 }
 
 #[derive(Debug)]

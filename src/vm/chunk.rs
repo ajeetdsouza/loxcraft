@@ -1,11 +1,11 @@
 use crate::syntax::ast::{
     Expr, ExprAssign, ExprInfix, ExprLiteral, ExprPrefix, ExprVariable, OpInfix, OpPrefix, Stmt,
-    StmtExpr, StmtPrint, StmtVar,
+    StmtBlock, StmtExpr, StmtPrint, StmtVar,
 };
 use crate::vm::op;
 use crate::vm::value::{Object, Value};
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use gc::Gc;
 
 type CompileResult<T = ()> = Result<T>;
@@ -14,6 +14,8 @@ type CompileResult<T = ()> = Result<T>;
 pub struct Chunk {
     pub code: Vec<u8>,
     pub constants: Vec<Value>,
+    locals: Vec<Local>,
+    scope_depth: usize,
 }
 
 impl Chunk {
@@ -21,6 +23,8 @@ impl Chunk {
         Self {
             code: Vec::new(),
             constants: Vec::new(),
+            locals: Vec::new(),
+            scope_depth: 0,
         }
     }
 
@@ -47,6 +51,45 @@ impl Chunk {
         Ok(idx)
     }
 
+    fn begin_scope(&mut self) {
+        self.scope_depth += 1;
+    }
+
+    fn end_scope(&mut self) {
+        debug_assert!(self.scope_depth > 0);
+        self.scope_depth -= 1;
+
+        while self
+            .locals
+            .last()
+            .map(|local| local.depth > self.scope_depth)
+            .unwrap_or(false)
+        {
+            self.locals.pop();
+            self.emit_byte(op::POP);
+        }
+    }
+
+    fn add_local(&mut self, name: &str) -> CompileResult {
+        if self.locals.len() >= 256 {
+            bail!("cannot define more than 256 local variables within a chunk");
+        }
+        self.locals.push(Local {
+            name: name.to_string(),
+            depth: self.scope_depth,
+        });
+        Ok(())
+    }
+
+    fn resolve_local(&self, name: &str) -> Option<usize> {
+        for (idx, local) in self.locals.iter().enumerate().rev() {
+            if local.name == name {
+                return Some(idx);
+            }
+        }
+        None
+    }
+
     pub fn dump(&self, name: &str) {
         println!("== {} ==", name);
         let mut offset = 0;
@@ -70,6 +113,8 @@ impl Chunk {
             op::FALSE => self.dump_instruction_simple("OP_FALSE", offset),
             op::TRUE => self.dump_instruction_simple("OP_TRUE", offset),
             op::POP => self.dump_instruction_simple("OP_POP", offset),
+            op::GET_LOCAL => self.dump_instruction_byte("OP_GET_LOCAL", offset),
+            op::SET_LOCAL => self.dump_instruction_byte("OP_SET_LOCAL", offset),
             op::GET_GLOBAL => self.dump_instruction_constant("OP_GET_GLOBAL", offset),
             op::DEFINE_GLOBAL => self.dump_instruction_constant("OP_DEFINE_GLOBAL", offset),
             op::SET_GLOBAL => self.dump_instruction_constant("OP_SET_GLOBAL", offset),
@@ -93,10 +138,16 @@ impl Chunk {
         offset + 1
     }
 
+    fn dump_instruction_byte(&self, name: &str, offset: usize) -> usize {
+        let byte = self.code[offset + 1];
+        println!("{:<24} {}", name, byte);
+        offset + 2
+    }
+
     fn dump_instruction_constant(&self, name: &str, offset: usize) -> usize {
-        let constant_idx = self.code[offset + 1];
-        let constant_val = &self.constants[constant_idx as usize];
-        println!("{:<24} {} {:?}", name, constant_idx, constant_val);
+        let idx = self.code[offset + 1];
+        let val = &self.constants[idx as usize];
+        println!("{:<24} {} {:?}", name, idx, val);
         offset + 2
     }
 
@@ -108,10 +159,20 @@ impl Chunk {
 
     fn compile_stmt(&mut self, stmt: &Stmt) -> CompileResult {
         match stmt {
+            Stmt::Block(block) => self.compile_stmt_block(block),
             Stmt::Expr(expr) => self.compile_stmt_expr(expr),
             Stmt::Print(print) => self.compile_stmt_print(print),
             Stmt::Var(var) => self.compile_stmt_var(var),
         }
+    }
+
+    fn compile_stmt_block(&mut self, block: &StmtBlock) -> CompileResult {
+        self.begin_scope();
+        for stmt in &block.stmts {
+            self.compile_stmt(stmt)?;
+        }
+        self.end_scope();
+        Ok(())
     }
 
     fn compile_stmt_expr(&mut self, expr: &StmtExpr) -> CompileResult {
@@ -129,8 +190,19 @@ impl Chunk {
     fn compile_stmt_var(&mut self, var: &StmtVar) -> CompileResult {
         self.compile_expr(&var.value)?;
 
-        self.emit_byte(op::DEFINE_GLOBAL);
+        if self.scope_depth > 0 {
+            for local in self.locals.iter().rev() {
+                if local.depth < self.scope_depth {
+                    break;
+                }
+                if local.name == var.name {
+                    bail!("'{}' has already been defined in this scope", var.name);
+                }
+            }
+            return self.add_local(&var.name);
+        }
 
+        self.emit_byte(op::DEFINE_GLOBAL);
         let name = Value::Object(Object::String(Gc::new(var.name.to_string())));
         let idx = self.make_constant(name)?;
         self.emit_byte(idx);
@@ -220,12 +292,28 @@ impl Chunk {
     }
 
     fn compile_expr_variable(&mut self, variable: &ExprVariable) -> CompileResult {
-        self.emit_byte(op::GET_GLOBAL);
+        if let Some(idx) = self.resolve_local(&variable.name) {
+            let idx = idx
+                .try_into()
+                .expect("more than 256 local variables were defined within a chunk");
 
+            self.emit_byte(op::GET_LOCAL);
+            self.emit_byte(idx);
+
+            return Ok(());
+        }
+
+        self.emit_byte(op::GET_GLOBAL);
         let name = Value::Object(Object::String(Gc::new(variable.name.to_string())));
         let idx = self.make_constant(name)?;
         self.emit_byte(idx);
 
         Ok(())
     }
+}
+
+#[derive(Debug)]
+struct Local {
+    name: String,
+    depth: usize,
 }

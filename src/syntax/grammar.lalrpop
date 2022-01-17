@@ -3,10 +3,14 @@ use crate::syntax::{ast, token};
 grammar;
 
 pub Stmt = {
+    StmtBlock,
     StmtExpr,
     StmtPrint,
     StmtVar,
 }
+
+StmtBlock: ast::Stmt =
+    "{" <stmts:Stmt*> "}" => ast::Stmt::Block(ast::StmtBlock { <> });
 
 StmtExpr: ast::Stmt =
     <expr:Expr> ";" => ast::Stmt::Expr(ast::StmtExpr { <> });
