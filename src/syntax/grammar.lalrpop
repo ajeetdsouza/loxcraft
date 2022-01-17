@@ -2,6 +2,22 @@ use crate::syntax::{ast, token};
 
 grammar;
 
+pub Stmt = {
+    StmtExpr,
+    StmtPrint,
+    StmtVar,
+}
+
+StmtExpr: ast::Stmt =
+    <expr:Expr> ";" => ast::Stmt::Expr(ast::StmtExpr { <> });
+
+StmtPrint: ast::Stmt =
+    "print" <expr:Expr> ";" => ast::Stmt::Print(ast::StmtPrint { <> });
+
+StmtVar: ast::Stmt =
+    "var" <name:"identifier"> "=" <expr:Expr> ";" =>
+        ast::Stmt::Var(ast::StmtVar { <> });
+
 pub Expr = ExprLogicOr;
 
 ExprLogicOr = ExprInfix<ExprLogicOr, OpLogicOr, ExprLogicAnd>;

@@ -21,16 +21,16 @@ fn main() -> io::Result<()> {
                 let result = readline.readline(">>> ");
                 match result {
                     Ok(line) => {
-                        use crate::syntax::grammar::ExprParser;
+                        use crate::syntax::grammar::StmtParser;
                         use crate::vm::{Chunk, VM};
 
                         readline.add_history_entry(line.as_str());
 
                         let tokens = Lexer::new(&line);
-                        let expr = ExprParser::new().parse(tokens.into_iter()).unwrap();
+                        let stmt = StmtParser::new().parse(tokens.into_iter()).unwrap();
 
                         let mut chunk = Chunk::new();
-                        chunk.compile(&expr);
+                        chunk.compile(&stmt);
 
                         let mut vm = VM::new(&chunk);
                         vm.run().unwrap();

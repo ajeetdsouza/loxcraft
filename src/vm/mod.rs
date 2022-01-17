@@ -8,12 +8,15 @@ use crate::vm::value::Value;
 use gc::Gc;
 use thiserror::Error;
 
+use std::collections::HashMap;
+
 use self::value::Object;
 
 pub struct VM<'a> {
     chunk: &'a Chunk,
     ip: usize,
     stack: Vec<Value>,
+    globals: HashMap<String, Value>,
     debug: bool,
 }
 
@@ -23,6 +26,7 @@ impl<'a> VM<'a> {
             chunk,
             ip: 0,
             stack: Vec::new(),
+            globals: HashMap::new(),
             debug: true,
         }
     }
@@ -30,8 +34,7 @@ impl<'a> VM<'a> {
     pub fn run(&mut self) -> Result<(), RuntimeError> {
         while self.ip < self.chunk.code.len() {
             if self.debug {
-                self.print_stack();
-                self.chunk.disassemble_instruction(self.ip);
+                self.chunk.dump_instruction(self.ip);
             }
 
             match self.read_byte() {
@@ -42,6 +45,34 @@ impl<'a> VM<'a> {
                 op::NIL => self.push(Value::Nil),
                 op::FALSE => self.push(Value::Bool(false)),
                 op::TRUE => self.push(Value::Bool(true)),
+                op::POP => {
+                    self.pop();
+                }
+                op::GET_GLOBAL => {
+                    let name = &match self.read_constant() {
+                        Value::Object(Object::String(string)) => string.to_string(),
+                        value => panic!(
+                            "expected identifier of type 'string', got type '{}'",
+                            value.type_()
+                        ),
+                    };
+                    let value = match self.globals.get(name) {
+                        Some(value) => value.clone(),
+                        None => return Err(RuntimeError::name_not_defined(name)),
+                    };
+                    self.push(value);
+                }
+                op::DEFINE_GLOBAL => {
+                    let name = match self.read_constant() {
+                        Value::Object(Object::String(string)) => string.to_string(),
+                        value => panic!(
+                            "expected identifier of type 'string', got type '{}'",
+                            value.type_()
+                        ),
+                    };
+                    let value = self.pop();
+                    self.globals.insert(name, value);
+                }
                 op::EQUAL => {
                     let b = self.pop();
                     let a = self.pop();
@@ -147,26 +178,23 @@ impl<'a> VM<'a> {
                     Value::Number(value) => self.push(Value::Number(-value)),
                     value => return Err(RuntimeError::type_unary_op("OP_NEGATE", value.type_())),
                 },
+                op::PRINT => println!("{:?}", self.pop()),
                 op::RETURN => {
                     println!("{:?}", self.pop());
-                    return Ok(());
+                    break;
                 }
                 op => panic!("encountered an unknown opcode: {:#04x}", op),
             }
         }
 
         if self.debug {
-            self.print_stack();
+            print!("{:>5}", "");
+            for value in self.stack.iter() {
+                print!("[ {:?} ]", value);
+            }
+            println!();
         }
         Ok(())
-    }
-
-    fn print_stack(&self) {
-        print!("{:>5}", "");
-        for value in self.stack.iter() {
-            print!("[ {:?} ]", value);
-        }
-        println!();
     }
 
     fn read_byte(&mut self) -> u8 {
@@ -193,18 +221,24 @@ impl<'a> VM<'a> {
 
 #[derive(Debug, Error)]
 pub enum RuntimeError {
+    #[error("NameError: {0}")]
+    NameError(String),
     #[error("TypeError: {0}")]
     TypeError(String),
 }
 
 impl RuntimeError {
+    fn name_not_defined(name: &str) -> Self {
+        Self::NameError(format!("name '{name}' is not defined"))
+    }
+
     fn type_binary_op(op: &str, type1: &str, type2: &str) -> Self {
-        RuntimeError::TypeError(format!(
+        Self::TypeError(format!(
             "unsupported operand type(s) for {op}: '{type1}' and '{type2}'",
         ))
     }
 
     fn type_unary_op(op: &str, type_: &str) -> Self {
-        RuntimeError::TypeError(format!("unsupported operand type for {op}: '{type_}'"))
+        Self::TypeError(format!("unsupported operand type for {op}: '{type_}'"))
     }
 }

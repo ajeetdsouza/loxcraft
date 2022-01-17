@@ -5,6 +5,9 @@ iota! {
             , NIL
             , FALSE
             , TRUE
+            , POP
+            , GET_GLOBAL
+            , DEFINE_GLOBAL
             , EQUAL
             , GREATER
             , LESS
@@ -14,5 +17,6 @@ iota! {
             , DIVIDE
             , NOT
             , NEGATE
+            , PRINT
             , RETURN
 }

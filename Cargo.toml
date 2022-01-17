@@ -18,3 +18,8 @@ thiserror = "1.0.30"
 
 [build-dependencies]
 lalrpop = { version = "0.19.1", default-features = false }
+
+[profile.release]
+codegen-units = 1
+lto = true
+# strip = true
