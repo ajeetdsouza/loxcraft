@@ -1,6 +1,6 @@
 use crate::syntax::ast::{
     Expr, ExprAssign, ExprInfix, ExprLiteral, ExprPrefix, ExprVariable, OpInfix, OpPrefix, Stmt,
-    StmtBlock, StmtExpr, StmtPrint, StmtVar,
+    StmtBlock, StmtExpr, StmtFor, StmtIf, StmtPrint, StmtVar, StmtWhile,
 };
 use crate::vm::op;
 use crate::vm::value::{Object, Value};
@@ -32,14 +32,14 @@ impl Chunk {
         self.compile_stmt(source).unwrap();
     }
 
-    fn emit_byte(&mut self, byte: u8) {
-        self.code.push(byte);
+    fn emit_u8(&mut self, value: u8) {
+        self.code.push(value);
     }
 
     fn emit_constant(&mut self, value: Value) -> CompileResult {
-        self.emit_byte(op::CONSTANT);
+        self.emit_u8(op::CONSTANT);
         let idx = self.make_constant(value)?;
-        self.emit_byte(idx);
+        self.emit_u8(idx);
         Ok(())
     }
 
@@ -49,6 +49,43 @@ impl Chunk {
             .context("cannot define more than 256 constants within a chunk")?;
         self.constants.push(value);
         Ok(idx)
+    }
+
+    fn emit_jump(&mut self, op: u8) -> usize {
+        self.emit_u8(op);
+        let jump = self.code.len();
+
+        self.emit_u8(0xFF);
+        self.emit_u8(0xFF);
+
+        jump
+    }
+
+    fn patch_jump(&mut self, offset: usize) -> CompileResult {
+        // -2 to adjust for the bytecode for the jump offset itself.
+        let jump = self.code.len() - offset - 2;
+        let jump = u16::try_from(jump).context("jump offset too large")?;
+
+        self.code[offset] = (jump >> 8) as u8;
+        self.code[offset + 1] = jump as u8;
+
+        Ok(())
+    }
+
+    fn start_loop(&self) -> usize {
+        self.code.len()
+    }
+
+    fn emit_loop(&mut self, loop_start: usize) -> CompileResult {
+        self.emit_u8(op::LOOP);
+
+        let offset = self.code.len() - loop_start + 2;
+        let offset = u16::try_from(offset).context("loop offset too large")?;
+
+        self.emit_u8((offset >> 8) as u8);
+        self.emit_u8(offset as u8);
+
+        Ok(())
     }
 
     fn begin_scope(&mut self) {
@@ -66,7 +103,7 @@ impl Chunk {
             .unwrap_or(false)
         {
             self.locals.pop();
-            self.emit_byte(op::POP);
+            self.emit_u8(op::POP);
         }
     }
 
@@ -81,9 +118,12 @@ impl Chunk {
         Ok(())
     }
 
-    fn resolve_local(&self, name: &str) -> Option<usize> {
+    fn resolve_local(&self, name: &str) -> Option<u8> {
         for (idx, local) in self.locals.iter().enumerate().rev() {
             if local.name == name {
+                let idx = idx
+                    .try_into()
+                    .expect("more than 256 local variables were defined within a chunk");
                 return Some(idx);
             }
         }
@@ -161,8 +201,11 @@ impl Chunk {
         match stmt {
             Stmt::Block(block) => self.compile_stmt_block(block),
             Stmt::Expr(expr) => self.compile_stmt_expr(expr),
+            Stmt::For(for_) => self.compile_stmt_for(for_),
+            Stmt::If(if_) => self.compile_stmt_if(if_),
             Stmt::Print(print) => self.compile_stmt_print(print),
             Stmt::Var(var) => self.compile_stmt_var(var),
+            Stmt::While(while_) => self.compile_stmt_while(while_),
         }
     }
 
@@ -177,13 +220,70 @@ impl Chunk {
 
     fn compile_stmt_expr(&mut self, expr: &StmtExpr) -> CompileResult {
         self.compile_expr(&expr.expr)?;
-        self.emit_byte(op::POP);
+        self.emit_u8(op::POP);
+        Ok(())
+    }
+
+    fn compile_stmt_for(&mut self, for_: &StmtFor) -> CompileResult {
+        self.begin_scope();
+
+        match &for_.init {
+            Some(Stmt::Expr(expr)) => self.compile_stmt_expr(expr)?,
+            Some(Stmt::Var(var)) => self.compile_stmt_var(var)?,
+            Some(stmt) => panic!(
+                "unexpected statement type in for loop initializer: {:?}",
+                stmt
+            ),
+            None => (),
+        }
+
+        let loop_start = self.start_loop();
+        let mut jump_to_end = None;
+
+        if let Some(cond) = &for_.cond {
+            self.compile_expr(cond)?;
+            jump_to_end = Some(self.emit_jump(op::JUMP_IF_FALSE));
+            self.emit_u8(op::POP);
+        }
+
+        self.compile_stmt(&for_.body)?;
+
+        if let Some(incr) = &for_.incr {
+            self.compile_expr(incr)?;
+            self.emit_u8(op::POP);
+        }
+
+        self.emit_loop(loop_start)?;
+        if let Some(jump_to_end) = jump_to_end {
+            self.patch_jump(jump_to_end)?;
+            self.emit_u8(op::POP);
+        }
+
+        self.end_scope();
+        Ok(())
+    }
+
+    fn compile_stmt_if(&mut self, if_: &StmtIf) -> CompileResult {
+        self.compile_expr(&if_.cond)?;
+        let jump_to_else = self.emit_jump(op::JUMP_IF_FALSE);
+        self.emit_u8(op::POP);
+
+        self.compile_stmt(&if_.then)?;
+        let jump_to_end = self.emit_jump(op::JUMP);
+
+        self.patch_jump(jump_to_else)?;
+        self.emit_u8(op::POP);
+        if let Some(else_) = &if_.else_ {
+            self.compile_stmt(else_)?;
+        }
+
+        self.patch_jump(jump_to_end)?;
         Ok(())
     }
 
     fn compile_stmt_print(&mut self, print: &StmtPrint) -> CompileResult {
         self.compile_expr(&print.expr)?;
-        self.emit_byte(op::PRINT);
+        self.emit_u8(op::PRINT);
         Ok(())
     }
 
@@ -202,10 +302,26 @@ impl Chunk {
             return self.add_local(&var.name);
         }
 
-        self.emit_byte(op::DEFINE_GLOBAL);
+        self.emit_u8(op::DEFINE_GLOBAL);
         let name = Value::Object(Object::String(Gc::new(var.name.to_string())));
         let idx = self.make_constant(name)?;
-        self.emit_byte(idx);
+        self.emit_u8(idx);
+
+        Ok(())
+    }
+
+    fn compile_stmt_while(&mut self, while_: &StmtWhile) -> CompileResult {
+        let loop_start = self.start_loop();
+
+        self.compile_expr(&while_.cond)?;
+
+        let jump_to_end = self.emit_jump(op::JUMP_IF_FALSE);
+        self.emit_u8(op::POP);
+        self.compile_stmt(&while_.body)?;
+        self.emit_loop(loop_start)?;
+
+        self.patch_jump(jump_to_end)?;
+        self.emit_u8(op::POP);
 
         Ok(())
     }
@@ -222,20 +338,24 @@ impl Chunk {
 
     fn compile_expr_assign(&mut self, assign: &ExprAssign) -> CompileResult {
         self.compile_expr(&assign.value)?;
+        if let Some(idx) = self.resolve_local(&assign.name) {
+            self.emit_u8(op::SET_LOCAL);
+            self.emit_u8(idx);
+            return Ok(());
+        }
 
-        self.emit_byte(op::SET_GLOBAL);
+        self.emit_u8(op::SET_GLOBAL);
         let name = Value::Object(Object::String(Gc::new(assign.name.to_string())));
         let idx = self.make_constant(name)?;
-        self.emit_byte(idx);
-
+        self.emit_u8(idx);
         Ok(())
     }
 
     fn compile_expr_literal(&mut self, expr: &ExprLiteral) -> CompileResult {
         match expr {
-            ExprLiteral::Nil => self.emit_byte(op::NIL),
-            ExprLiteral::Bool(false) => self.emit_byte(op::FALSE),
-            ExprLiteral::Bool(true) => self.emit_byte(op::TRUE),
+            ExprLiteral::Nil => self.emit_u8(op::NIL),
+            ExprLiteral::Bool(false) => self.emit_u8(op::FALSE),
+            ExprLiteral::Bool(true) => self.emit_u8(op::TRUE),
             ExprLiteral::Number(number) => {
                 let value = Value::Number(*number);
                 self.emit_constant(value)?;
@@ -250,31 +370,79 @@ impl Chunk {
     }
 
     fn compile_expr_infix(&mut self, expr: &ExprInfix) -> CompileResult {
-        self.compile_expr(&expr.lt)?;
-        self.compile_expr(&expr.rt)?;
-
         match expr.op {
-            OpInfix::LogicAnd => todo!(),
-            OpInfix::LogicOr => todo!(),
-            OpInfix::Equal => self.emit_byte(op::EQUAL),
+            OpInfix::LogicOr => {
+                self.compile_expr(&expr.lt)?;
+                let jump_to_else = self.emit_jump(op::JUMP_IF_FALSE);
+                let jump_to_end = self.emit_jump(op::JUMP);
+
+                self.patch_jump(jump_to_else)?;
+                self.emit_u8(op::POP);
+                self.compile_expr(&expr.rt)?;
+
+                self.patch_jump(jump_to_end)?;
+            }
+            OpInfix::LogicAnd => {
+                self.compile_expr(&expr.lt)?;
+                let jump_to_end = self.emit_jump(op::JUMP_IF_FALSE);
+                self.emit_u8(op::POP);
+                self.compile_expr(&expr.rt)?;
+
+                self.patch_jump(jump_to_end)?;
+            }
+            OpInfix::Equal => {
+                self.compile_expr(&expr.lt)?;
+                self.compile_expr(&expr.rt)?;
+                self.emit_u8(op::EQUAL);
+            }
             OpInfix::NotEqual => {
-                self.emit_byte(op::EQUAL);
-                self.emit_byte(op::NOT);
+                self.compile_expr(&expr.lt)?;
+                self.compile_expr(&expr.rt)?;
+                self.emit_u8(op::EQUAL);
+                self.emit_u8(op::NOT);
             }
-            OpInfix::Greater => self.emit_byte(op::GREATER),
+            OpInfix::Greater => {
+                self.compile_expr(&expr.lt)?;
+                self.compile_expr(&expr.rt)?;
+                self.emit_u8(op::GREATER);
+            }
             OpInfix::GreaterEqual => {
-                self.emit_byte(op::LESS);
-                self.emit_byte(op::NOT);
+                self.compile_expr(&expr.lt)?;
+                self.compile_expr(&expr.rt)?;
+                self.emit_u8(op::LESS);
+                self.emit_u8(op::NOT);
             }
-            OpInfix::Less => self.emit_byte(op::LESS),
+            OpInfix::Less => {
+                self.compile_expr(&expr.lt)?;
+                self.compile_expr(&expr.rt)?;
+                self.emit_u8(op::LESS);
+            }
             OpInfix::LessEqual => {
-                self.emit_byte(op::GREATER);
-                self.emit_byte(op::NOT);
+                self.compile_expr(&expr.lt)?;
+                self.compile_expr(&expr.rt)?;
+                self.emit_u8(op::GREATER);
+                self.emit_u8(op::NOT);
             }
-            OpInfix::Add => self.emit_byte(op::ADD),
-            OpInfix::Subtract => self.emit_byte(op::SUBTRACT),
-            OpInfix::Multiply => self.emit_byte(op::MULTIPLY),
-            OpInfix::Divide => self.emit_byte(op::DIVIDE),
+            OpInfix::Add => {
+                self.compile_expr(&expr.lt)?;
+                self.compile_expr(&expr.rt)?;
+                self.emit_u8(op::ADD);
+            }
+            OpInfix::Subtract => {
+                self.compile_expr(&expr.lt)?;
+                self.compile_expr(&expr.rt)?;
+                self.emit_u8(op::SUBTRACT)
+            }
+            OpInfix::Multiply => {
+                self.compile_expr(&expr.lt)?;
+                self.compile_expr(&expr.rt)?;
+                self.emit_u8(op::MULTIPLY);
+            }
+            OpInfix::Divide => {
+                self.compile_expr(&expr.lt)?;
+                self.compile_expr(&expr.rt)?;
+                self.emit_u8(op::DIVIDE);
+            }
         };
 
         Ok(())
@@ -284,8 +452,8 @@ impl Chunk {
         self.compile_expr(&expr.expr)?;
 
         match expr.op {
-            OpPrefix::Negate => self.emit_byte(op::NEGATE),
-            OpPrefix::Not => self.emit_byte(op::NOT),
+            OpPrefix::Negate => self.emit_u8(op::NEGATE),
+            OpPrefix::Not => self.emit_u8(op::NOT),
         };
 
         Ok(())
@@ -293,21 +461,15 @@ impl Chunk {
 
     fn compile_expr_variable(&mut self, variable: &ExprVariable) -> CompileResult {
         if let Some(idx) = self.resolve_local(&variable.name) {
-            let idx = idx
-                .try_into()
-                .expect("more than 256 local variables were defined within a chunk");
-
-            self.emit_byte(op::GET_LOCAL);
-            self.emit_byte(idx);
-
+            self.emit_u8(op::GET_LOCAL);
+            self.emit_u8(idx);
             return Ok(());
         }
 
-        self.emit_byte(op::GET_GLOBAL);
+        self.emit_u8(op::GET_GLOBAL);
         let name = Value::Object(Object::String(Gc::new(variable.name.to_string())));
         let idx = self.make_constant(name)?;
-        self.emit_byte(idx);
-
+        self.emit_u8(idx);
         Ok(())
     }
 }

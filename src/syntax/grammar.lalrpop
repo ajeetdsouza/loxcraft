@@ -2,7 +2,50 @@ use crate::syntax::{ast, token};
 
 grammar;
 
+// https://en.wikipedia.org/wiki/Dangling_else#Avoiding_the_conflict_in_LR_parsers
 pub Stmt = {
+    StmtOpen,
+    StmtClosed,
+}
+
+StmtOpen: ast::Stmt = {
+    "if" "(" <cond:Expr> ")" <then:Stmt> =>
+        ast::Stmt::If(Box::new(ast::StmtIf { <>, else_: None })),
+    "if" "(" <cond:Expr> ")" <then:StmtClosed> "else" <else_:StmtOpen> =>
+        ast::Stmt::If(Box::new(ast::StmtIf { cond, then, else_: Some(else_) })),
+    "while" "(" <cond:Expr> ")" <body:StmtOpen> =>
+        ast::Stmt::While(Box::new(ast::StmtWhile { <> })),
+    "for" "(" <init:ForInit> <cond:ForCond> <incr:ForIncr> ")" <body:StmtOpen> =>
+        ast::Stmt::For(Box::new(ast::StmtFor { <> })),
+}
+
+StmtClosed: ast::Stmt = {
+    StmtSimple,
+    "if" "(" <cond:Expr> ")" <then:StmtClosed> "else" <else_:StmtClosed> =>
+        ast::Stmt::If(Box::new(ast::StmtIf { cond, then, else_: Some(else_) })),
+    "while" "(" <cond:Expr> ")" <body:StmtClosed> =>
+        ast::Stmt::While(Box::new(ast::StmtWhile { <> })),
+    "for" "(" <init:ForInit> <cond:ForCond> <incr:ForIncr> ")" <body:StmtClosed> =>
+        ast::Stmt::For(Box::new(ast::StmtFor { <> })),
+}
+
+ForInit: Option<ast::Stmt> = {
+    <StmtVar> => Some(<>),
+    <StmtExpr> => Some(<>),
+    ";" => None,
+}
+
+ForCond: Option<ast::Expr> = {
+    <Expr> ";" => Some(<>),
+    ";" => None,
+}
+
+ForIncr: Option<ast::Expr> = {
+    <Expr> => Some(<>),
+    () => None
+};
+
+StmtSimple = {
     StmtBlock,
     StmtExpr,
     StmtPrint,

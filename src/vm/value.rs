@@ -9,8 +9,8 @@ pub enum Value {
 }
 
 impl Value {
-    pub fn is_truthy(&self) -> bool {
-        matches!(self, Value::Nil | Value::Bool(false))
+    pub fn bool(&self) -> bool {
+        !matches!(self, Value::Nil | Value::Bool(false))
     }
 
     pub fn type_(&self) -> &str {

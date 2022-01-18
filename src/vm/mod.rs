@@ -37,7 +37,7 @@ impl VM {
                 self.chunk.dump_instruction(self.ip);
             }
 
-            match self.read_byte() {
+            match self.read_u8() {
                 op::CONSTANT => {
                     let value = self.read_constant().clone();
                     self.push(value);
@@ -49,7 +49,7 @@ impl VM {
                     self.pop();
                 }
                 op::GET_LOCAL => {
-                    let slot = self.read_byte();
+                    let slot = self.read_u8();
                     let value = self
                         .stack
                         .get(slot as usize)
@@ -58,7 +58,7 @@ impl VM {
                     self.push(value);
                 }
                 op::SET_LOCAL => {
-                    let slot = self.read_byte();
+                    let slot = self.read_u8();
                     let value = self.peek().clone();
                     *self
                         .stack
@@ -206,39 +206,63 @@ impl VM {
                 }
                 op::NOT => {
                     let value = self.pop();
-                    self.push(Value::Bool(value.is_truthy()));
+                    self.push(Value::Bool(value.bool()));
                 }
                 op::NEGATE => match self.pop() {
                     Value::Number(value) => self.push(Value::Number(-value)),
                     value => return Err(RuntimeError::type_unary_op("OP_NEGATE", value.type_())),
                 },
                 op::PRINT => println!("{:?}", self.pop()),
+                op::JUMP => {
+                    let offset = self.read_u16();
+                    self.ip += offset as usize;
+                }
+                op::JUMP_IF_FALSE => {
+                    let offset = self.read_u16();
+                    if !self.peek().bool() {
+                        self.ip += offset as usize;
+                    }
+                }
+                op::LOOP => {
+                    let offset = self.read_u16();
+                    self.ip = self
+                        .ip
+                        .checked_sub(offset as usize)
+                        .expect("instruction pointer is negative");
+                }
                 op::RETURN => {
                     println!("{:?}", self.pop());
                     break;
                 }
                 op => panic!("encountered an unknown opcode: {:#04x}", op),
             }
+
+            if self.debug {
+                print!("{:>5}", "");
+                for value in self.stack.iter() {
+                    print!("[ {:?} ]", value);
+                }
+                println!();
+            }
         }
 
-        if self.debug {
-            print!("{:>5}", "");
-            for value in self.stack.iter() {
-                print!("[ {:?} ]", value);
-            }
-            println!();
-        }
         Ok(())
     }
 
-    fn read_byte(&mut self) -> u8 {
-        let byte = self.chunk.code[self.ip];
+    fn read_u8(&mut self) -> u8 {
+        let value = self.chunk.code[self.ip];
         self.ip += 1;
-        byte
+        value
+    }
+
+    fn read_u16(&mut self) -> u16 {
+        let mut value = self.read_u8() as u16;
+        value = (value << 8) | self.read_u8() as u16;
+        value
     }
 
     fn read_constant(&mut self) -> &Value {
-        let constant_idx = self.read_byte() as usize;
+        let constant_idx = self.read_u8() as usize;
         &self.chunk.constants[constant_idx]
     }
 

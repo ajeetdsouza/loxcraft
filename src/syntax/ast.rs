@@ -2,8 +2,11 @@
 pub enum Stmt {
     Block(StmtBlock),
     Expr(StmtExpr),
+    For(Box<StmtFor>),
+    If(Box<StmtIf>),
     Print(StmtPrint),
     Var(StmtVar),
+    While(Box<StmtWhile>),
 }
 
 #[derive(Debug)]
@@ -17,6 +20,21 @@ pub struct StmtExpr {
 }
 
 #[derive(Debug)]
+pub struct StmtFor {
+    pub init: Option<Stmt>,
+    pub cond: Option<Expr>,
+    pub incr: Option<Expr>,
+    pub body: Stmt,
+}
+
+#[derive(Debug)]
+pub struct StmtIf {
+    pub cond: Expr,
+    pub then: Stmt,
+    pub else_: Option<Stmt>,
+}
+
+#[derive(Debug)]
 pub struct StmtPrint {
     pub expr: Expr,
 }
@@ -25,6 +43,12 @@ pub struct StmtPrint {
 pub struct StmtVar {
     pub name: String,
     pub value: Expr,
+}
+
+#[derive(Debug)]
+pub struct StmtWhile {
+    pub cond: Expr,
+    pub body: Stmt,
 }
 
 #[derive(Debug)]
