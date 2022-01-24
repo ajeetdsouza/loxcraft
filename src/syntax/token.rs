@@ -89,7 +89,7 @@ pub enum Token {
 
     #[error]
     #[regex(r"//.*", logos::skip)]
-    #[regex(r"[ \r\t\f]+", logos::skip)]
+    #[regex(r"[ \r\n\t\f]+", logos::skip)]
     Error,
 }
 
@@ -108,47 +108,4 @@ fn lex_string(lexer: &mut Lexer<Token>) -> String {
 fn lex_identifier(lexer: &mut Lexer<Token>) -> String {
     let slice = lexer.slice();
     slice.to_string()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_equal_equal() {
-        check("==", Token::EqualEqual);
-    }
-
-    #[test]
-    fn test_number() {
-        check("123", Token::Number(123.0));
-    }
-
-    #[test]
-    fn test_number_decimal() {
-        check("123.456", Token::Number(123.456));
-    }
-
-    #[test]
-    fn test_comment() {
-        let mut lexer = Token::lexer("// This is a comment");
-        assert_eq!(lexer.next(), None);
-    }
-
-    #[test]
-    fn test_string_comment() {
-        check(r#""// This is a comment""#, Token::String("".to_string()))
-    }
-
-    #[test]
-    fn test_newline_error() {
-        check("\n", Token::Error);
-    }
-
-    /// Asserts that the entire input is parsed into the given token.
-    fn check(input: &str, token: Token) {
-        let mut lexer = Token::lexer(input);
-        assert_eq!(lexer.next(), Some(token));
-        assert_eq!(lexer.slice(), input);
-    }
 }

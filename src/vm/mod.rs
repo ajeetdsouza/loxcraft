@@ -1,40 +1,55 @@
-mod chunk;
+pub mod chunk;
+pub mod compiler;
 mod op;
 mod value;
 
-pub use crate::vm::chunk::Chunk;
 use crate::vm::value::Value;
 
 use gc::Gc;
 use thiserror::Error;
 
 use std::collections::HashMap;
+use std::io::Write;
+use std::mem;
 
-use self::value::Object;
+use self::value::{Function, Object};
 
-pub struct VM {
-    pub chunk: Chunk,
-    ip: usize,
+pub struct VM<W: Write> {
+    pub frame: CallFrame,
+    frames: Vec<CallFrame>,
     stack: Vec<Value>,
     globals: HashMap<String, Value>,
+    stdout: W,
     debug: bool,
 }
 
-impl VM {
-    pub fn new(chunk: Chunk) -> Self {
+impl<W: Write> VM<W> {
+    pub fn new(stdout: W) -> Self {
+        let function = Function::new("", 0);
+        let frame = CallFrame::new(function);
+
         Self {
-            chunk,
-            ip: 0,
+            frame,
+            frames: Vec::new(),
             stack: Vec::new(),
             globals: HashMap::new(),
-            debug: true,
+            stdout,
+            debug: false,
         }
     }
 
-    pub fn run(&mut self) -> Result<(), RuntimeError> {
-        while self.ip < self.chunk.code.len() {
+    pub fn run(&mut self, function: Function) {
+        self.frame = CallFrame::new(function);
+        if let Err(e) = self.run_helper() {
+            println!("{}", e);
+            self.dump_trace();
+        }
+    }
+
+    fn run_helper(&mut self) -> Result<(), RuntimeError> {
+        while self.frame.ip < self.frame.function.chunk.code.len() {
             if self.debug {
-                self.chunk.dump_instruction(self.ip);
+                self.frame.function.chunk.dump_instruction(self.frame.ip);
             }
 
             match self.read_u8() {
@@ -49,21 +64,14 @@ impl VM {
                     self.pop();
                 }
                 op::GET_LOCAL => {
-                    let slot = self.read_u8();
-                    let value = self
-                        .stack
-                        .get(slot as usize)
-                        .expect("tried to access a non-existent slot")
-                        .clone();
+                    let slot_idx = self.read_u8();
+                    let value = self.stack[self.frame.slot + slot_idx as usize].clone();
                     self.push(value);
                 }
                 op::SET_LOCAL => {
-                    let slot = self.read_u8();
-                    let value = self.peek().clone();
-                    *self
-                        .stack
-                        .get_mut(slot as usize)
-                        .expect("tried to access a non-existent slot") = value;
+                    let slot_idx = self.read_u8();
+                    let value = self.peek(0).clone();
+                    self.stack[self.frame.slot + slot_idx as usize] = value;
                 }
                 op::GET_GLOBAL => {
                     let name = &match self.read_constant() {
@@ -98,7 +106,7 @@ impl VM {
                             value.type_()
                         ),
                     };
-                    let value = self.peek().clone();
+                    let value = self.peek(0).clone();
 
                     #[allow(clippy::map_entry)]
                     if self.globals.contains_key(&name) {
@@ -206,52 +214,95 @@ impl VM {
                 }
                 op::NOT => {
                     let value = self.pop();
-                    self.push(Value::Bool(value.bool()));
+                    self.push(Value::Bool(!value.bool()));
                 }
                 op::NEGATE => match self.pop() {
                     Value::Number(value) => self.push(Value::Number(-value)),
                     value => return Err(RuntimeError::type_unary_op("OP_NEGATE", value.type_())),
                 },
-                op::PRINT => println!("{:?}", self.pop()),
+                op::PRINT => {
+                    let value = self.pop();
+                    writeln!(self.stdout, "{}", value).unwrap();
+                }
                 op::JUMP => {
                     let offset = self.read_u16();
-                    self.ip += offset as usize;
+                    self.frame.ip += offset as usize;
                 }
                 op::JUMP_IF_FALSE => {
                     let offset = self.read_u16();
-                    if !self.peek().bool() {
-                        self.ip += offset as usize;
+                    if !self.peek(0).bool() {
+                        self.frame.ip += offset as usize;
                     }
                 }
                 op::LOOP => {
                     let offset = self.read_u16();
-                    self.ip = self
-                        .ip
-                        .checked_sub(offset as usize)
-                        .expect("instruction pointer is negative");
+                    self.frame.ip -= offset as usize;
+                }
+                op::CALL => {
+                    let arg_count = self.read_u8() as usize;
+                    let function = self.peek(arg_count).clone();
+                    self.call_value(function, arg_count)?;
                 }
                 op::RETURN => {
-                    println!("{:?}", self.pop());
-                    break;
+                    let result = self.pop();
+                    let frame = match self.frames.pop() {
+                        Some(frame) => frame,
+                        None => {
+                            self.pop();
+                            break;
+                        }
+                    };
+                    self.stack.truncate(self.frame.slot);
+                    self.push(result);
+                    self.frame = frame;
                 }
                 op => panic!("encountered an unknown opcode: {:#04x}", op),
             }
 
             if self.debug {
-                print!("{:>5}", "");
-                for value in self.stack.iter() {
-                    print!("[ {:?} ]", value);
-                }
-                println!();
+                self.dump_stack();
+                // self.dump_trace();
             }
         }
 
         Ok(())
     }
 
+    fn dump_trace(&self) {
+        println!("Traceback (most recent call last):");
+        println!("  in {}", self.frame.function);
+        for frame in self.frames.iter().rev() {
+            println!("  in {}", frame.function);
+        }
+    }
+
+    fn call_value(&mut self, callee: Value, arg_count: usize) -> Result<(), RuntimeError> {
+        let function = match callee {
+            Value::Object(Object::Function(function)) => function,
+            value => return Err(RuntimeError::object_not_callable(value.type_())),
+        };
+        self.call_function(function, arg_count)?;
+        Ok(())
+    }
+
+    fn call_function(&mut self, function: Function, arg_count: usize) -> Result<(), RuntimeError> {
+        if arg_count != function.arity {
+            return Err(RuntimeError::arity_mismatch(
+                &function.name,
+                function.arity,
+                arg_count,
+            ));
+        }
+        let slot = self.stack.len() - arg_count - 1;
+        let mut frame = CallFrame::new_at(function, slot);
+        mem::swap(&mut self.frame, &mut frame);
+        self.frames.push(frame);
+        Ok(())
+    }
+
     fn read_u8(&mut self) -> u8 {
-        let value = self.chunk.code[self.ip];
-        self.ip += 1;
+        let value = self.frame.function.chunk.code[self.frame.ip];
+        self.frame.ip += 1;
         value
     }
 
@@ -263,23 +314,48 @@ impl VM {
 
     fn read_constant(&mut self) -> &Value {
         let constant_idx = self.read_u8() as usize;
-        &self.chunk.constants[constant_idx]
+        &self.frame.function.chunk.constants[constant_idx]
     }
 
-    fn peek(&mut self) -> &Value {
-        self.stack
-            .last()
-            .expect("stack underflow: tried to peek data, but the stack is empty")
+    fn peek(&mut self, idx: usize) -> &Value {
+        &self.stack[self.stack.len() - idx - 1]
     }
 
     fn pop(&mut self) -> Value {
-        self.stack
-            .pop()
-            .expect("stack underflow: tried to pop data, but the stack is empty")
+        self.stack.pop().unwrap()
     }
 
     fn push(&mut self, value: Value) {
         self.stack.push(value);
+    }
+
+    fn dump_stack(&self) {
+        print!("{:>5}", "");
+        for value in self.stack.iter() {
+            print!("[ {} ]", value);
+        }
+        println!();
+    }
+}
+
+#[derive(Debug)]
+pub struct CallFrame {
+    function: Function,
+    ip: usize,
+    slot: usize,
+}
+
+impl CallFrame {
+    pub fn new(function: Function) -> Self {
+        Self::new_at(function, 0)
+    }
+
+    pub fn new_at(function: Function, slot: usize) -> Self {
+        Self {
+            function,
+            ip: 0,
+            slot,
+        }
     }
 }
 
@@ -292,8 +368,18 @@ pub enum RuntimeError {
 }
 
 impl RuntimeError {
+    fn arity_mismatch(name: &str, expected: usize, got: usize) -> Self {
+        Self::TypeError(format!(
+            "{name}() takes {expected} positional arguments but {got} were given",
+        ))
+    }
+
     fn name_not_defined(name: &str) -> Self {
         Self::NameError(format!("name '{name}' is not defined"))
+    }
+
+    fn object_not_callable(type_: &str) -> Self {
+        Self::TypeError(format!("'{type_}' object is not callable"))
     }
 
     fn type_binary_op(op: &str, type1: &str, type2: &str) -> Self {

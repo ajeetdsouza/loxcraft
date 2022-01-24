@@ -19,6 +19,10 @@ thiserror = "1.0.30"
 [build-dependencies]
 lalrpop = { version = "0.19.1", default-features = false }
 
+[dev-dependencies]
+regex = { version = "1.5.4", default-features = false, features = ["std"] }
+test-generator = "0.3.0"
+
 [profile.release]
 codegen-units = 1
 lto = true

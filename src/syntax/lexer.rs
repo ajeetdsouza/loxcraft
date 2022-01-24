@@ -20,7 +20,7 @@ impl<'a> Iterator for Lexer<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.inner.next()? {
-            Token::Error => todo!(),
+            Token::Error => panic!("unexpected character '{}'", self.inner.slice()),
             token => {
                 let span = self.inner.span();
                 Some(Ok((span.start, token, span.end)))

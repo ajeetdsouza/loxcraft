@@ -2,8 +2,29 @@ use crate::syntax::{ast, token};
 
 grammar;
 
+pub Program: ast::Program = <stmts:Decl*> => ast::Program { <> };
+
+Decl = {
+    DeclFun,
+    Stmt,
+}
+
+DeclFun: ast::Stmt =
+    "fun" <name:Identifier> "(" <params:Params> ")" <body:StmtBlockInternal> =>
+        ast::Stmt::Fun(Box::new(ast::StmtFun { <> }));
+
+Params: Vec<String> = {
+    <first:Identifier> <rest:("," <Identifier>)*> => {
+        let mut params = Vec::with_capacity(1 + rest.len());
+        params.push(first);
+        params.extend(rest);
+        params
+    },
+    () => Vec::new(),
+};
+
 // https://en.wikipedia.org/wiki/Dangling_else#Avoiding_the_conflict_in_LR_parsers
-pub Stmt = {
+Stmt = {
     StmtOpen,
     StmtClosed,
 }
@@ -49,11 +70,14 @@ StmtSimple = {
     StmtBlock,
     StmtExpr,
     StmtPrint,
+    StmtReturn,
     StmtVar,
 }
 
-StmtBlock: ast::Stmt =
-    "{" <stmts:Stmt*> "}" => ast::Stmt::Block(ast::StmtBlock { <> });
+StmtBlock: ast::Stmt = StmtBlockInternal => ast::Stmt::Block(<>);
+
+StmtBlockInternal: ast::StmtBlock = "{" <stmts:Stmt*> "}" =>
+    ast::StmtBlock { <> };
 
 StmtExpr: ast::Stmt =
     <expr:Expr> ";" => ast::Stmt::Expr(ast::StmtExpr { <> });
@@ -61,14 +85,17 @@ StmtExpr: ast::Stmt =
 StmtPrint: ast::Stmt =
     "print" <expr:Expr> ";" => ast::Stmt::Print(ast::StmtPrint { <> });
 
+StmtReturn: ast::Stmt =
+    "return" <expr:Expr> ";" => ast::Stmt::Return(ast::StmtReturn { <> });
+
 StmtVar: ast::Stmt =
-    "var" <name:"identifier"> "=" <value:Expr> ";" =>
+    "var" <name:Identifier> "=" <value:Expr> ";" =>
         ast::Stmt::Var(ast::StmtVar { <> });
 
-pub Expr = ExprAssign;
+Expr = ExprAssign;
 
 ExprAssign = {
-    <name:"identifier"> "=" <value:Expr> =>
+    <name:Identifier> "=" <value:Expr> =>
         ast::Expr::Assign(Box::new(ast::ExprAssign { <> })),
     ExprLogicOr,
 }
@@ -108,11 +135,28 @@ OpFactor: ast::OpInfix = {
 ExprPrefix: ast::Expr = {
     <op:OpPrefix> <expr:ExprPrefix> =>
         ast::Expr::Prefix(Box::new(ast::ExprPrefix { <> })),
-    ExprPrimary,
+    ExprCall,
 }
 OpPrefix: ast::OpPrefix = {
     "-" => ast::OpPrefix::Negate,
     "!" => ast::OpPrefix::Not,
+}
+
+ExprCall: ast::Expr = {
+    <callee:ExprCall> "(" <args:Args> ")" => {
+        ast::Expr::Call(Box::new(ast::ExprCall { callee, args }))
+    },
+    ExprPrimary,
+};
+
+Args: Vec<ast::Expr> = {
+    <first:Expr> <rest:("," <Expr>)*> => {
+        let mut args = Vec::with_capacity(1 + rest.len());
+        args.push(first);
+        args.extend(rest);
+        args
+    },
+    () => Vec::new(),
 }
 
 ExprPrimary: ast::Expr = {
@@ -125,12 +169,12 @@ ExprLiteral: ast::ExprLiteral = {
     "nil" => ast::ExprLiteral::Nil,
     "false" => ast::ExprLiteral::Bool(false),
     "true" => ast::ExprLiteral::Bool(true),
-    "string" => ast::ExprLiteral::String(<>),
-    "number" => ast::ExprLiteral::Number(<>),
+    String => ast::ExprLiteral::String(<>),
+    Number => ast::ExprLiteral::Number(<>),
 }
 
 ExprVariable: ast::ExprVariable =
-    <name:"identifier"> => ast::ExprVariable { <> };
+    <name:Identifier> => ast::ExprVariable { <> };
 
 ExprInfix<Lt, Op, Rt>: ast::Expr = {
     <lt:Lt> <op:Op> <rt:Rt> =>
@@ -167,9 +211,9 @@ extern {
         "<=" => token::Token::LessEqual,
 
         // Literals.
-        "identifier" => token::Token::Identifier(<String>),
-        "string" => token::Token::String(<String>),
-        "number" => token::Token::Number(<f64>),
+        Identifier => token::Token::Identifier(<String>),
+        String => token::Token::String(<String>),
+        Number => token::Token::Number(<f64>),
 
         // Keywords.
         "and" => token::Token::And,

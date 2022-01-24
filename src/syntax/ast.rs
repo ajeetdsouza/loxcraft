@@ -1,10 +1,16 @@
+pub struct Program {
+    pub stmts: Vec<Stmt>,
+}
+
 #[derive(Debug)]
 pub enum Stmt {
     Block(StmtBlock),
     Expr(StmtExpr),
     For(Box<StmtFor>),
+    Fun(Box<StmtFun>),
     If(Box<StmtIf>),
     Print(StmtPrint),
+    Return(StmtReturn),
     Var(StmtVar),
     While(Box<StmtWhile>),
 }
@@ -28,6 +34,13 @@ pub struct StmtFor {
 }
 
 #[derive(Debug)]
+pub struct StmtFun {
+    pub name: String,
+    pub params: Vec<String>,
+    pub body: StmtBlock,
+}
+
+#[derive(Debug)]
 pub struct StmtIf {
     pub cond: Expr,
     pub then: Stmt,
@@ -36,6 +49,11 @@ pub struct StmtIf {
 
 #[derive(Debug)]
 pub struct StmtPrint {
+    pub expr: Expr,
+}
+
+#[derive(Debug)]
+pub struct StmtReturn {
     pub expr: Expr,
 }
 
@@ -54,6 +72,7 @@ pub struct StmtWhile {
 #[derive(Debug)]
 pub enum Expr {
     Assign(Box<ExprAssign>),
+    Call(Box<ExprCall>),
     Literal(ExprLiteral),
     Infix(Box<ExprInfix>),
     Prefix(Box<ExprPrefix>),
@@ -64,6 +83,12 @@ pub enum Expr {
 pub struct ExprAssign {
     pub name: String,
     pub value: Expr,
+}
+
+#[derive(Debug)]
+pub struct ExprCall {
+    pub callee: Expr,
+    pub args: Vec<Expr>,
 }
 
 #[derive(Debug)]
