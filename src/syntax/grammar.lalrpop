@@ -76,7 +76,7 @@ StmtSimple = {
 
 StmtBlock: ast::Stmt = StmtBlockInternal => ast::Stmt::Block(<>);
 
-StmtBlockInternal: ast::StmtBlock = "{" <stmts:Stmt*> "}" =>
+StmtBlockInternal: ast::StmtBlock = "{" <stmts:Decl*> "}" =>
     ast::StmtBlock { <> };
 
 StmtExpr: ast::Stmt =

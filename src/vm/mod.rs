@@ -40,13 +40,15 @@ impl<W: Write> VM<W> {
 
     pub fn run(&mut self, function: Function) {
         self.frame = CallFrame::new(function);
-        if let Err(e) = self.run_helper() {
+        if let Err(e) = self.run_internal() {
             println!("{}", e);
             self.dump_trace();
         }
     }
 
-    fn run_helper(&mut self) -> Result<(), RuntimeError> {
+    fn run_internal(&mut self) -> Result<(), RuntimeError> {
+        self.stack.clear();
+
         while self.frame.ip < self.frame.function.chunk.code.len() {
             if self.debug {
                 self.frame.function.chunk.dump_instruction(self.frame.ip);

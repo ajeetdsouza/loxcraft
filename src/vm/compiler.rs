@@ -9,6 +9,8 @@ use crate::vm::value::{Function, Object, Value};
 use anyhow::{bail, Context, Result};
 use gc::Gc;
 
+use std::mem;
+
 type CompileResult<T = ()> = Result<T>;
 
 pub struct Compiler {
@@ -60,10 +62,15 @@ impl Compiler {
 
     fn compile_stmt_block(&mut self, block: &StmtBlock) -> CompileResult {
         self.begin_scope();
+        self.compile_stmt_block_internal(block)?;
+        self.end_scope();
+        Ok(())
+    }
+
+    fn compile_stmt_block_internal(&mut self, block: &StmtBlock) -> CompileResult {
         for stmt in &block.stmts {
             self.compile_stmt(stmt)?;
         }
-        self.end_scope();
         Ok(())
     }
 
@@ -114,10 +121,15 @@ impl Compiler {
 
     fn compile_stmt_fun(&mut self, fun: &StmtFun) -> CompileResult {
         let mut compiler = Compiler::new_function(&fun.name, fun.params.len());
+        compiler.scope_depth = self.scope_depth;
+
+        // TODO: find a cleaner way to do this
+        mem::swap(&mut self.locals, &mut compiler.locals);
         compiler.locals.push(Local {
             name: fun.name.to_string(),
             depth: self.scope_depth,
         });
+        compiler.begin_scope();
 
         for param in &fun.params {
             compiler.locals.push(Local {
@@ -125,10 +137,12 @@ impl Compiler {
                 depth: compiler.scope_depth,
             })
         }
-
-        compiler.compile_stmt_block(&fun.body)?;
+        compiler.compile_stmt_block_internal(&fun.body)?;
         compiler.emit_u8(op::NIL);
         compiler.emit_u8(op::RETURN);
+
+        compiler.end_scope();
+        mem::swap(&mut self.locals, &mut compiler.locals);
 
         self.emit_constant(Value::Object(Object::Function(compiler.function)))?;
         self.add_variable(&fun.name)
