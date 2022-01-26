@@ -9,9 +9,7 @@ pub struct Lexer<'a> {
 
 impl<'a> Lexer<'a> {
     pub fn new(source: &'a str) -> Self {
-        Self {
-            inner: Token::lexer(source),
-        }
+        Self { inner: Token::lexer(source) }
     }
 }
 

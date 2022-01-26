@@ -95,9 +95,7 @@ pub enum Token {
 
 fn lex_number(lexer: &mut Lexer<Token>) -> Result<f64> {
     let slice = lexer.slice();
-    slice
-        .parse::<f64>()
-        .with_context(|| format!("failed to parse number: {}", slice))
+    slice.parse::<f64>().with_context(|| format!("failed to parse number: {}", slice))
 }
 
 fn lex_string(lexer: &mut Lexer<Token>) -> String {

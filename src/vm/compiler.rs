@@ -86,10 +86,7 @@ impl Compiler {
         match &for_.init {
             Some(Stmt::Expr(expr)) => self.compile_stmt_expr(expr)?,
             Some(Stmt::Var(var)) => self.compile_stmt_var(var)?,
-            Some(stmt) => panic!(
-                "unexpected statement type in for loop initializer: {:?}",
-                stmt
-            ),
+            Some(stmt) => panic!("unexpected statement type in for loop initializer: {:?}", stmt),
             None => (),
         }
 
@@ -125,17 +122,11 @@ impl Compiler {
 
         // TODO: find a cleaner way to do this
         mem::swap(&mut self.locals, &mut compiler.locals);
-        compiler.locals.push(Local {
-            name: fun.name.to_string(),
-            depth: self.scope_depth,
-        });
+        compiler.locals.push(Local { name: fun.name.to_string(), depth: self.scope_depth });
         compiler.begin_scope();
 
         for param in &fun.params {
-            compiler.locals.push(Local {
-                name: param.to_string(),
-                depth: compiler.scope_depth,
-            })
+            compiler.locals.push(Local { name: param.to_string(), depth: compiler.scope_depth })
         }
         compiler.compile_stmt_block_internal(&fun.body)?;
         compiler.emit_u8(op::NIL);
@@ -430,12 +421,7 @@ impl Compiler {
         debug_assert!(self.scope_depth > 0);
         self.scope_depth -= 1;
 
-        while self
-            .locals
-            .last()
-            .map(|local| local.depth > self.scope_depth)
-            .unwrap_or(false)
-        {
+        while self.locals.last().map(|local| local.depth > self.scope_depth).unwrap_or(false) {
             self.locals.pop();
             self.emit_u8(op::POP);
         }
@@ -466,19 +452,14 @@ impl Compiler {
         if self.locals.len() >= 256 {
             bail!("cannot define more than 256 local variables within a chunk");
         }
-        self.locals.push(Local {
-            name: name.to_string(),
-            depth: self.scope_depth,
-        });
+        self.locals.push(Local { name: name.to_string(), depth: self.scope_depth });
         Ok(())
     }
 
     fn resolve_local(&self, name: &str) -> Result<Option<u8>> {
         for (idx, local) in self.locals.iter().enumerate().rev() {
             if local.name == name {
-                let idx = idx
-                    .try_into()
-                    .context("more than 256 local variables were defined")?;
+                let idx = idx.try_into().context("more than 256 local variables were defined")?;
                 return Ok(Some(idx));
             }
         }

@@ -66,11 +66,7 @@ pub struct Function {
 
 impl Function {
     pub fn new(name: &str, arity: usize) -> Self {
-        Self {
-            name: name.to_string(),
-            arity,
-            chunk: Chunk::new(),
-        }
+        Self { name: name.to_string(), arity, chunk: Chunk::new() }
     }
 }
 

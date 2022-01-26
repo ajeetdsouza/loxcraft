@@ -79,11 +79,7 @@ impl Chunk {
 
     fn dump_instruction_jump(&self, name: &str, neg: bool, offset: usize) -> usize {
         let jump = ((self.code[offset + 1] as usize) << 8) | (self.code[offset + 2] as usize);
-        let offset_new = if neg {
-            offset + 3 - jump
-        } else {
-            offset + 3 + jump
-        };
+        let offset_new = if neg { offset + 3 - jump } else { offset + 3 + jump };
         println!("{:>16} {:>4} -> {}", name, offset, offset_new);
         offset + 3
     }

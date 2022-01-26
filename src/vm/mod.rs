@@ -289,11 +289,7 @@ impl<W: Write> VM<W> {
 
     fn call_function(&mut self, function: Function, arg_count: usize) -> Result<(), RuntimeError> {
         if arg_count != function.arity {
-            return Err(RuntimeError::arity_mismatch(
-                &function.name,
-                function.arity,
-                arg_count,
-            ));
+            return Err(RuntimeError::arity_mismatch(&function.name, function.arity, arg_count));
         }
         let slot = self.stack.len() - arg_count - 1;
         let mut frame = CallFrame::new_at(function, slot);
@@ -353,11 +349,7 @@ impl CallFrame {
     }
 
     pub fn new_at(function: Function, slot: usize) -> Self {
-        Self {
-            function,
-            ip: 0,
-            slot,
-        }
+        Self { function, ip: 0, slot }
     }
 }
 
@@ -385,9 +377,7 @@ impl RuntimeError {
     }
 
     fn type_binary_op(op: &str, type1: &str, type2: &str) -> Self {
-        Self::TypeError(format!(
-            "unsupported operand type(s) for {op}: '{type1}' and '{type2}'",
-        ))
+        Self::TypeError(format!("unsupported operand type(s) for {op}: '{type1}' and '{type2}'",))
     }
 
     fn type_unary_op(op: &str, type_: &str) -> Self {
