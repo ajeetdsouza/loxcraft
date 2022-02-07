@@ -1,9 +1,9 @@
 use crate::vm::chunk::Chunk;
+use crate::vm::native;
 
 use std::cmp::Ordering;
 use std::fmt;
-
-use gc::Gc;
+use std::rc::Rc;
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub enum Value {
@@ -26,6 +26,7 @@ impl Value {
             Value::Object(object) => match object {
                 Object::String(_) => "string",
                 Object::Function(_) => "function",
+                Object::Native(_) => "native",
             },
         }
     }
@@ -45,13 +46,15 @@ impl fmt::Display for Value {
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub enum Object {
     Function(Function),
-    String(Gc<String>),
+    Native(Native),
+    String(Rc<String>),
 }
 
 impl fmt::Display for Object {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Object::Function(function) => write!(f, "{}", function),
+            Object::Native(native) => write!(f, "{}", native),
             Object::String(string) => write!(f, "{}", string),
         }
     }
@@ -87,6 +90,36 @@ impl PartialEq for Function {
 }
 
 impl PartialOrd for Function {
+    fn partial_cmp(&self, _: &Self) -> Option<Ordering> {
+        None
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Native {
+    pub id: u8,
+}
+
+impl Native {
+    pub fn new(id: u8) -> Self {
+        Self { id }
+    }
+
+    pub fn function<W>(&self) -> native::Function<W> {
+        match self.id {
+            native::CLOCK => Some(native::clock),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for Native {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "<function (native)>")
+    }
+}
+
+impl PartialOrd for Native {
     fn partial_cmp(&self, _: &Self) -> Option<Ordering> {
         None
     }

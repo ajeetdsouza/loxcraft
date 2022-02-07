@@ -7,9 +7,9 @@ use crate::vm::op;
 use crate::vm::value::{Function, Object, Value};
 
 use anyhow::{bail, Context, Result};
-use gc::Gc;
 
 use std::mem;
+use std::rc::Rc;
 
 type CompileResult<T = ()> = Result<T>;
 
@@ -122,11 +122,11 @@ impl Compiler {
 
         // TODO: find a cleaner way to do this
         mem::swap(&mut self.locals, &mut compiler.locals);
-        compiler.locals.push(Local { name: fun.name.to_string(), depth: self.scope_depth });
         compiler.begin_scope();
+        compiler.add_local(&fun.name)?;
 
         for param in &fun.params {
-            compiler.locals.push(Local { name: param.to_string(), depth: compiler.scope_depth })
+            compiler.add_local(param)?;
         }
         compiler.compile_stmt_block_internal(&fun.body)?;
         compiler.emit_u8(op::NIL);
@@ -214,7 +214,7 @@ impl Compiler {
         }
 
         self.emit_u8(op::SET_GLOBAL);
-        let name = Value::Object(Object::String(Gc::new(assign.name.to_string())));
+        let name = Value::Object(Object::String(Rc::new(assign.name.to_string())));
         let idx = self.make_constant(name)?;
         self.emit_u8(idx);
         Ok(())
@@ -245,7 +245,7 @@ impl Compiler {
                 self.emit_constant(value)?;
             }
             ExprLiteral::String(string) => {
-                let object = Object::String(Gc::new(string.to_string()));
+                let object = Object::String(Rc::new(string.to_string()));
                 let value = Value::Object(object);
                 self.emit_constant(value)?;
             }
@@ -351,7 +351,7 @@ impl Compiler {
         }
 
         self.emit_u8(op::GET_GLOBAL);
-        let name = Value::Object(Object::String(Gc::new(variable.name.to_string())));
+        let name = Value::Object(Object::String(Rc::new(variable.name.to_string())));
         let idx = self.make_constant(name)?;
         self.emit_u8(idx);
         Ok(())
@@ -441,7 +441,7 @@ impl Compiler {
         }
 
         self.emit_u8(op::DEFINE_GLOBAL);
-        let name = Value::Object(Object::String(Gc::new(name.to_string())));
+        let name = Value::Object(Object::String(Rc::new(name.to_string())));
         let idx = self.make_constant(name)?;
         self.emit_u8(idx);
 

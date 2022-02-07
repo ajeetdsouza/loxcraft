@@ -1,43 +1,51 @@
 pub mod chunk;
 pub mod compiler;
+mod native;
 mod op;
 mod value;
 
 use crate::vm::value::Value;
 
-use gc::Gc;
 use thiserror::Error;
 
-use std::collections::HashMap;
 use std::io::Write;
 use std::mem;
+use std::rc::Rc;
+use std::{collections::HashMap, time::Instant};
 
-use self::value::{Function, Object};
+use self::value::{Function, Native, Object};
 
-pub struct VM<W: Write> {
+pub struct VM<W> {
     pub frame: CallFrame,
     frames: Vec<CallFrame>,
     stack: Vec<Value>,
-    globals: HashMap<String, Value>,
+    globals: HashMap<Rc<String>, Value>,
     stdout: W,
     debug: bool,
+    pub start_time: Instant,
+}
+
+impl<W> VM<W> {
+    pub fn new(stdout: W) -> Self {
+        let mut globals = HashMap::new();
+        globals.insert(
+            Rc::new("clock".to_string()),
+            Value::Object(Object::Native(Native::new(native::CLOCK))),
+        );
+
+        Self {
+            frame: CallFrame::new(Function::new("", 0)),
+            frames: Vec::new(),
+            stack: Vec::new(),
+            globals,
+            stdout,
+            debug: false,
+            start_time: Instant::now(),
+        }
+    }
 }
 
 impl<W: Write> VM<W> {
-    pub fn new(stdout: W) -> Self {
-        let function = Function::new("", 0);
-        let frame = CallFrame::new(function);
-
-        Self {
-            frame,
-            frames: Vec::new(),
-            stack: Vec::new(),
-            globals: HashMap::new(),
-            stdout,
-            debug: false,
-        }
-    }
-
     pub fn run(&mut self, function: Function) {
         self.frame = CallFrame::new(function);
         if let Err(e) = self.run_internal() {
@@ -77,7 +85,7 @@ impl<W: Write> VM<W> {
                 }
                 op::GET_GLOBAL => {
                     let name = &match self.read_constant() {
-                        Value::Object(Object::String(string)) => string.to_string(),
+                        Value::Object(Object::String(string)) => string.clone(),
                         value => panic!(
                             "expected identifier of type 'string', got type '{}'",
                             value.type_()
@@ -91,7 +99,7 @@ impl<W: Write> VM<W> {
                 }
                 op::DEFINE_GLOBAL => {
                     let name = match self.read_constant() {
-                        Value::Object(Object::String(string)) => string.to_string(),
+                        Value::Object(Object::String(string)) => string.clone(),
                         value => panic!(
                             "expected identifier of type 'string', got type '{}'",
                             value.type_()
@@ -102,7 +110,7 @@ impl<W: Write> VM<W> {
                 }
                 op::SET_GLOBAL => {
                     let name = match self.read_constant() {
-                        Value::Object(Object::String(string)) => string.to_string(),
+                        Value::Object(Object::String(string)) => string.clone(),
                         value => panic!(
                             "expected identifier of type 'string', got type '{}'",
                             value.type_()
@@ -160,7 +168,7 @@ impl<W: Write> VM<W> {
                     match (&a, &b) {
                         (Value::Number(a), Value::Number(b)) => self.push(Value::Number(a + b)),
                         (Value::Object(Object::String(a)), Value::Object(Object::String(b))) => {
-                            let object = Object::String(Gc::new(a.to_string() + b.as_ref()));
+                            let object = Object::String(Rc::new(a.to_string() + b.as_ref()));
                             self.push(Value::Object(object));
                         }
                         (val1, val2) => {
@@ -279,12 +287,11 @@ impl<W: Write> VM<W> {
     }
 
     fn call_value(&mut self, callee: Value, arg_count: usize) -> Result<(), RuntimeError> {
-        let function = match callee {
-            Value::Object(Object::Function(function)) => function,
+        match callee {
+            Value::Object(Object::Function(function)) => self.call_function(function, arg_count),
+            Value::Object(Object::Native(native)) => self.call_native(native, arg_count),
             value => return Err(RuntimeError::object_not_callable(value.type_())),
-        };
-        self.call_function(function, arg_count)?;
-        Ok(())
+        }
     }
 
     fn call_function(&mut self, function: Function, arg_count: usize) -> Result<(), RuntimeError> {
@@ -295,6 +302,16 @@ impl<W: Write> VM<W> {
         let mut frame = CallFrame::new_at(function, slot);
         mem::swap(&mut self.frame, &mut frame);
         self.frames.push(frame);
+        Ok(())
+    }
+
+    fn call_native(&mut self, native_: Native, arg_count: usize) -> Result<(), RuntimeError> {
+        let slot = self.stack.len() - arg_count;
+        let function = native_.function().unwrap();
+        let args = self.stack.split_off(slot);
+        self.stack.pop(); // pop off the native object
+        let result = function(self, &args);
+        self.stack.push(result);
         Ok(())
     }
 
