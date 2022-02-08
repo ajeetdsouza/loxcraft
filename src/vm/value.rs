@@ -1,11 +1,13 @@
 use crate::vm::chunk::Chunk;
 use crate::vm::native;
 
+use gc::{Finalize, Gc, Trace};
+
 use std::cmp::Ordering;
 use std::fmt;
 use std::rc::Rc;
 
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Finalize, PartialEq, PartialOrd, Trace)]
 pub enum Value {
     Bool(bool),
     Nil,
@@ -43,9 +45,9 @@ impl fmt::Display for Value {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Finalize, PartialEq, PartialOrd, Trace)]
 pub enum Object {
-    Function(Function),
+    Function(Gc<Function>),
     Native(Native),
     String(Rc<String>),
 }
@@ -60,7 +62,7 @@ impl fmt::Display for Object {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Finalize, Trace)]
 pub struct Function {
     pub name: String,
     pub arity: usize,
@@ -95,7 +97,7 @@ impl PartialOrd for Function {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Finalize, PartialEq, Trace)]
 pub struct Native {
     pub id: u8,
 }

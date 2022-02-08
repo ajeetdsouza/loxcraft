@@ -1,7 +1,9 @@
 use crate::vm::op;
 use crate::vm::value::Value;
 
-#[derive(Clone, Debug, Default)]
+use gc::{Finalize, Trace};
+
+#[derive(Clone, Debug, Default, Finalize, Trace)]
 pub struct Chunk {
     pub code: Vec<u8>,
     pub constants: Vec<Value>,

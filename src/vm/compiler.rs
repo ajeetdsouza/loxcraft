@@ -7,6 +7,7 @@ use crate::vm::op;
 use crate::vm::value::{Function, Object, Value};
 
 use anyhow::{bail, Context, Result};
+use gc::Gc;
 
 use std::mem;
 use std::rc::Rc;
@@ -135,7 +136,7 @@ impl Compiler {
         compiler.end_scope();
         mem::swap(&mut self.locals, &mut compiler.locals);
 
-        self.emit_constant(Value::Object(Object::Function(compiler.function)))?;
+        self.emit_constant(Value::Object(Object::Function(Gc::new(compiler.function))))?;
         self.add_variable(&fun.name)
     }
 

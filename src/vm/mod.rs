@@ -4,16 +4,15 @@ mod native;
 mod op;
 mod value;
 
-use crate::vm::value::Value;
+use crate::vm::value::{Function, Native, Object, Value};
 
+use gc::Gc;
 use thiserror::Error;
 
 use std::io::Write;
 use std::mem;
 use std::rc::Rc;
 use std::{collections::HashMap, time::Instant};
-
-use self::value::{Function, Native, Object};
 
 pub struct VM<W> {
     pub frame: CallFrame,
@@ -34,7 +33,7 @@ impl<W> VM<W> {
         );
 
         Self {
-            frame: CallFrame::new(Function::new("", 0)),
+            frame: CallFrame::new(Gc::new(Function::new("", 0))),
             frames: Vec::new(),
             stack: Vec::new(),
             globals,
@@ -47,7 +46,7 @@ impl<W> VM<W> {
 
 impl<W: Write> VM<W> {
     pub fn run(&mut self, function: Function) {
-        self.frame = CallFrame::new(function);
+        self.frame = CallFrame::new(Gc::new(function));
         if let Err(e) = self.run_internal() {
             println!("{}", e);
             self.dump_trace();
@@ -287,14 +286,20 @@ impl<W: Write> VM<W> {
     }
 
     fn call_value(&mut self, callee: Value, arg_count: usize) -> Result<(), RuntimeError> {
-        match callee {
-            Value::Object(Object::Function(function)) => self.call_function(function, arg_count),
+        match &callee {
+            Value::Object(Object::Function(function)) => {
+                self.call_function(function.clone(), arg_count)
+            }
             Value::Object(Object::Native(native)) => self.call_native(native, arg_count),
             value => return Err(RuntimeError::object_not_callable(value.type_())),
         }
     }
 
-    fn call_function(&mut self, function: Function, arg_count: usize) -> Result<(), RuntimeError> {
+    fn call_function(
+        &mut self,
+        function: Gc<Function>,
+        arg_count: usize,
+    ) -> Result<(), RuntimeError> {
         if arg_count != function.arity {
             return Err(RuntimeError::arity_mismatch(&function.name, function.arity, arg_count));
         }
@@ -305,7 +310,7 @@ impl<W: Write> VM<W> {
         Ok(())
     }
 
-    fn call_native(&mut self, native_: Native, arg_count: usize) -> Result<(), RuntimeError> {
+    fn call_native(&mut self, native_: &Native, arg_count: usize) -> Result<(), RuntimeError> {
         let slot = self.stack.len() - arg_count;
         let function = native_.function().unwrap();
         let args = self.stack.split_off(slot);
@@ -355,17 +360,17 @@ impl<W: Write> VM<W> {
 
 #[derive(Debug)]
 pub struct CallFrame {
-    function: Function,
+    function: Gc<Function>,
     ip: usize,
     slot: usize,
 }
 
 impl CallFrame {
-    pub fn new(function: Function) -> Self {
+    pub fn new(function: Gc<Function>) -> Self {
         Self::new_at(function, 0)
     }
 
-    pub fn new_at(function: Function, slot: usize) -> Self {
+    pub fn new_at(function: Gc<Function>, slot: usize) -> Self {
         Self { function, ip: 0, slot }
     }
 }
