@@ -1,7 +1,5 @@
 use clap::{AppSettings, Parser};
 
-use std::path::PathBuf;
-
 #[derive(Debug, Parser)]
 #[clap(
     about,
@@ -12,5 +10,5 @@ use std::path::PathBuf;
 )]
 pub enum App {
     Repl,
-    Run { path: PathBuf },
+    Run { path: String },
 }

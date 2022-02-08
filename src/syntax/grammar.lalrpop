@@ -1,4 +1,4 @@
-use crate::syntax::{ast, token};
+use crate::syntax::{ast, lexer};
 
 grammar;
 
@@ -184,53 +184,53 @@ ExprInfix<Lt, Op, Rt>: ast::Expr = {
 
 extern {
     type Location = usize;
-    type Error = anyhow::Error;
+    type Error = lexer::LexerError;
 
-    enum token::Token {
+    enum lexer::Token {
         // Single-character tokens.
-        "(" => token::Token::LtParen,
-        ")" => token::Token::RtParen,
-        "{" => token::Token::LtBrace,
-        "}" => token::Token::RtBrace,
-        "," => token::Token::Comma,
-        "." => token::Token::Dot,
-        "-" => token::Token::Minus,
-        "+" => token::Token::Plus,
-        ";" => token::Token::Semicolon,
-        "/" => token::Token::Slash,
-        "*" => token::Token::Asterisk,
+        "(" => lexer::Token::LtParen,
+        ")" => lexer::Token::RtParen,
+        "{" => lexer::Token::LtBrace,
+        "}" => lexer::Token::RtBrace,
+        "," => lexer::Token::Comma,
+        "." => lexer::Token::Dot,
+        "-" => lexer::Token::Minus,
+        "+" => lexer::Token::Plus,
+        ";" => lexer::Token::Semicolon,
+        "/" => lexer::Token::Slash,
+        "*" => lexer::Token::Asterisk,
 
         // One or two character tokens.
-        "!" => token::Token::Bang,
-        "!=" => token::Token::BangEqual,
-        "=" => token::Token::Equal,
-        "==" => token::Token::EqualEqual,
-        ">" => token::Token::Greater,
-        ">=" => token::Token::GreaterEqual,
-        "<" => token::Token::Less,
-        "<=" => token::Token::LessEqual,
+        "!" => lexer::Token::Bang,
+        "!=" => lexer::Token::BangEqual,
+        "=" => lexer::Token::Equal,
+        "==" => lexer::Token::EqualEqual,
+        ">" => lexer::Token::Greater,
+        ">=" => lexer::Token::GreaterEqual,
+        "<" => lexer::Token::Less,
+        "<=" => lexer::Token::LessEqual,
 
         // Literals.
-        Identifier => token::Token::Identifier(<String>),
-        String => token::Token::String(<String>),
-        Number => token::Token::Number(<f64>),
+        Identifier => lexer::Token::Identifier(<String>),
+        String => lexer::Token::String(<String>),
+        Number => lexer::Token::Number(<f64>),
 
         // Keywords.
-        "and" => token::Token::And,
-        "class" => token::Token::Class,
-        "else" => token::Token::Else,
-        "false" => token::Token::False,
-        "for" => token::Token::For,
-        "fun" => token::Token::Fun,
-        "if" => token::Token::If,
-        "nil" => token::Token::Nil,
-        "or" => token::Token::Or,
-        "print" => token::Token::Print,
-        "return" => token::Token::Return,
-        "super" => token::Token::Super,
-        "this" => token::Token::This,
-        "true" => token::Token::True,
-        "var" => token::Token::Var,
-        "while" => token::Token::While,
+        "and" => lexer::Token::And,
+        "class" => lexer::Token::Class,
+        "else" => lexer::Token::Else,
+        "false" => lexer::Token::False,
+        "for" => lexer::Token::For,
+        "fun" => lexer::Token::Fun,
+        "if" => lexer::Token::If,
+        "nil" => lexer::Token::Nil,
+        "or" => lexer::Token::Or,
+        "print" => lexer::Token::Print,
+        "return" => lexer::Token::Return,
+        "super" => lexer::Token::Super,
+        "this" => lexer::Token::This,
+        "true" => lexer::Token::True,
+        "var" => lexer::Token::Var,
+        "while" => lexer::Token::While,
     }
 }

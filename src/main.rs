@@ -1,6 +1,5 @@
 use lox::app::App;
-use lox::syntax::grammar::ProgramParser;
-use lox::syntax::lexer::Lexer;
+use lox::syntax;
 use lox::vm::compiler::Compiler;
 use lox::vm::VM;
 
@@ -31,9 +30,13 @@ fn main() -> io::Result<()> {
                 match result {
                     Ok(line) => {
                         readline.add_history_entry(line.as_str());
-
-                        let tokens = Lexer::new(&line);
-                        let program = ProgramParser::new().parse(tokens.into_iter()).unwrap();
+                        let program = match syntax::parse(&line) {
+                            Ok(program) => program,
+                            Err(err) => {
+                                syntax::report_err("<stdin>", &line, err).unwrap();
+                                continue;
+                            }
+                        };
                         let compiler = Compiler::new_script();
                         let function = compiler.compile(&program).unwrap();
                         vm.run(function);
@@ -54,9 +57,14 @@ fn main() -> io::Result<()> {
             }
         }
         App::Run { path } => {
-            let source = fs::read_to_string(path).unwrap();
-            let tokens = Lexer::new(&source);
-            let program = ProgramParser::new().parse(tokens.into_iter()).unwrap();
+            let source = fs::read_to_string(&path).unwrap();
+            let program = match syntax::parse(&source) {
+                Ok(program) => program,
+                Err(err) => {
+                    syntax::report_err(&path, &source, err).unwrap();
+                    return Ok(());
+                }
+            };
             let compiler = Compiler::new_script();
             let function = compiler.compile(&program).unwrap();
 

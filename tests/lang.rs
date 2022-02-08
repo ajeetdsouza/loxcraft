@@ -1,5 +1,4 @@
-use lox::syntax::grammar::ProgramParser;
-use lox::syntax::lexer::Lexer;
+use lox::syntax;
 use lox::vm::compiler::Compiler;
 use lox::vm::VM;
 
@@ -16,8 +15,7 @@ thread_local! {
 #[test_resources("tests/lang/**/*.lox")]
 fn run_file(path: &str) {
     let source = fs::read_to_string(path).unwrap();
-    let tokens = Lexer::new(&source);
-    let program = ProgramParser::new().parse(tokens.into_iter()).unwrap();
+    let program = syntax::parse(&source).unwrap();
     let compiler = Compiler::new_script();
     let function = compiler.compile(&program).unwrap();
 
