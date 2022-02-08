@@ -11,6 +11,11 @@ use rustyline::Editor;
 use std::fs;
 use std::io;
 
+use mimalloc::MiMalloc;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+
 fn main() -> io::Result<()> {
     let app = App::parse();
     match app {

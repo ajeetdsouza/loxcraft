@@ -12,6 +12,7 @@ clap = { version = "3.0.6", features = ["derive"] }
 iota = "0.2.2"
 lalrpop-util = "0.19.6"
 logos = "0.12.0"
+mimalloc = { version = "0.1.27", default-features = false }
 rustyline = "9.1.2"
 thiserror = "1.0.30"
 
