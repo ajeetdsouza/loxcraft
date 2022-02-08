@@ -2,7 +2,7 @@ pub mod chunk;
 pub mod compiler;
 mod native;
 mod op;
-mod value;
+pub mod value;
 
 use crate::vm::value::{Function, Native, Object, Value};
 
@@ -26,7 +26,7 @@ pub struct VM<W> {
 }
 
 impl<W> VM<W> {
-    pub fn new(stdout: W) -> Self {
+    pub fn new(stdout: W, debug: bool) -> Self {
         let mut globals = FnvHashMap::default();
         globals.insert(
             Rc::new("clock".to_string()),
@@ -39,7 +39,7 @@ impl<W> VM<W> {
             stack: Vec::new(),
             globals,
             stdout,
-            debug: false,
+            debug,
             start_time: Instant::now(),
         }
     }
@@ -59,8 +59,8 @@ impl<W: Write> VM<W> {
         #[cfg(feature = "profiler")]
         if let Ok(report) = guard.report().build() {
             use pprof::protos::Message;
-            use std::path::PathBuf;
             use std::fs::{self, File};
+            use std::path::PathBuf;
 
             let dir = PathBuf::from("/tmp/lox");
             fs::create_dir_all(&dir).unwrap();

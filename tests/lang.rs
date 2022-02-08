@@ -20,7 +20,7 @@ fn run_file(path: &str) {
     let function = compiler.compile(&program).unwrap();
 
     let mut got = Vec::new();
-    let mut vm = VM::new(&mut got);
+    let mut vm = VM::new(&mut got, false);
     vm.run(function);
 
     let mut expected = Vec::new();
