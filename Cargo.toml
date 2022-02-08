@@ -15,6 +15,10 @@ iota = "0.2.2"
 lalrpop-util = "0.19.6"
 logos = "0.12.0"
 mimalloc = { version = "0.1.27", default-features = false }
+pprof = { version = "0.6.2", features = [
+    "flamegraph",
+    "protobuf",
+], optional = true }
 rustyline = "9.1.2"
 thiserror = "1.0.30"
 
@@ -26,6 +30,9 @@ regex = { version = "1.5.4", default-features = false, features = ["std"] }
 test-generator = "0.3.0"
 
 [profile.release]
-codegen-units = 1
-lto = true
+# codegen-units = 1
+# lto = true
 # strip = true
+
+[features]
+profiler = ["pprof"]

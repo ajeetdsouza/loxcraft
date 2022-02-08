@@ -47,11 +47,35 @@ impl<W> VM<W> {
 
 impl<W: Write> VM<W> {
     pub fn run(&mut self, function: Function) {
+        #[cfg(feature = "profiler")]
+        let guard = pprof::ProfilerGuard::new(100).unwrap();
+
         self.frame = CallFrame::new(Gc::new(function));
         if let Err(e) = self.run_internal() {
             println!("{}", e);
             self.dump_trace();
         }
+
+        #[cfg(feature = "profiler")]
+        if let Ok(report) = guard.report().build() {
+            use pprof::protos::Message;
+            use std::path::PathBuf;
+            use std::fs::{self, File};
+
+            let dir = PathBuf::from("/tmp/lox");
+            fs::create_dir_all(&dir).unwrap();
+
+            let file = File::create(dir.join("flamegraph.svg")).unwrap();
+            report.flamegraph(file).unwrap();
+
+            let mut file = File::create(dir.join("profile.pb")).unwrap();
+            let profile = report.pprof().unwrap();
+            let mut content = Vec::new();
+            profile.encode(&mut content).unwrap();
+            file.write_all(&content).unwrap();
+
+            println!("profile written to {}", dir.display());
+        };
     }
 
     fn run_internal(&mut self) -> Result<(), RuntimeError> {
@@ -271,7 +295,6 @@ impl<W: Write> VM<W> {
 
             if self.debug {
                 self.dump_stack();
-                // self.dump_trace();
             }
         }
 
