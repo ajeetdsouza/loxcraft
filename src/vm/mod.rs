@@ -6,19 +6,20 @@ mod value;
 
 use crate::vm::value::{Function, Native, Object, Value};
 
+use fnv::FnvHashMap;
 use gc::Gc;
 use thiserror::Error;
 
 use std::io::Write;
 use std::mem;
 use std::rc::Rc;
-use std::{collections::HashMap, time::Instant};
+use std::time::Instant;
 
 pub struct VM<W> {
     pub frame: CallFrame,
     frames: Vec<CallFrame>,
     stack: Vec<Value>,
-    globals: HashMap<Rc<String>, Value>,
+    globals: FnvHashMap<Rc<String>, Value>,
     stdout: W,
     debug: bool,
     pub start_time: Instant,
@@ -26,7 +27,7 @@ pub struct VM<W> {
 
 impl<W> VM<W> {
     pub fn new(stdout: W) -> Self {
-        let mut globals = HashMap::new();
+        let mut globals = FnvHashMap::default();
         globals.insert(
             Rc::new("clock".to_string()),
             Value::Object(Object::Native(Native::new(native::CLOCK))),

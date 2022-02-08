@@ -9,6 +9,7 @@ version = "0.1.0"
 [dependencies]
 anyhow = "1.0.52"
 clap = { version = "3.0.6", features = ["derive"] }
+fnv = "1.0.7"
 gc = { version = "0.4.1", features = ["derive"] }
 iota = "0.2.2"
 lalrpop-util = "0.19.6"

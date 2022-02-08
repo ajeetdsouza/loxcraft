@@ -427,6 +427,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "fnv",
  "gc",
  "iota",
  "lalrpop",
