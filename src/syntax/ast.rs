@@ -20,6 +20,7 @@ pub struct StmtBlock {
     pub stmts: Vec<Stmt>,
 }
 
+/// An expression statement evaluates an expression and discards the result.
 #[derive(Debug)]
 pub struct StmtExpr {
     pub expr: Expr,
@@ -108,7 +109,9 @@ pub struct ExprInfix {
 
 #[derive(Debug)]
 pub enum OpInfix {
+    /// Short-circuiting logical OR.
     LogicOr,
+    /// Short-circuiting logical AND.
     LogicAnd,
     Equal,
     NotEqual,

@@ -3,39 +3,33 @@ use crate::syntax::ast::{
     OpPrefix, Program, Stmt, StmtBlock, StmtExpr, StmtFor, StmtFun, StmtIf, StmtPrint, StmtReturn,
     StmtVar, StmtWhile,
 };
-use crate::vm::op;
+use crate::vm::op::{ArgCount, ConstantIdx, JumpOffset, Op, StackIdx};
 use crate::vm::value::{Function, Object, Value};
 
 use anyhow::{bail, Context, Result};
-use gc::Gc;
 
 use std::mem;
 use std::rc::Rc;
 
 type CompileResult<T = ()> = Result<T>;
 
+#[derive(Debug)]
 pub struct Compiler {
-    function: Function,
-    type_: FunctionType,
-    locals: Vec<Local>,
+    ctx: CompilerCtx,
+    stack: Vec<CompilerCtx>,
     scope_depth: usize,
 }
 
 impl Compiler {
-    pub fn new_script() -> Self {
+    /// Creates a compiler for a new script.
+    pub fn new() -> Self {
         Self {
-            function: Function::new("", 0),
-            type_: FunctionType::Script,
-            locals: Vec::new(),
-            scope_depth: 0,
-        }
-    }
-
-    fn new_function(name: &str, arity: usize) -> Self {
-        Self {
-            function: Function::new(name, arity),
-            type_: FunctionType::Function,
-            locals: Vec::new(),
+            ctx: CompilerCtx {
+                function: Function::new("", 0),
+                type_: FunctionType::Script,
+                locals: Vec::new(),
+            },
+            stack: Vec::new(),
             scope_depth: 0,
         }
     }
@@ -44,7 +38,7 @@ impl Compiler {
         for stmt in &program.stmts {
             self.compile_stmt(stmt)?;
         }
-        Ok(self.function)
+        Ok(self.ctx.function)
     }
 
     fn compile_stmt(&mut self, stmt: &Stmt) -> CompileResult {
@@ -77,13 +71,15 @@ impl Compiler {
 
     fn compile_stmt_expr(&mut self, expr: &StmtExpr) -> CompileResult {
         self.compile_expr(&expr.expr)?;
-        self.emit_u8(op::POP);
+        self.emit_op(Op::Pop);
         Ok(())
     }
 
     fn compile_stmt_for(&mut self, for_: &StmtFor) -> CompileResult {
         self.begin_scope();
 
+        // Evaluate init statement. This may be an expression, a variable
+        // assignment, or nothing at all.
         match &for_.init {
             Some(Stmt::Expr(expr)) => self.compile_stmt_expr(expr)?,
             Some(Stmt::Var(var)) => self.compile_stmt_var(var)?,
@@ -91,26 +87,36 @@ impl Compiler {
             None => (),
         }
 
+        // START:
         let loop_start = self.start_loop();
-        let mut jump_to_end = None;
 
+        // Evaluate the condition, if it exists.
+        let mut jump_to_end = None;
         if let Some(cond) = &for_.cond {
             self.compile_expr(cond)?;
-            jump_to_end = Some(self.emit_jump(op::JUMP_IF_FALSE));
-            self.emit_u8(op::POP);
+            // If the condition is false, go to END.
+            jump_to_end = Some(self.emit_jump(Op::JumpIfFalse));
+            // Discard the condition.
+            self.emit_op(Op::Pop);
         }
 
+        // Evaluate the body.
         self.compile_stmt(&for_.body)?;
 
+        // Evaluate the increment expression, if it exists.
         if let Some(incr) = &for_.incr {
             self.compile_expr(incr)?;
-            self.emit_u8(op::POP);
+            // Discard the result of the expression.
+            self.emit_op(Op::Pop);
         }
 
+        // Go to START.
         self.emit_loop(loop_start)?;
+        // END:
         if let Some(jump_to_end) = jump_to_end {
             self.patch_jump(jump_to_end)?;
-            self.emit_u8(op::POP);
+            // Discard the condition.
+            self.emit_op(Op::Pop);
         }
 
         self.end_scope();
@@ -118,79 +124,92 @@ impl Compiler {
     }
 
     fn compile_stmt_fun(&mut self, fun: &StmtFun) -> CompileResult {
-        let mut compiler = Compiler::new_function(&fun.name, fun.params.len());
-        compiler.scope_depth = self.scope_depth;
-
-        // TODO: find a cleaner way to do this
-        mem::swap(&mut self.locals, &mut compiler.locals);
-        compiler.begin_scope();
-        compiler.add_local(&fun.name)?;
-
+        let ctx = CompilerCtx {
+            function: Function::new(&fun.name, fun.params.len()),
+            type_: FunctionType::Function,
+            locals: Vec::new(),
+        };
+        self.begin_ctx(ctx);
+        self.create_local(&fun.name)?;
         for param in &fun.params {
-            compiler.add_local(param)?;
+            self.create_local(param)?;
         }
-        compiler.compile_stmt_block_internal(&fun.body)?;
-        compiler.emit_u8(op::NIL);
-        compiler.emit_u8(op::RETURN);
+        self.compile_stmt_block(&fun.body)?;
+        let function = self.end_ctx();
 
-        compiler.end_scope();
-        mem::swap(&mut self.locals, &mut compiler.locals);
+        let constant = self.create_constant(Value::Object(Object::Function(Rc::new(function))))?;
+        self.emit_op(Op::Constant(constant));
+        self.create_variable(&fun.name)?;
 
-        self.emit_constant(Value::Object(Object::Function(Gc::new(compiler.function))))?;
-        self.add_variable(&fun.name)
+        Ok(())
     }
 
     fn compile_stmt_if(&mut self, if_: &StmtIf) -> CompileResult {
         self.compile_expr(&if_.cond)?;
-        let jump_to_else = self.emit_jump(op::JUMP_IF_FALSE);
-        self.emit_u8(op::POP);
-
+        // If the condition is false, go to ELSE.
+        let jump_to_else = self.emit_jump(Op::JumpIfFalse);
+        // Discard the condition.
+        self.emit_op(Op::Pop);
+        // Evaluate the if branch.
         self.compile_stmt(&if_.then)?;
-        let jump_to_end = self.emit_jump(op::JUMP);
+        // Go to END.
+        let jump_to_end = self.emit_jump(Op::Jump);
 
+        // ELSE:
         self.patch_jump(jump_to_else)?;
-        self.emit_u8(op::POP);
+        self.emit_op(Op::Pop); // Discard the condition.
         if let Some(else_) = &if_.else_ {
             self.compile_stmt(else_)?;
         }
 
+        // END:
         self.patch_jump(jump_to_end)?;
+
         Ok(())
     }
 
     fn compile_stmt_print(&mut self, print: &StmtPrint) -> CompileResult {
         self.compile_expr(&print.expr)?;
-        self.emit_u8(op::PRINT);
+        self.emit_op(Op::Print);
         Ok(())
     }
 
     fn compile_stmt_return(&mut self, return_: &StmtReturn) -> CompileResult {
-        if self.type_ == FunctionType::Script {
+        if self.ctx.type_ == FunctionType::Script {
             bail!("cannot return outside function");
         }
-
         self.compile_expr(&return_.expr)?;
-        self.emit_u8(op::RETURN);
+        self.emit_op(Op::Return);
         Ok(())
     }
 
     fn compile_stmt_var(&mut self, var: &StmtVar) -> CompileResult {
+        // Push the value to the stack. This will either be popped and added to
+        // the globals map, or it will be used directly from the stack as a
+        // local variable.
         self.compile_expr(&var.value)?;
-        self.add_variable(&var.name)
+        self.create_variable(&var.name)
     }
 
     fn compile_stmt_while(&mut self, while_: &StmtWhile) -> CompileResult {
+        // START:
         let loop_start = self.start_loop();
 
+        // Evaluate condition.
         self.compile_expr(&while_.cond)?;
-
-        let jump_to_end = self.emit_jump(op::JUMP_IF_FALSE);
-        self.emit_u8(op::POP);
+        // If the condition is false, go to END.
+        let jump_to_end = self.emit_jump(Op::JumpIfFalse);
+        // Discard the condition.
+        self.emit_op(Op::Pop);
+        // Evaluate the body of the loop.
         self.compile_stmt(&while_.body)?;
+        // Go to START.
         self.emit_loop(loop_start)?;
 
+        // END:
         self.patch_jump(jump_to_end)?;
-        self.emit_u8(op::POP);
+        // Discard the condition.
+        self.emit_op(Op::Pop);
 
         Ok(())
     }
@@ -208,16 +227,15 @@ impl Compiler {
 
     fn compile_expr_assign(&mut self, assign: &ExprAssign) -> CompileResult {
         self.compile_expr(&assign.value)?;
+
         if let Some(idx) = self.resolve_local(&assign.name)? {
-            self.emit_u8(op::SET_LOCAL);
-            self.emit_u8(idx);
+            self.emit_op(Op::SetLocal(idx));
             return Ok(());
         }
 
-        self.emit_u8(op::SET_GLOBAL);
         let name = Value::Object(Object::String(Rc::new(assign.name.to_string())));
-        let idx = self.make_constant(name)?;
-        self.emit_u8(idx);
+        let idx = self.create_constant(name)?;
+        self.emit_op(Op::SetGlobal(idx));
         Ok(())
     }
 
@@ -225,30 +243,31 @@ impl Compiler {
         self.compile_expr(&call.callee)?;
 
         let arg_count =
-            u8::try_from(call.args.len()).context("too many arguments in function call")?;
+            ArgCount::try_from(call.args.len()).context("too many arguments in function call")?;
         for arg in &call.args {
+            // Push all arguments to the stack. The function treats them as
+            // locals.
             self.compile_expr(arg)?;
         }
 
-        self.emit_u8(op::CALL);
-        self.emit_u8(arg_count);
-
+        self.emit_op(Op::Call(arg_count));
         Ok(())
     }
 
     fn compile_expr_literal(&mut self, expr: &ExprLiteral) -> CompileResult {
         match expr {
-            ExprLiteral::Nil => self.emit_u8(op::NIL),
-            ExprLiteral::Bool(false) => self.emit_u8(op::FALSE),
-            ExprLiteral::Bool(true) => self.emit_u8(op::TRUE),
+            ExprLiteral::Nil => self.emit_op(Op::Nil),
+            ExprLiteral::Bool(false) => self.emit_op(Op::False),
+            ExprLiteral::Bool(true) => self.emit_op(Op::True),
             ExprLiteral::Number(number) => {
                 let value = Value::Number(*number);
-                self.emit_constant(value)?;
+                let constant = self.create_constant(value)?;
+                self.emit_op(Op::Constant(constant));
             }
             ExprLiteral::String(string) => {
-                let object = Object::String(Rc::new(string.to_string()));
-                let value = Value::Object(object);
-                self.emit_constant(value)?;
+                let value = Value::Object(Object::String(Rc::new(string.to_string())));
+                let constant = self.create_constant(value)?;
+                self.emit_op(Op::Constant(constant));
             }
         };
         Ok(())
@@ -258,75 +277,88 @@ impl Compiler {
         match expr.op {
             OpInfix::LogicOr => {
                 self.compile_expr(&expr.lt)?;
-                let jump_to_else = self.emit_jump(op::JUMP_IF_FALSE);
-                let jump_to_end = self.emit_jump(op::JUMP);
+                // If the first expression is false, go to RIGHT_EXPR.
+                let jump_to_right_expr = self.emit_jump(Op::JumpIfFalse);
+                // Otherwise, go to END.
+                let jump_to_end = self.emit_jump(Op::Jump);
 
-                self.patch_jump(jump_to_else)?;
-                self.emit_u8(op::POP);
+                // RIGHT_EXPR:
+                self.patch_jump(jump_to_right_expr)?;
+                // Discard the left value.
+                self.emit_op(Op::Pop);
+                // Evaluate the right expression.
                 self.compile_expr(&expr.rt)?;
 
+                // END:
+                // Short-circuit to the end.
                 self.patch_jump(jump_to_end)?;
             }
             OpInfix::LogicAnd => {
                 self.compile_expr(&expr.lt)?;
-                let jump_to_end = self.emit_jump(op::JUMP_IF_FALSE);
-                self.emit_u8(op::POP);
+                // If the first expression is false, go to END.
+                let jump_to_end = self.emit_jump(Op::JumpIfFalse);
+                // Otherwise, evaluate the right expression.
+                self.emit_op(Op::Pop);
                 self.compile_expr(&expr.rt)?;
 
+                // END:
+                // Short-circuit to the end.
                 self.patch_jump(jump_to_end)?;
             }
             OpInfix::Equal => {
                 self.compile_expr(&expr.lt)?;
                 self.compile_expr(&expr.rt)?;
-                self.emit_u8(op::EQUAL);
+                self.emit_op(Op::Equal);
             }
             OpInfix::NotEqual => {
                 self.compile_expr(&expr.lt)?;
                 self.compile_expr(&expr.rt)?;
-                self.emit_u8(op::EQUAL);
-                self.emit_u8(op::NOT);
+                self.emit_op(Op::Equal);
+                self.emit_op(Op::Not);
             }
             OpInfix::Greater => {
                 self.compile_expr(&expr.lt)?;
                 self.compile_expr(&expr.rt)?;
-                self.emit_u8(op::GREATER);
+                self.emit_op(Op::Greater);
             }
+            // "Greater or equal to" is equivalent to "not less than".
             OpInfix::GreaterEqual => {
                 self.compile_expr(&expr.lt)?;
                 self.compile_expr(&expr.rt)?;
-                self.emit_u8(op::LESS);
-                self.emit_u8(op::NOT);
+                self.emit_op(Op::Less);
+                self.emit_op(Op::Not);
             }
             OpInfix::Less => {
                 self.compile_expr(&expr.lt)?;
                 self.compile_expr(&expr.rt)?;
-                self.emit_u8(op::LESS);
+                self.emit_op(Op::Less);
             }
+            // "Less or equal to" is equivalent to "not greater than".
             OpInfix::LessEqual => {
                 self.compile_expr(&expr.lt)?;
                 self.compile_expr(&expr.rt)?;
-                self.emit_u8(op::GREATER);
-                self.emit_u8(op::NOT);
+                self.emit_op(Op::Greater);
+                self.emit_op(Op::Not);
             }
             OpInfix::Add => {
                 self.compile_expr(&expr.lt)?;
                 self.compile_expr(&expr.rt)?;
-                self.emit_u8(op::ADD);
+                self.emit_op(Op::Add);
             }
             OpInfix::Subtract => {
                 self.compile_expr(&expr.lt)?;
                 self.compile_expr(&expr.rt)?;
-                self.emit_u8(op::SUBTRACT)
+                self.emit_op(Op::Subtract)
             }
             OpInfix::Multiply => {
                 self.compile_expr(&expr.lt)?;
                 self.compile_expr(&expr.rt)?;
-                self.emit_u8(op::MULTIPLY);
+                self.emit_op(Op::Multiply);
             }
             OpInfix::Divide => {
                 self.compile_expr(&expr.lt)?;
                 self.compile_expr(&expr.rt)?;
-                self.emit_u8(op::DIVIDE);
+                self.emit_op(Op::Divide);
             }
         };
 
@@ -335,82 +367,78 @@ impl Compiler {
 
     fn compile_expr_prefix(&mut self, expr: &ExprPrefix) -> CompileResult {
         self.compile_expr(&expr.expr)?;
-
         match expr.op {
-            OpPrefix::Negate => self.emit_u8(op::NEGATE),
-            OpPrefix::Not => self.emit_u8(op::NOT),
+            OpPrefix::Negate => self.emit_op(Op::Negate),
+            OpPrefix::Not => self.emit_op(Op::Not),
         };
-
         Ok(())
     }
 
     fn compile_expr_variable(&mut self, variable: &ExprVariable) -> CompileResult {
         if let Some(idx) = self.resolve_local(&variable.name)? {
-            self.emit_u8(op::GET_LOCAL);
-            self.emit_u8(idx);
+            self.emit_op(Op::GetLocal(idx));
             return Ok(());
         }
 
-        self.emit_u8(op::GET_GLOBAL);
         let name = Value::Object(Object::String(Rc::new(variable.name.to_string())));
-        let idx = self.make_constant(name)?;
-        self.emit_u8(idx);
+        let idx = self.create_constant(name)?;
+        self.emit_op(Op::GetGlobal(idx));
         Ok(())
     }
 
-    fn emit_u8(&mut self, value: u8) {
-        self.function.chunk.code.push(value);
+    // Writes an Op to the bytecode of the current function.
+    fn emit_op(&mut self, op: Op) {
+        self.ctx.function.chunk.code.push(op);
     }
 
-    fn emit_constant(&mut self, value: Value) -> CompileResult {
-        self.emit_u8(op::CONSTANT);
-        let idx = self.make_constant(value)?;
-        self.emit_u8(idx);
-        Ok(())
-    }
-
-    fn make_constant(&mut self, value: Value) -> CompileResult<u8> {
-        let idx = u8::try_from(self.function.chunk.constants.len())
+    /// Creates a new constant in the current function's constant pool and
+    /// returns its index. If an identical constant already exists in the pool,
+    /// the index of that constant is returned instead.
+    fn create_constant(&mut self, value: Value) -> CompileResult<ConstantIdx> {
+        let idx = match self.ctx.function.chunk.constants.iter().position(|c| c == &value) {
+            Some(idx) => idx,
+            None => {
+                let idx = self.ctx.function.chunk.constants.len();
+                self.ctx.function.chunk.constants.push(value);
+                idx
+            }
+        };
+        ConstantIdx::try_from(idx)
             .ok()
-            .context("cannot define more than 256 constants within a chunk")?;
-        self.function.chunk.constants.push(value);
-        Ok(idx)
+            .context("cannot define more than 256 constants within a chunk")
     }
 
-    fn emit_jump(&mut self, op: u8) -> usize {
-        self.emit_u8(op);
-        let jump = self.function.chunk.code.len();
-
-        self.emit_u8(0xFF);
-        self.emit_u8(0xFF);
-
-        jump
+    /// Emits a blank jump instruction and returns its location. The location is
+    /// later used to patch the jump instruction.
+    fn emit_jump(&mut self, op: fn(JumpOffset) -> Op) -> usize {
+        let location = self.ctx.function.chunk.code.len();
+        self.emit_op(op(JumpOffset::MAX));
+        location
     }
 
-    fn patch_jump(&mut self, offset: usize) -> CompileResult {
-        // -2 to adjust for the bytecode for the jump offset itself.
-        let jump = self.function.chunk.code.len() - offset - 2;
-        let jump = u16::try_from(jump).context("jump offset too large")?;
-
-        self.function.chunk.code[offset] = (jump >> 8) as u8;
-        self.function.chunk.code[offset + 1] = jump as u8;
-
+    /// Patches the jump instruction at the given location to jump to the
+    /// current instruction.
+    fn patch_jump(&mut self, location: usize) -> CompileResult {
+        let offset = self.ctx.function.chunk.code.len() - location - 1;
+        let offset = JumpOffset::try_from(offset).context("jump offset too large")?;
+        match &mut self.ctx.function.chunk.code[location] {
+            Op::Jump(to) | Op::JumpIfFalse(to) => *to = offset,
+            _ => panic!("tried to patch an op that is not a jump"),
+        };
         Ok(())
     }
 
+    /// Marks the starting position of a loop.
     fn start_loop(&self) -> usize {
-        self.function.chunk.code.len()
+        self.ctx.function.chunk.code.len()
     }
 
+    /// Jumps to the starting position of a loop.
     fn emit_loop(&mut self, loop_start: usize) -> CompileResult {
-        self.emit_u8(op::LOOP);
-
-        let offset = self.function.chunk.code.len() - loop_start + 2;
-        let offset = u16::try_from(offset).context("loop offset too large")?;
-
-        self.emit_u8((offset >> 8) as u8);
-        self.emit_u8(offset as u8);
-
+        // +1 to the offset to skip over the loop instruction itself.
+        let offset = self.ctx.function.chunk.code.len() - loop_start + 1;
+        let offset = JumpOffset::try_from(offset).context("loop offset too large")?;
+        self.emit_op(Op::Loop(offset));
         Ok(())
     }
 
@@ -419,63 +447,104 @@ impl Compiler {
     }
 
     fn end_scope(&mut self) {
-        debug_assert!(self.scope_depth > 0);
         self.scope_depth -= 1;
-
-        while self.locals.last().map(|local| local.depth > self.scope_depth).unwrap_or(false) {
-            self.locals.pop();
-            self.emit_u8(op::POP);
+        while self.ctx.locals.last().map(|l| l.depth > self.scope_depth).unwrap_or(false) {
+            // Remove locals that are no longer in scope.
+            self.ctx.locals.pop();
+            // Discard the variable's value from the stack.
+            self.emit_op(Op::Pop);
         }
     }
 
-    fn add_variable(&mut self, name: &str) -> CompileResult {
-        if self.scope_depth > 0 {
-            for local in self.locals.iter().rev() {
-                if local.depth < self.scope_depth {
-                    break;
-                }
-                if local.name == name {
-                    bail!("'{}' has already been defined in this scope", name);
-                }
-            }
-            return self.add_local(name);
-        }
-
-        self.emit_u8(op::DEFINE_GLOBAL);
-        let name = Value::Object(Object::String(Rc::new(name.to_string())));
-        let idx = self.make_constant(name)?;
-        self.emit_u8(idx);
-
-        Ok(())
+    fn begin_ctx(&mut self, mut ctx: CompilerCtx) {
+        mem::swap(&mut self.ctx, &mut ctx);
+        self.stack.push(ctx);
     }
 
-    fn add_local(&mut self, name: &str) -> CompileResult {
-        if self.locals.len() >= 256 {
+    fn end_ctx(&mut self) -> Function {
+        let mut ctx = self.stack.pop().expect("tried to end context in a script");
+        mem::swap(&mut self.ctx, &mut ctx);
+        ctx.function
+    }
+
+    /// Creates a local or global variable (based on the current scope) out of
+    /// the top value of the stack.
+    fn create_variable(&mut self, name: &str) -> CompileResult {
+        // If the scope depth is 0, create a global variable.
+        if self.scope_depth == 0 {
+            let name = Value::Object(Object::String(Rc::new(name.to_string())));
+            let name = self.create_constant(name)?;
+            self.emit_op(Op::DefineGlobal(name));
+            return Ok(());
+        }
+
+        // Otherwise, create a local variable.
+        self.create_local(name)
+    }
+
+    /// Creates a named local variable out of the top value of the stack.
+    fn create_local(&mut self, name: &str) -> CompileResult {
+        if self.ctx.locals.len() >= 256 {
             bail!("cannot define more than 256 local variables within a chunk");
         }
-        self.locals.push(Local { name: name.to_string(), depth: self.scope_depth });
+
+        if self
+            .ctx
+            .locals
+            .iter()
+            .rev()
+            .take_while(|l| l.depth >= self.scope_depth)
+            .any(|l| l.name == name)
+        {
+            bail!("'{}' has already been defined in this scope", name);
+        }
+
+        self.ctx.locals.push(Local::new(name, self.scope_depth));
         Ok(())
     }
 
-    fn resolve_local(&self, name: &str) -> Result<Option<u8>> {
-        for (idx, local) in self.locals.iter().enumerate().rev() {
-            if local.name == name {
-                let idx = idx.try_into().context("more than 256 local variables were defined")?;
-                return Ok(Some(idx));
-            }
-        }
-        Ok(None)
+    /// Finds the index of the local variable with the given name and the
+    /// maximum scope depth. If not available, returns [`None`].
+    fn resolve_local(&self, name: &str) -> Result<Option<StackIdx>> {
+        let idx = match self.ctx.locals.iter().rposition(|l| l.name == name) {
+            Some(idx) => Some(
+                StackIdx::try_from(idx).context("more than 256 local variables were defined")?,
+            ),
+            None => None,
+        };
+        Ok(idx)
     }
+}
+
+#[derive(Debug)]
+struct CompilerCtx {
+    function: Function,
+    type_: FunctionType,
+    locals: Vec<Local>,
 }
 
 #[derive(Debug, Eq, Ord, PartialEq, PartialOrd)]
 enum FunctionType {
+    /// A function that has been defined in code.
     Function,
+    /// The global-level function that is called when the program starts.
     Script,
 }
 
 #[derive(Clone, Debug)]
 struct Local {
+    /// The name of the variable.
     name: String,
+    /// The scope depth of the variable, i.e. the number of nested scopes that
+    /// surround it. This starts at 1, because global scopes don't have local
+    /// variables.
     depth: usize,
+    /// This is set to `true` if a closure captures this variable.
+    is_captured: bool,
+}
+
+impl Local {
+    fn new<S: Into<String>>(name: S, depth: usize) -> Self {
+        Self { name: name.into(), depth, is_captured: false }
+    }
 }

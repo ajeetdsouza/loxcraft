@@ -1,13 +1,11 @@
 use crate::vm::chunk::Chunk;
-use crate::vm::native;
-
-use gc::{Finalize, Gc, Trace};
+use crate::vm::vm::RuntimeError;
 
 use std::cmp::Ordering;
 use std::fmt;
 use std::rc::Rc;
 
-#[derive(Clone, Debug, Finalize, PartialEq, PartialOrd, Trace)]
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub enum Value {
     Bool(bool),
     Nil,
@@ -45,9 +43,9 @@ impl fmt::Display for Value {
     }
 }
 
-#[derive(Clone, Debug, Finalize, PartialEq, PartialOrd, Trace)]
+#[derive(Clone, Debug)]
 pub enum Object {
-    Function(Gc<Function>),
+    Function(Rc<Function>),
     Native(Native),
     String(Rc<String>),
 }
@@ -62,7 +60,26 @@ impl fmt::Display for Object {
     }
 }
 
-#[derive(Clone, Debug, Finalize, Trace)]
+impl PartialEq for Object {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            // Functions are only equal if they point to the same object.
+            (Object::Function(f1), Object::Function(f2)) => Rc::ptr_eq(f1, f2),
+            (Object::Native(n1), Object::Native(n2)) => n1 == n2,
+            (Object::String(s1), Object::String(s2)) => s1 == s2,
+            _ => false,
+        }
+    }
+}
+
+impl PartialOrd for Object {
+    /// Always returns [`None`], since objects cannot be ordered.
+    fn partial_cmp(&self, _: &Self) -> Option<Ordering> {
+        None
+    }
+}
+
+#[derive(Debug)]
 pub struct Function {
     pub name: String,
     pub arity: usize,
@@ -70,8 +87,9 @@ pub struct Function {
 }
 
 impl Function {
-    pub fn new(name: &str, arity: usize) -> Self {
-        Self { name: name.to_string(), arity, chunk: Chunk::new() }
+    /// Creates a new function with an empty chunk.
+    pub fn new<S: Into<String>>(name: S, arity: usize) -> Self {
+        Function { name: name.into(), arity, chunk: Chunk::new() }
     }
 }
 
@@ -86,43 +104,55 @@ impl fmt::Display for Function {
 }
 
 impl PartialEq for Function {
+    /// Always returns `false`, since functions cannot be compared. When
+    /// actually comparing functions, we use pointer equality.
     fn eq(&self, _: &Self) -> bool {
         false
     }
 }
 
 impl PartialOrd for Function {
+    /// Always returns [`None`], since functions cannot be ordered.
     fn partial_cmp(&self, _: &Self) -> Option<Ordering> {
         None
     }
 }
 
-#[derive(Clone, Debug, Eq, Finalize, PartialEq, Trace)]
-pub struct Native {
-    pub id: u8,
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Native {
+    Clock,
 }
 
 impl Native {
-    pub fn new(id: u8) -> Self {
-        Self { id }
-    }
-
-    pub fn function<W>(&self) -> native::Function<W> {
-        match self.id {
-            native::CLOCK => Some(native::clock),
-            _ => None,
+    /// Returns the function pointer for the given native.
+    pub fn function(&self) -> fn(&[Value]) -> Result<Value, RuntimeError> {
+        match self {
+            Native::Clock => native::clock,
         }
     }
 }
 
 impl fmt::Display for Native {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "<function (native)>")
+        write!(f, "<native function>")
     }
 }
 
 impl PartialOrd for Native {
+    /// Always returns [`None`], since native functions cannot be ordered.
     fn partial_cmp(&self, _: &Self) -> Option<Ordering> {
         None
+    }
+}
+
+mod native {
+    use crate::vm::value::Value;
+    use crate::vm::vm::RuntimeError;
+
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    pub fn clock(_args: &[Value]) -> Result<Value, RuntimeError> {
+        let elapsed = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
+        Ok(Value::Number(elapsed as f64 / 1e9))
     }
 }

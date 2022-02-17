@@ -1,6 +1,6 @@
 use crate::syntax;
 use crate::vm::compiler::Compiler;
-use crate::vm::VM;
+use crate::vm::vm::VM;
 
 use clap::{AppSettings, Parser};
 
@@ -58,7 +58,7 @@ pub fn repl(debug: bool) {
                         continue;
                     }
                 };
-                let compiler = Compiler::new_script();
+                let compiler = Compiler::new();
                 let function = compiler.compile(&program).unwrap();
                 vm.run(function);
             }
@@ -87,7 +87,7 @@ fn run(path: &str, debug: bool) {
             return;
         }
     };
-    let compiler = Compiler::new_script();
+    let compiler = Compiler::new();
     let function = compiler.compile(&program).unwrap();
 
     let stdout = io::stdout();

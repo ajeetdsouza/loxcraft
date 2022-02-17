@@ -1,94 +1,72 @@
-use crate::vm::op;
+use crate::vm::op::Op;
 use crate::vm::value::Value;
 
-use gc::{Finalize, Trace};
+use super::op::{ConstantIdx, JumpOffset};
 
-#[derive(Clone, Debug, Default, Finalize, Trace)]
+#[derive(Debug)]
 pub struct Chunk {
-    pub code: Vec<u8>,
+    pub code: Vec<Op>,
     pub constants: Vec<Value>,
 }
 
 impl Chunk {
     pub fn new() -> Self {
-        Self::default()
+        Self { code: Vec::new(), constants: Vec::new() }
     }
 
     pub fn dump(&self, name: &str) {
         println!("== {} ==", name);
-        let mut offset = 0;
-        while offset < self.code.len() {
-            offset = self.dump_instruction(offset);
+        for idx in 0..self.code.len() {
+            self.dump_op(idx);
         }
     }
 
-    pub fn dump_instruction(&self, offset: usize) -> usize {
-        print!("{:04} ", offset);
-        // if offset > 0 && self.lines[offset] == self.lines[offset - 1] {
-        //     print!("{:>4} ", "|");
-        // } else {
-        //     print!("{:>4} ", self.lines[offset]);
-        // }
-
-        let instruction = self.code[offset];
-        match instruction {
-            op::CONSTANT => self.dump_instruction_constant("OP_CONSTANT", offset),
-            op::NIL => self.dump_instruction_simple("OP_NIL", offset),
-            op::FALSE => self.dump_instruction_simple("OP_FALSE", offset),
-            op::TRUE => self.dump_instruction_simple("OP_TRUE", offset),
-            op::POP => self.dump_instruction_simple("OP_POP", offset),
-            op::GET_LOCAL => self.dump_instruction_byte("OP_GET_LOCAL", offset),
-            op::SET_LOCAL => self.dump_instruction_byte("OP_SET_LOCAL", offset),
-            op::GET_GLOBAL => self.dump_instruction_constant("OP_GET_GLOBAL", offset),
-            op::DEFINE_GLOBAL => self.dump_instruction_constant("OP_DEFINE_GLOBAL", offset),
-            op::SET_GLOBAL => self.dump_instruction_constant("OP_SET_GLOBAL", offset),
-            op::EQUAL => self.dump_instruction_simple("OP_EQUAL", offset),
-            op::GREATER => self.dump_instruction_simple("OP_GREATER", offset),
-            op::LESS => self.dump_instruction_simple("OP_LESS", offset),
-            op::ADD => self.dump_instruction_simple("OP_ADD", offset),
-            op::SUBTRACT => self.dump_instruction_simple("OP_SUBTRACT", offset),
-            op::MULTIPLY => self.dump_instruction_simple("OP_MULTIPLY", offset),
-            op::DIVIDE => self.dump_instruction_simple("OP_DIVIDE", offset),
-            op::NOT => self.dump_instruction_simple("OP_NOT", offset),
-            op::NEGATE => self.dump_instruction_simple("OP_NEGATE", offset),
-            op::PRINT => self.dump_instruction_simple("OP_PRINT", offset),
-            op::JUMP => self.dump_instruction_jump("OP_JUMP", false, offset),
-            op::JUMP_IF_FALSE => self.dump_instruction_jump("OP_JUMP_IF_FALSE", false, offset),
-            op::LOOP => self.dump_instruction_jump("OP_LOOP", true, offset),
-            op::CALL => self.dump_instruction_byte("OP_CALL", offset),
-            op::RETURN => self.dump_instruction_simple("OP_RETURN", offset),
-            _ => self.dump_instruction_unknown(offset),
+    pub fn dump_op(&self, idx: usize) {
+        print!("{:04} ", idx);
+        match self.code[idx] {
+            Op::Constant(constant) => self.dump_op_constant("OP_CONSTANT", constant),
+            Op::Nil => self.dump_op_simple("OP_NIL"),
+            Op::False => self.dump_op_simple("OP_FALSE"),
+            Op::True => self.dump_op_simple("OP_TRUE"),
+            Op::Pop => self.dump_op_simple("OP_POP"),
+            Op::GetLocal(byte) => self.dump_op_byte("OP_GET_LOCAL", byte),
+            Op::SetLocal(byte) => self.dump_op_byte("OP_SET_LOCAL", byte),
+            Op::GetGlobal(constant) => self.dump_op_constant("OP_GET_GLOBAL", constant),
+            Op::DefineGlobal(constant) => self.dump_op_constant("OP_DEFINE_GLOBAL", constant),
+            Op::SetGlobal(constant) => self.dump_op_constant("OP_SET_GLOBAL", constant),
+            Op::Equal => self.dump_op_simple("OP_EQUAL"),
+            Op::Greater => self.dump_op_simple("OP_GREATER"),
+            Op::Less => self.dump_op_simple("OP_LESS"),
+            Op::Add => self.dump_op_simple("OP_ADD"),
+            Op::Subtract => self.dump_op_simple("OP_SUBTRACT"),
+            Op::Multiply => self.dump_op_simple("OP_MULTIPLY"),
+            Op::Divide => self.dump_op_simple("OP_DIVIDE"),
+            Op::Not => self.dump_op_simple("OP_NOT"),
+            Op::Negate => self.dump_op_simple("OP_NEGATE"),
+            Op::Print => self.dump_op_simple("OP_PRINT"),
+            Op::Jump(offset) => self.dump_op_jump("OP_JUMP", idx, offset, false),
+            Op::JumpIfFalse(offset) => self.dump_op_jump("OP_JUMP_IF_FALSE", idx, offset, false),
+            Op::Loop(offset) => self.dump_op_jump("OP_LOOP", idx, offset, true),
+            Op::Call(byte) => self.dump_op_byte("OP_CALL", byte),
+            Op::Return => self.dump_op_simple("OP_RETURN"),
         }
     }
 
-    fn dump_instruction_simple(&self, name: &str, offset: usize) -> usize {
-        println!("{}", name);
-        offset + 1
-    }
-
-    fn dump_instruction_byte(&self, name: &str, offset: usize) -> usize {
-        let byte = self.code[offset + 1];
+    fn dump_op_byte(&self, name: &str, byte: u8) {
         println!("{:<24} {}", name, byte);
-        offset + 2
     }
 
-    fn dump_instruction_constant(&self, name: &str, offset: usize) -> usize {
-        let idx = self.code[offset + 1];
+    fn dump_op_constant(&self, name: &str, idx: ConstantIdx) {
         let val = &self.constants[idx as usize];
         println!("{:<24} {} {}", name, idx, val);
-        offset + 2
     }
 
-    fn dump_instruction_jump(&self, name: &str, neg: bool, offset: usize) -> usize {
-        let jump = ((self.code[offset + 1] as usize) << 8) | (self.code[offset + 2] as usize);
-        let offset_new = if neg { offset + 3 - jump } else { offset + 3 + jump };
-        println!("{:>16} {:>4} -> {}", name, offset, offset_new);
-        offset + 3
+    fn dump_op_jump(&self, name: &str, from: usize, offset: JumpOffset, reverse: bool) {
+        let to = if reverse { from + 1 - offset as usize } else { from + 1 + offset as usize };
+        println!("{:<16} {:>4} -> {}", name, from, to);
     }
 
-    fn dump_instruction_unknown(&self, offset: usize) -> usize {
-        let instruction = self.code[offset];
-        println!("unknown opcode: {:#04x}", instruction);
-        offset + 1
+    fn dump_op_simple(&self, name: &str) {
+        println!("{}", name);
     }
 }

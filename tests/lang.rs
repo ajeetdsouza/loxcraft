@@ -1,6 +1,6 @@
 use lox::syntax;
 use lox::vm::compiler::Compiler;
-use lox::vm::VM;
+use lox::vm::vm::VM;
 
 use regex::Regex;
 use test_generator::test_resources;
@@ -16,7 +16,7 @@ thread_local! {
 fn run_file(path: &str) {
     let source = fs::read_to_string(path).unwrap();
     let program = syntax::parse(&source).unwrap();
-    let compiler = Compiler::new_script();
+    let compiler = Compiler::new();
     let function = compiler.compile(&program).unwrap();
 
     let mut got = Vec::new();
