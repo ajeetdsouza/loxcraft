@@ -15,7 +15,7 @@ impl Chunk {
     }
 
     pub fn dump(&self, name: &str) {
-        println!("== {} ==", name);
+        println!("== {name} ==");
         for idx in 0..self.code.len() {
             self.dump_op(idx);
         }
@@ -24,16 +24,18 @@ impl Chunk {
     pub fn dump_op(&self, idx: usize) {
         print!("{:04} ", idx);
         match self.code[idx] {
-            Op::Constant(constant) => self.dump_op_constant("OP_CONSTANT", constant),
+            Op::Constant(constant_idx) => self.dump_op_constant("OP_CONSTANT", constant_idx),
             Op::Nil => self.dump_op_simple("OP_NIL"),
             Op::False => self.dump_op_simple("OP_FALSE"),
             Op::True => self.dump_op_simple("OP_TRUE"),
             Op::Pop => self.dump_op_simple("OP_POP"),
-            Op::GetLocal(byte) => self.dump_op_byte("OP_GET_LOCAL", byte),
-            Op::SetLocal(byte) => self.dump_op_byte("OP_SET_LOCAL", byte),
-            Op::GetGlobal(constant) => self.dump_op_constant("OP_GET_GLOBAL", constant),
-            Op::DefineGlobal(constant) => self.dump_op_constant("OP_DEFINE_GLOBAL", constant),
-            Op::SetGlobal(constant) => self.dump_op_constant("OP_SET_GLOBAL", constant),
+            Op::GetLocal(stack_idx) => self.dump_op_byte("OP_GET_LOCAL", stack_idx),
+            Op::SetLocal(stack_idx) => self.dump_op_byte("OP_SET_LOCAL", stack_idx),
+            Op::GetGlobal(constant_idx) => self.dump_op_constant("OP_GET_GLOBAL", constant_idx),
+            Op::DefineGlobal(constant_idx) => {
+                self.dump_op_constant("OP_DEFINE_GLOBAL", constant_idx)
+            }
+            Op::SetGlobal(constant_idx) => self.dump_op_constant("OP_SET_GLOBAL", constant_idx),
             Op::Equal => self.dump_op_simple("OP_EQUAL"),
             Op::Greater => self.dump_op_simple("OP_GREATER"),
             Op::Less => self.dump_op_simple("OP_LESS"),
@@ -44,10 +46,16 @@ impl Chunk {
             Op::Not => self.dump_op_simple("OP_NOT"),
             Op::Negate => self.dump_op_simple("OP_NEGATE"),
             Op::Print => self.dump_op_simple("OP_PRINT"),
-            Op::Jump(offset) => self.dump_op_jump("OP_JUMP", idx, offset, false),
-            Op::JumpIfFalse(offset) => self.dump_op_jump("OP_JUMP_IF_FALSE", idx, offset, false),
-            Op::Loop(offset) => self.dump_op_jump("OP_LOOP", idx, offset, true),
-            Op::Call(byte) => self.dump_op_byte("OP_CALL", byte),
+            Op::Jump(jump_offset) => self.dump_op_jump("OP_JUMP", idx, jump_offset, false),
+            Op::JumpIfFalse(jump_offset) => {
+                self.dump_op_jump("OP_JUMP_IF_FALSE", idx, jump_offset, false)
+            }
+            Op::Loop(jump_offset) => self.dump_op_jump("OP_LOOP", idx, jump_offset, true),
+            Op::Call(arg_count) => self.dump_op_byte("OP_CALL", arg_count),
+            Op::Closure(constant_idx) => println!(
+                "{:<16} {:>4} {}",
+                "OP_CLOSURE", constant_idx, self.constants[constant_idx as usize]
+            ),
             Op::Return => self.dump_op_simple("OP_RETURN"),
         }
     }
@@ -67,6 +75,6 @@ impl Chunk {
     }
 
     fn dump_op_simple(&self, name: &str) {
-        println!("{}", name);
+        println!("{name}");
     }
 }

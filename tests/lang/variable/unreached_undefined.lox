@@ -2,4 +2,5 @@ if (false) {
   print notDefined;
 }
 
-print "ok"; // expect: ok
+// out: ok
+print "ok";

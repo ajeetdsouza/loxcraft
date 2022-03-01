@@ -1,5 +1,5 @@
 use crate::vm::op::Op;
-use crate::vm::value::{Function, Native, Object, Value};
+use crate::vm::value::{Closure, Function, Native, Value};
 
 use fnv::FnvHashMap;
 use thiserror::Error;
@@ -10,70 +10,78 @@ use std::rc::Rc;
 
 use super::op::ConstantIdx;
 
-pub struct VM<W> {
+pub struct VM<W1, W2> {
     pub frame: CallFrame,
     frames: Vec<CallFrame>,
     stack: Vec<Value>,
     globals: FnvHashMap<Rc<String>, Value>,
-    stdout: W,
+
+    stdout: W1,
+    stderr: W2,
+
     debug: bool,
+    profile: bool,
 }
 
-impl<W> VM<W> {
-    pub fn new(stdout: W, debug: bool) -> Self {
+impl<W1, W2> VM<W1, W2> {
+    pub fn new(stdout: W1, stderr: W2, debug: bool, profile: bool) -> Self {
         let mut globals = FnvHashMap::default();
-        globals.insert(Rc::new("clock".to_string()), Value::Object(Object::Native(Native::Clock)));
+        globals.insert(Rc::new("clock".to_string()), Value::Native(Native::Clock));
 
+        let closure = Closure { function: Rc::new(Function::new("", 0)) };
         Self {
-            frame: CallFrame::new(Rc::new(Function::new("", 0))),
+            frame: CallFrame::new(closure),
             frames: Vec::new(),
             stack: Vec::new(),
             globals,
             stdout,
+            stderr,
             debug,
+            profile,
         }
     }
 }
 
-impl<W: Write> VM<W> {
+impl<W1: Write, W2: Write> VM<W1, W2> {
     pub fn run(&mut self, function: Function) {
-        #[cfg(feature = "profiler")]
-        let guard = pprof::ProfilerGuard::new(100).unwrap();
+        let guard = if self.profile { Some(pprof::ProfilerGuard::new(100).unwrap()) } else { None };
 
-        self.frame = CallFrame::new(Rc::new(function));
+        let closure = Closure { function: Rc::new(function) };
+        self.frame = CallFrame::new(closure);
         if let Err(e) = self.run_internal() {
-            println!("{}", e);
+            writeln!(self.stderr, "{e}").unwrap();
             self.dump_trace();
         }
 
-        #[cfg(feature = "profiler")]
-        if let Ok(report) = guard.report().build() {
-            use pprof::protos::Message;
-            use std::fs::{self, File};
-            use std::path::PathBuf;
+        if let Some(guard) = guard {
+            if let Ok(report) = guard.report().build() {
+                use pprof::protos::Message;
+                use std::fs::{self, File};
+                use std::path::PathBuf;
 
-            let dir = PathBuf::from("/tmp/lox");
-            fs::create_dir_all(&dir).unwrap();
+                let dir = PathBuf::from("/tmp/lox");
+                fs::create_dir_all(&dir).unwrap();
 
-            let file = File::create(dir.join("flamegraph.svg")).unwrap();
-            report.flamegraph(file).unwrap();
+                let file = File::create(dir.join("flamegraph.svg")).unwrap();
+                report.flamegraph(file).unwrap();
 
-            let mut file = File::create(dir.join("profile.pb")).unwrap();
-            let profile = report.pprof().unwrap();
-            let mut content = Vec::new();
-            profile.encode(&mut content).unwrap();
-            file.write_all(&content).unwrap();
+                let mut file = File::create(dir.join("profile.pb")).unwrap();
+                let profile = report.pprof().unwrap();
+                let mut content = Vec::new();
+                profile.encode(&mut content).unwrap();
+                file.write_all(&content).unwrap();
 
-            println!("profile written to {}", dir.display());
-        };
+                println!("profile written to {}", dir.display());
+            };
+        }
     }
 
     fn run_internal(&mut self) -> Result<(), RuntimeError> {
         self.stack.clear();
 
-        while self.frame.ip < self.frame.function.chunk.code.len() {
+        while self.frame.ip < self.frame.closure.function.chunk.code.len() {
             if self.debug {
-                self.frame.function.chunk.dump_op(self.frame.ip);
+                self.frame.closure.function.chunk.dump_op(self.frame.ip);
             }
 
             match self.read_op() {
@@ -97,7 +105,7 @@ impl<W: Write> VM<W> {
                 }
                 Op::GetGlobal(constant_idx) => {
                     let name = &match self.read_constant(constant_idx) {
-                        Value::Object(Object::String(string)) => string.clone(),
+                        Value::String(string) => string.clone(),
                         value => panic!(
                             "expected identifier of type 'string', got type '{}'",
                             value.type_()
@@ -111,7 +119,7 @@ impl<W: Write> VM<W> {
                 }
                 Op::DefineGlobal(constant_idx) => {
                     let name = match self.read_constant(constant_idx) {
-                        Value::Object(Object::String(string)) => string.clone(),
+                        Value::String(string) => string.clone(),
                         value => panic!(
                             "expected identifier of type 'string', got type '{}'",
                             value.type_()
@@ -122,7 +130,7 @@ impl<W: Write> VM<W> {
                 }
                 Op::SetGlobal(constant_idx) => {
                     let name = match self.read_constant(constant_idx) {
-                        Value::Object(Object::String(string)) => string.clone(),
+                        Value::String(string) => string.clone(),
                         value => panic!(
                             "expected identifier of type 'string', got type '{}'",
                             value.type_()
@@ -179,9 +187,9 @@ impl<W: Write> VM<W> {
                     let a = self.pop();
                     match (&a, &b) {
                         (Value::Number(a), Value::Number(b)) => self.push(Value::Number(a + b)),
-                        (Value::Object(Object::String(a)), Value::Object(Object::String(b))) => {
-                            let object = Object::String(Rc::new(a.to_string() + b.as_ref()));
-                            self.push(Value::Object(object));
+                        (Value::String(a), Value::String(b)) => {
+                            let value = Value::String(Rc::new(a.to_string() + b.as_ref()));
+                            self.push(value);
                         }
                         (val1, val2) => {
                             return Err(RuntimeError::type_binary_op(
@@ -244,7 +252,7 @@ impl<W: Write> VM<W> {
                 },
                 Op::Print => {
                     let value = self.pop();
-                    writeln!(self.stdout, "{}", value).unwrap();
+                    writeln!(self.stdout, "{value}").unwrap();
                 }
                 Op::Jump(offset) => {
                     self.frame.ip += offset as usize;
@@ -262,6 +270,15 @@ impl<W: Write> VM<W> {
                     let function = self.peek(arg_count).clone();
                     self.call_value(function, arg_count)?;
                 }
+                Op::Closure(constant_idx) => match &self.read_constant(constant_idx) {
+                    Value::Function(function) => {
+                        let closure = Value::Closure(Closure { function: function.clone() });
+                        self.push(closure);
+                    }
+                    value => {
+                        panic!("expected value of type 'function', got type '{}'", value.type_())
+                    }
+                },
                 Op::Return => {
                     let result = self.pop();
                     let frame = match self.frames.pop() {
@@ -282,46 +299,42 @@ impl<W: Write> VM<W> {
             }
         }
 
-        if self.debug {
-            assert!(
-                self.stack.is_empty(),
-                "the stack should always be empty after executing a program"
-            );
+        if !self.stack.is_empty() {
+            self.dump_stack();
+            panic!("stack was not empty after program execution")
         }
 
         Ok(())
     }
 
-    fn dump_trace(&self) {
-        println!("Traceback (most recent call last):");
-        println!("  in {}", self.frame.function);
+    fn dump_trace(&mut self) {
+        writeln!(&mut self.stderr, "Traceback (most recent call last):").unwrap();
+        writeln!(&mut self.stderr, "  in {}", self.frame.closure.function).unwrap();
         for frame in self.frames.iter().rev() {
-            println!("  in {}", frame.function);
+            writeln!(&mut self.stderr, "  in {}", frame.closure.function).unwrap();
         }
     }
 
     fn call_value(&mut self, callee: Value, arg_count: usize) -> Result<(), RuntimeError> {
         match &callee {
-            Value::Object(Object::Function(function)) => {
-                self.call_function(function.clone(), arg_count)
-            }
-            Value::Object(Object::Native(native)) => self.call_native(native, arg_count),
-            value => return Err(RuntimeError::object_not_callable(value.type_())),
+            Value::Closure(closure) => self.call_closure(closure, arg_count),
+            Value::Native(native) => self.call_native(native, arg_count),
+            value => return Err(RuntimeError::value_not_callable(value.type_())),
         }
     }
 
-    fn call_function(
-        &mut self,
-        function: Rc<Function>,
-        arg_count: usize,
-    ) -> Result<(), RuntimeError> {
-        if arg_count != function.arity {
-            return Err(RuntimeError::arity_mismatch(&function.name, function.arity, arg_count));
+    fn call_closure(&mut self, closure: &Closure, arg_count: usize) -> Result<(), RuntimeError> {
+        if arg_count != closure.function.arity {
+            return Err(RuntimeError::arity_mismatch(
+                &closure.function.name,
+                closure.function.arity,
+                arg_count,
+            ));
         }
         // The function itself as well as its parameters have already been
         // pushed to the stack, so we start the CallFrame at that slot.
         let slot = self.stack.len() - arg_count - 1;
-        let mut frame = CallFrame::new_at(function, slot);
+        let mut frame = CallFrame::new_at(closure.clone(), slot);
         mem::swap(&mut self.frame, &mut frame);
         self.frames.push(frame);
         Ok(())
@@ -331,7 +344,7 @@ impl<W: Write> VM<W> {
         let slot = self.stack.len() - arg_count;
         let function = native_.function();
         let args = self.stack.split_off(slot);
-        self.stack.pop(); // pop off the native object
+        self.stack.pop(); // pop off the native value
 
         let value = function(&args)?;
         self.stack.push(value);
@@ -339,13 +352,13 @@ impl<W: Write> VM<W> {
     }
 
     fn read_op(&mut self) -> Op {
-        let op = self.frame.function.chunk.code[self.frame.ip];
+        let op = self.frame.closure.function.chunk.code[self.frame.ip];
         self.frame.ip += 1;
         op
     }
 
     fn read_constant(&self, idx: ConstantIdx) -> &Value {
-        &self.frame.function.chunk.constants[idx as usize]
+        &self.frame.closure.function.chunk.constants[idx as usize]
     }
 
     fn peek(&mut self, idx: usize) -> &Value {
@@ -363,7 +376,7 @@ impl<W: Write> VM<W> {
     fn dump_stack(&self) {
         print!("{:>5}", "");
         for value in self.stack.iter() {
-            print!("[ {} ]", value);
+            print!("[ {value} ]");
         }
         println!();
     }
@@ -371,18 +384,18 @@ impl<W: Write> VM<W> {
 
 #[derive(Debug)]
 pub struct CallFrame {
-    function: Rc<Function>,
+    closure: Closure,
     ip: usize,
     slot: usize,
 }
 
 impl CallFrame {
-    pub fn new(function: Rc<Function>) -> Self {
-        Self::new_at(function, 0)
+    pub fn new(closure: Closure) -> Self {
+        Self::new_at(closure, 0)
     }
 
-    pub fn new_at(function: Rc<Function>, slot: usize) -> Self {
-        Self { function, ip: 0, slot }
+    pub fn new_at(closure: Closure, slot: usize) -> Self {
+        Self { closure, ip: 0, slot }
     }
 }
 
@@ -405,8 +418,8 @@ impl RuntimeError {
         Self::NameError(format!("name '{name}' is not defined"))
     }
 
-    fn object_not_callable(type_: &str) -> Self {
-        Self::TypeError(format!("'{type_}' object is not callable"))
+    fn value_not_callable(type_: &str) -> Self {
+        Self::TypeError(format!("'{type_}' value is not callable"))
     }
 
     fn type_binary_op(op: &str, type1: &str, type2: &str) -> Self {

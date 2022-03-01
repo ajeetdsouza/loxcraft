@@ -4,7 +4,7 @@ use crate::syntax::ast::{
     StmtVar, StmtWhile,
 };
 use crate::vm::op::{ArgCount, ConstantIdx, JumpOffset, Op, StackIdx};
-use crate::vm::value::{Function, Object, Value};
+use crate::vm::value::{Function, Value};
 
 use anyhow::{bail, Context, Result};
 
@@ -16,7 +16,6 @@ type CompileResult<T = ()> = Result<T>;
 #[derive(Debug)]
 pub struct Compiler {
     ctx: CompilerCtx,
-    stack: Vec<CompilerCtx>,
     scope_depth: usize,
 }
 
@@ -28,8 +27,8 @@ impl Compiler {
                 function: Function::new("", 0),
                 type_: FunctionType::Script,
                 locals: Vec::new(),
+                parent: None,
             },
-            stack: Vec::new(),
             scope_depth: 0,
         }
     }
@@ -70,7 +69,7 @@ impl Compiler {
     }
 
     fn compile_stmt_expr(&mut self, expr: &StmtExpr) -> CompileResult {
-        self.compile_expr(&expr.expr)?;
+        self.compile_expr(&expr.value)?;
         self.emit_op(Op::Pop);
         Ok(())
     }
@@ -128,6 +127,7 @@ impl Compiler {
             function: Function::new(&fun.name, fun.params.len()),
             type_: FunctionType::Function,
             locals: Vec::new(),
+            parent: None,
         };
         self.begin_ctx(ctx);
         self.create_local(&fun.name)?;
@@ -135,10 +135,12 @@ impl Compiler {
             self.create_local(param)?;
         }
         self.compile_stmt_block(&fun.body)?;
+        // Implicit return at the end of the function.
+        self.compile_stmt_return(&StmtReturn { value: None })?;
         let function = self.end_ctx();
 
-        let constant = self.create_constant(Value::Object(Object::Function(Rc::new(function))))?;
-        self.emit_op(Op::Constant(constant));
+        let constant_idx = self.create_constant(Value::Function(Rc::new(function)))?;
+        self.emit_op(Op::Closure(constant_idx));
         self.create_variable(&fun.name)?;
 
         Ok(())
@@ -169,7 +171,7 @@ impl Compiler {
     }
 
     fn compile_stmt_print(&mut self, print: &StmtPrint) -> CompileResult {
-        self.compile_expr(&print.expr)?;
+        self.compile_expr(&print.value)?;
         self.emit_op(Op::Print);
         Ok(())
     }
@@ -178,7 +180,7 @@ impl Compiler {
         if self.ctx.type_ == FunctionType::Script {
             bail!("cannot return outside function");
         }
-        self.compile_expr(&return_.expr)?;
+        self.compile_expr(return_.value.as_ref().unwrap_or(&Expr::Literal(ExprLiteral::Nil)))?;
         self.emit_op(Op::Return);
         Ok(())
     }
@@ -187,7 +189,7 @@ impl Compiler {
         // Push the value to the stack. This will either be popped and added to
         // the globals map, or it will be used directly from the stack as a
         // local variable.
-        self.compile_expr(&var.value)?;
+        self.compile_expr(var.value.as_ref().unwrap_or(&Expr::Literal(ExprLiteral::Nil)))?;
         self.create_variable(&var.name)
     }
 
@@ -233,7 +235,7 @@ impl Compiler {
             return Ok(());
         }
 
-        let name = Value::Object(Object::String(Rc::new(assign.name.to_string())));
+        let name = Value::String(Rc::new(assign.name.to_string()));
         let idx = self.create_constant(name)?;
         self.emit_op(Op::SetGlobal(idx));
         Ok(())
@@ -265,7 +267,7 @@ impl Compiler {
                 self.emit_op(Op::Constant(constant));
             }
             ExprLiteral::String(string) => {
-                let value = Value::Object(Object::String(Rc::new(string.to_string())));
+                let value = Value::String(Rc::new(string.to_string()));
                 let constant = self.create_constant(value)?;
                 self.emit_op(Op::Constant(constant));
             }
@@ -366,7 +368,7 @@ impl Compiler {
     }
 
     fn compile_expr_prefix(&mut self, expr: &ExprPrefix) -> CompileResult {
-        self.compile_expr(&expr.expr)?;
+        self.compile_expr(&expr.rt)?;
         match expr.op {
             OpPrefix::Negate => self.emit_op(Op::Negate),
             OpPrefix::Not => self.emit_op(Op::Not),
@@ -380,7 +382,7 @@ impl Compiler {
             return Ok(());
         }
 
-        let name = Value::Object(Object::String(Rc::new(variable.name.to_string())));
+        let name = Value::String(Rc::new(variable.name.to_string()));
         let idx = self.create_constant(name)?;
         self.emit_op(Op::GetGlobal(idx));
         Ok(())
@@ -451,19 +453,20 @@ impl Compiler {
         while self.ctx.locals.last().map(|l| l.depth > self.scope_depth).unwrap_or(false) {
             // Remove locals that are no longer in scope.
             self.ctx.locals.pop();
-            // Discard the variable's value from the stack.
             self.emit_op(Op::Pop);
         }
     }
 
-    fn begin_ctx(&mut self, mut ctx: CompilerCtx) {
-        mem::swap(&mut self.ctx, &mut ctx);
-        self.stack.push(ctx);
+    /// Pushes the current ctx to parent and assigns it to the given ctx.
+    fn begin_ctx(&mut self, ctx: CompilerCtx) {
+        let ctx = mem::replace(&mut self.ctx, ctx);
+        self.ctx.parent = Some(Box::new(ctx));
     }
 
+    /// Pops the current ctx and extracts a [`Function`] from it.
     fn end_ctx(&mut self) -> Function {
-        let mut ctx = self.stack.pop().expect("tried to end context in a script");
-        mem::swap(&mut self.ctx, &mut ctx);
+        let parent = self.ctx.parent.take().expect("tried to end context in a script");
+        let ctx = mem::replace(&mut self.ctx, *parent);
         ctx.function
     }
 
@@ -472,7 +475,7 @@ impl Compiler {
     fn create_variable(&mut self, name: &str) -> CompileResult {
         // If the scope depth is 0, create a global variable.
         if self.scope_depth == 0 {
-            let name = Value::Object(Object::String(Rc::new(name.to_string())));
+            let name = Value::String(Rc::new(name.to_string()));
             let name = self.create_constant(name)?;
             self.emit_op(Op::DefineGlobal(name));
             return Ok(());
@@ -484,10 +487,6 @@ impl Compiler {
 
     /// Creates a named local variable out of the top value of the stack.
     fn create_local(&mut self, name: &str) -> CompileResult {
-        if self.ctx.locals.len() >= 256 {
-            bail!("cannot define more than 256 local variables within a chunk");
-        }
-
         if self
             .ctx
             .locals
@@ -496,7 +495,7 @@ impl Compiler {
             .take_while(|l| l.depth >= self.scope_depth)
             .any(|l| l.name == name)
         {
-            bail!("'{}' has already been defined in this scope", name);
+            bail!("'{name}' has already been defined in this scope");
         }
 
         self.ctx.locals.push(Local::new(name, self.scope_depth));
@@ -521,6 +520,7 @@ struct CompilerCtx {
     function: Function,
     type_: FunctionType,
     locals: Vec<Local>,
+    parent: Option<Box<CompilerCtx>>,
 }
 
 #[derive(Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -539,12 +539,10 @@ struct Local {
     /// surround it. This starts at 1, because global scopes don't have local
     /// variables.
     depth: usize,
-    /// This is set to `true` if a closure captures this variable.
-    is_captured: bool,
 }
 
 impl Local {
     fn new<S: Into<String>>(name: S, depth: usize) -> Self {
-        Self { name: name.into(), depth, is_captured: false }
+        Self { name: name.into(), depth }
     }
 }

@@ -5,5 +5,4 @@ fun f() {
   }
 }
 
-print f();
-// expect: i
+print f(); // out: i

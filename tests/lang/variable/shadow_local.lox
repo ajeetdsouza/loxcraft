@@ -2,7 +2,7 @@
   var a = "local";
   {
     var a = "shadow";
-    print a; // expect: shadow
+    print a; // out: shadow
   }
-  print a; // expect: local
+  print a; // out: local
 }

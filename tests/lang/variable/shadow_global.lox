@@ -1,6 +1,6 @@
 var a = "global";
 {
   var a = "shadow";
-  print a; // expect: shadow
+  print a; // out: shadow
 }
-print a; // expect: global
+print a; // out: global

@@ -58,7 +58,7 @@ pub fn report_err(name: &str, source: &str, err: ParserError) -> io::Result<()> 
         .with_notes(notes);
     term::emit(&mut writer.lock(), &config, &file, &diagnostic).map_err(|err| match err {
         Error::Io(err) => err,
-        _ => panic!("invalid error generated: {}", err),
+        _ => panic!("invalid error generated: {err}"),
     })?;
 
     Ok(())

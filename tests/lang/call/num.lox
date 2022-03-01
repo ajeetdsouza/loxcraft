@@ -1,1 +1,4 @@
-123(); // expect runtime error: Can only call functions and classes.
+// err: TypeError: 'number' value is not callable
+// err: Traceback (most recent call last):
+// err:   in <script>
+123();

@@ -1,1 +1,4 @@
-print notDefined;  // expect runtime error: Undefined variable 'notDefined'.
+// err: NameError: name 'notDefined' is not defined
+// err: Traceback (most recent call last):
+// err:   in <script>
+print notDefined;

@@ -1,10 +1,10 @@
 {
   var a = "before";
-  print a; // expect: before
+  print a; // out: before
 
   a = "after";
-  print a; // expect: after
+  print a; // out: after
 
-  print a = "arg"; // expect: arg
-  print a; // expect: arg
+  print a = "arg"; // out: arg
+  print a; // out: arg
 }

@@ -1,25 +1,28 @@
 [package]
+authors = ["Ajeet D'Souza <98ajeet@gmail.com>"]
 build = "build.rs"
+description = "A compiler / VM for the Lox programming language"
 edition = "2021"
+keywords = ["compiler", "interpreter", "language", "lox", "vm"]
+license = "MIT"
 name = "lox"
-rust-version = "1.58"
+repository = "https://github.com/ajeetdsouza/lox"
+rust-version = "1.59"
 version = "0.1.0"
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[badges]
+maintenance = { status = "actively-developed" }
 
 [dependencies]
 anyhow = "1.0.52"
-clap = { version = "3.0.6", features = ["derive"] }
+clap = { version = "3.1.0", features = ["derive"] }
 codespan-reporting = "0.11.1"
 fnv = "1.0.7"
 human-panic = "1.0.3"
-iota = "0.2.2"
 lalrpop-util = "0.19.6"
 logos = "0.12.0"
 mimalloc = { version = "0.1.27", default-features = false }
-pprof = { version = "0.6.2", features = [
-    "flamegraph",
-    "protobuf",
-], optional = true }
+pprof = { version = "0.6.2", features = ["flamegraph", "protobuf"] }
 rustyline = "9.1.2"
 thiserror = "1.0.30"
 
@@ -27,13 +30,10 @@ thiserror = "1.0.30"
 lalrpop = { version = "0.19.1", default-features = false }
 
 [dev-dependencies]
-regex = { version = "1.5.4", default-features = false, features = ["std"] }
+pretty_assertions = "1.1.0"
 test-generator = "0.3.0"
 
 [profile.release]
 # codegen-units = 1
 # lto = true
 # strip = true
-
-[features]
-profiler = ["pprof"]

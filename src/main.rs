@@ -1,4 +1,4 @@
-use lox::app::App;
+use lox::cmd::Cmd;
 
 use clap::Parser;
 
@@ -9,6 +9,6 @@ static GLOBAL: MiMalloc = MiMalloc;
 
 fn main() {
     human_panic::setup_panic!();
-    let app = App::parse();
-    app.run();
+    let cmd = Cmd::parse();
+    cmd.run();
 }

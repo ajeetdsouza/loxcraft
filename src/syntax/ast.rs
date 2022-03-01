@@ -23,7 +23,7 @@ pub struct StmtBlock {
 /// An expression statement evaluates an expression and discards the result.
 #[derive(Debug)]
 pub struct StmtExpr {
-    pub expr: Expr,
+    pub value: Expr,
 }
 
 #[derive(Debug)]
@@ -50,18 +50,18 @@ pub struct StmtIf {
 
 #[derive(Debug)]
 pub struct StmtPrint {
-    pub expr: Expr,
+    pub value: Expr,
 }
 
 #[derive(Debug)]
 pub struct StmtReturn {
-    pub expr: Expr,
+    pub value: Option<Expr>,
 }
 
 #[derive(Debug)]
 pub struct StmtVar {
     pub name: String,
-    pub value: Expr,
+    pub value: Option<Expr>,
 }
 
 #[derive(Debug)]
@@ -128,7 +128,7 @@ pub enum OpInfix {
 #[derive(Debug)]
 pub struct ExprPrefix {
     pub op: OpPrefix,
-    pub expr: Expr,
+    pub rt: Expr,
 }
 
 #[derive(Debug)]

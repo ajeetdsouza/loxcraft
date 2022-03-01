@@ -1,3 +1,6 @@
 fun f(a, b) {}
 
-f(1); // expect runtime error: Expected 2 arguments but got 1.
+// err: TypeError: f() takes 2 positional arguments but 1 were given
+// err: Traceback (most recent call last):
+// err:   in <script>
+f(1);

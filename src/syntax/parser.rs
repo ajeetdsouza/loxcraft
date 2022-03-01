@@ -6,4 +6,8 @@ pub type Parser = grammar::ProgramParser;
 
 pub type ParserError = ParseError<usize, Token, LexerError>;
 
-lalrpop_mod!(grammar, "/syntax/grammar.rs");
+lalrpop_mod!(
+    #[allow(clippy::all)]
+    grammar,
+    "/syntax/grammar.rs"
+);

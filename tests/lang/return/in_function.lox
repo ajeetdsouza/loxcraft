@@ -3,4 +3,4 @@ fun f() {
   print "bad";
 }
 
-print f(); // expect: ok
+print f(); // out: ok

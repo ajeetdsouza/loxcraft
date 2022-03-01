@@ -1,7 +1,11 @@
 {
   fun isEven(n) {
     if (n == 0) return true;
-    return isOdd(n - 1); // expect runtime error: Undefined variable 'isOdd'.
+    // err: NameError: name 'isOdd' is not defined
+    // err: Traceback (most recent call last):
+    // err:   in <function isEven>
+    // err:   in <script>
+    return isOdd(n - 1);
   }
 
   fun isOdd(n) {

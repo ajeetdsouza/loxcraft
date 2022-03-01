@@ -80,17 +80,20 @@ StmtBlockInternal: ast::StmtBlock = "{" <stmts:Decl*> "}" =>
     ast::StmtBlock { <> };
 
 StmtExpr: ast::Stmt =
-    <expr:Expr> ";" => ast::Stmt::Expr(ast::StmtExpr { <> });
+    <value:Expr> ";" => ast::Stmt::Expr(ast::StmtExpr { <> });
 
 StmtPrint: ast::Stmt =
-    "print" <expr:Expr> ";" => ast::Stmt::Print(ast::StmtPrint { <> });
+    "print" <value:Expr> ";" => ast::Stmt::Print(ast::StmtPrint { <> });
 
 StmtReturn: ast::Stmt =
-    "return" <expr:Expr> ";" => ast::Stmt::Return(ast::StmtReturn { <> });
+    "return" <value:Expr?> ";" => ast::Stmt::Return(ast::StmtReturn { <> });
 
-StmtVar: ast::Stmt =
+StmtVar: ast::Stmt = {
     "var" <name:Identifier> "=" <value:Expr> ";" =>
-        ast::Stmt::Var(ast::StmtVar { <> });
+        ast::Stmt::Var(ast::StmtVar { name, value: Some(value) }),
+    "var" <name:Identifier> ";" =>
+        ast::Stmt::Var(ast::StmtVar { name, value: None }),
+};
 
 Expr = ExprAssign;
 
@@ -133,7 +136,7 @@ OpFactor: ast::OpInfix = {
 }
 
 ExprPrefix: ast::Expr = {
-    <op:OpPrefix> <expr:ExprPrefix> =>
+    <op:OpPrefix> <rt:ExprPrefix> =>
         ast::Expr::Prefix(Box::new(ast::ExprPrefix { <> })),
     ExprCall,
 }

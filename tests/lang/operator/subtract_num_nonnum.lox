@@ -1,1 +1,4 @@
-1 - "1"; // expect runtime error: Operands must be numbers.
+// err: TypeError: unsupported operand type(s) for OP_SUBTRACT: 'number' and 'string'
+// err: Traceback (most recent call last):
+// err:   in <script>
+1 - "1";

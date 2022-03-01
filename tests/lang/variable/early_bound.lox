@@ -4,7 +4,7 @@ var a = "outer";
     print a;
   }
 
-  foo(); // expect: outer
+  foo(); // out: outer
   var a = "inner";
-  foo(); // expect: outer
+  foo(); // out: outer
 }

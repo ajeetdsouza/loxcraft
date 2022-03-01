@@ -1,1 +1,4 @@
--"s"; // expect runtime error: Operand must be a number.
+// err: TypeError: unsupported operand type for OP_NEGATE: 'string'
+// err: Traceback (most recent call last):
+// err:   in <script>
+-"s";

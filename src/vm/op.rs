@@ -11,18 +11,18 @@ pub enum Op {
     /// Pops a value from the stack.
     Pop,
 
-    /// Reads the stack at idx and pushes the value onto the stack.
+    /// Reads the stack at `idx` and pushes the value onto the stack.
     GetLocal(StackIdx),
-    /// Pops a value from the stack and sets the stack at idx to it.
+    /// Pops a value from the stack and sets the stack at `idx` to it.
     SetLocal(StackIdx),
-    /// Reads a constant (variable name) at idx, looks up its value in the
-    /// globals map, and pushes the value onto the stack.
+    /// Reads a constant (variable name) at `idx`, looks up its value in the
+    /// `globals` map, and pushes the value onto the stack.
     GetGlobal(ConstantIdx),
-    /// Reads a constant (variable name) at idx, pops a value from the stack,
-    /// and sets the variable to this value in the globals map.
+    /// Reads a constant (variable name) at `idx`, pops a value from the stack,
+    /// and sets the variable to this value in the `globals` map.
     DefineGlobal(ConstantIdx),
     /// Similar to [`Op::DefineGlobal`], but requires that the variable already
-    /// exists in the globals map.
+    /// exists in the `globals` map.
     SetGlobal(ConstantIdx),
 
     // Operators.
@@ -49,6 +49,9 @@ pub enum Op {
     /// function to be called followed by `n` arguments. It then pushes a new
     /// frame and calls the function in that frame.
     Call(ArgCount),
+    /// Reads a constant (function) at idx, wraps it in a closure, and pushes it
+    /// to the stack.
+    Closure(ConstantIdx),
     /// Pops the current frame, and clears its stack. Retains the return value
     /// at the top of the stack.
     Return,

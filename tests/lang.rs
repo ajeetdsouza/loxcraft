@@ -2,33 +2,37 @@ use lox::syntax;
 use lox::vm::compiler::Compiler;
 use lox::vm::vm::VM;
 
-use regex::Regex;
+use pretty_assertions::assert_eq;
 use test_generator::test_resources;
 
+use std::fmt::Write;
 use std::fs;
-use std::io::Write;
-
-thread_local! {
-    static RE_EXPECT: Regex = Regex::new(r" // expect: (.*)").unwrap();
-}
+use std::str;
 
 #[test_resources("tests/lang/**/*.lox")]
-fn run_file(path: &str) {
+fn lox(path: &str) {
     let source = fs::read_to_string(path).unwrap();
-    let program = syntax::parse(&source).unwrap();
-    let compiler = Compiler::new();
-    let function = compiler.compile(&program).unwrap();
 
-    let mut got = Vec::new();
-    let mut vm = VM::new(&mut got, false);
-    vm.run(function);
+    let mut exp_out = String::new();
+    let mut exp_err = String::new();
 
-    let mut expected = Vec::new();
-    RE_EXPECT.with(|re| {
-        for captures in re.captures_iter(&source) {
-            writeln!(expected, "{}", &captures[1]).unwrap();
+    for line in source.lines() {
+        if let Some((_, out)) = line.split_once("// out: ") {
+            writeln!(&mut exp_out, "{out}").unwrap();
+        } else if let Some((_, out)) = line.split_once("// err: ") {
+            writeln!(&mut exp_err, "{out}").unwrap();
         }
-    });
+    }
 
-    assert_eq!(got, expected);
+    let program = syntax::parse(&source).unwrap();
+    let function = Compiler::new().compile(&program).unwrap();
+
+    let mut got_out = Vec::new();
+    let mut got_err = Vec::new();
+    VM::new(&mut got_out, &mut got_err, false, false).run(function);
+    let got_out = str::from_utf8(&got_out).unwrap();
+    let got_err = str::from_utf8(&got_err).unwrap();
+
+    assert_eq!(exp_out, got_out);
+    assert_eq!(exp_err, got_err);
 }

@@ -5,12 +5,15 @@ use std::cmp::Ordering;
 use std::fmt;
 use std::rc::Rc;
 
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Debug)]
 pub enum Value {
     Bool(bool),
+    Closure(Closure),
+    Function(Rc<Function>),
+    Native(Native),
     Nil,
     Number(f64),
-    Object(Object),
+    String(Rc<String>),
 }
 
 impl Value {
@@ -21,13 +24,11 @@ impl Value {
     pub fn type_(&self) -> &str {
         match self {
             Value::Bool(_) => "bool",
+            Value::Closure(_) | Value::Function(_) => "function",
+            Value::Native(_) => "native",
             Value::Nil => "nil",
             Value::Number(_) => "number",
-            Value::Object(object) => match object {
-                Object::String(_) => "string",
-                Object::Function(_) => "function",
-                Object::Native(_) => "native",
-            },
+            Value::String(_) => "string",
         }
     }
 }
@@ -35,47 +36,50 @@ impl Value {
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Value::Bool(bool) => write!(f, "{}", bool),
+            Value::Bool(bool) => write!(f, "{bool}"),
+            Value::Closure(closure) => write!(f, "{closure}"),
+            Value::Function(function) => write!(f, "{function}"),
+            Value::Native(native) => write!(f, "{native}"),
             Value::Nil => write!(f, "nil"),
-            Value::Number(number) => write!(f, "{}", number),
-            Value::Object(object) => write!(f, "{}", object),
+            Value::Number(number) => write!(f, "{number}"),
+            Value::String(string) => write!(f, "{string}"),
         }
     }
 }
 
-#[derive(Clone, Debug)]
-pub enum Object {
-    Function(Rc<Function>),
-    Native(Native),
-    String(Rc<String>),
-}
-
-impl fmt::Display for Object {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Object::Function(function) => write!(f, "{}", function),
-            Object::Native(native) => write!(f, "{}", native),
-            Object::String(string) => write!(f, "{}", string),
-        }
-    }
-}
-
-impl PartialEq for Object {
+impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            // Functions are only equal if they point to the same object.
-            (Object::Function(f1), Object::Function(f2)) => Rc::ptr_eq(f1, f2),
-            (Object::Native(n1), Object::Native(n2)) => n1 == n2,
-            (Object::String(s1), Object::String(s2)) => s1 == s2,
+            (Value::Bool(b1), Value::Bool(b2)) => b1 == b2,
+            // Functions are only equal if they point to the same value.
+            (Value::Function(f1), Value::Function(f2)) => Rc::ptr_eq(f1, f2),
+            (Value::Native(n1), Value::Native(n2)) => n1 == n2,
+            (Value::Nil, Value::Nil) => true,
+            (Value::Number(n1), Value::Number(n2)) => n1 == n2,
+            (Value::String(s1), Value::String(s2)) => s1 == s2,
             _ => false,
         }
     }
 }
 
-impl PartialOrd for Object {
-    /// Always returns [`None`], since objects cannot be ordered.
-    fn partial_cmp(&self, _: &Self) -> Option<Ordering> {
-        None
+impl PartialOrd for Value {
+    /// Only numbers can be ordered.
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match (self, other) {
+            (Value::Number(n1), Value::Number(n2)) => n1.partial_cmp(n2),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Closure {
+    pub function: Rc<Function>,
+}
+
+impl fmt::Display for Closure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.function)
     }
 }
 

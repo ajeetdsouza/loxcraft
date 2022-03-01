@@ -2,20 +2,14 @@ use crate::syntax;
 use crate::vm::compiler::Compiler;
 use crate::vm::vm::VM;
 
-use clap::{AppSettings, Parser};
+use clap::Parser;
 
 use std::fs;
 use std::io;
 
 #[derive(Debug, Parser)]
-#[clap(
-    about,
-    author,
-    version,
-    global_setting(AppSettings::DisableHelpSubcommand),
-    global_setting(AppSettings::PropagateVersion)
-)]
-pub enum App {
+#[clap(about, author, disable_help_subcommand = true, propagate_version = true, version)]
+pub enum Cmd {
     REPL {
         #[clap(long)]
         debug: bool,
@@ -24,19 +18,21 @@ pub enum App {
         path: String,
         #[clap(long)]
         debug: bool,
+        #[clap(long)]
+        profile: bool,
     },
 }
 
-impl App {
+impl Cmd {
     pub fn run(&self) {
         match self {
-            App::REPL { debug } => repl(*debug),
-            App::Run { path, debug } => run(path, *debug),
+            Cmd::REPL { debug } => repl(*debug, false),
+            Cmd::Run { path, debug, profile } => run(path, *debug, *profile),
         }
     }
 }
 
-pub fn repl(debug: bool) {
+pub fn repl(debug: bool, profile: bool) {
     use rustyline::error::ReadlineError;
     use rustyline::Editor;
 
@@ -45,7 +41,10 @@ pub fn repl(debug: bool) {
     let stdout = io::stdout();
     let stdout = stdout.lock();
 
-    let mut vm = VM::new(stdout, debug);
+    let stderr = io::stdout();
+    let stderr = stderr.lock();
+
+    let mut vm = VM::new(stdout, stderr, debug, profile);
     loop {
         let result = readline.readline(">>> ");
         match result {
@@ -78,7 +77,7 @@ pub fn repl(debug: bool) {
     }
 }
 
-fn run(path: &str, debug: bool) {
+fn run(path: &str, debug: bool, profile: bool) {
     let source = fs::read_to_string(&path).unwrap();
     let program = match syntax::parse(&source) {
         Ok(program) => program,
@@ -93,6 +92,9 @@ fn run(path: &str, debug: bool) {
     let stdout = io::stdout();
     let stdout = stdout.lock();
 
-    let mut vm = VM::new(stdout, debug);
+    let stderr = io::stderr();
+    let stderr = stderr.lock();
+
+    let mut vm = VM::new(stdout, stderr, debug, profile);
     vm.run(function);
 }
