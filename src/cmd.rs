@@ -1,8 +1,10 @@
+use crate::repl::{LoxPrompt, LoxValidator};
 use crate::syntax;
 use crate::vm::compiler::Compiler;
 use crate::vm::vm::VM;
 
 use clap::Parser;
+use reedline::{Reedline, Signal};
 
 use std::fs;
 use std::io;
@@ -33,10 +35,8 @@ impl Cmd {
 }
 
 pub fn repl(debug: bool, profile: bool) {
-    use rustyline::error::ReadlineError;
-    use rustyline::Editor;
-
-    let mut readline = Editor::<()>::new();
+    let validator = Box::new(LoxValidator);
+    let mut editor = Reedline::create().unwrap().with_validator(validator);
 
     let stdout = io::stdout();
     let stdout = stdout.lock();
@@ -46,10 +46,8 @@ pub fn repl(debug: bool, profile: bool) {
 
     let mut vm = VM::new(stdout, stderr, debug, profile);
     loop {
-        let result = readline.readline(">>> ");
-        match result {
-            Ok(line) => {
-                readline.add_history_entry(&line);
+        match editor.read_line(&LoxPrompt) {
+            Ok(Signal::Success(line)) => {
                 let program = match syntax::parse(&line) {
                     Ok(program) => program,
                     Err(err) => {
@@ -61,13 +59,16 @@ pub fn repl(debug: bool, profile: bool) {
                 let function = compiler.compile(&program).unwrap();
                 vm.run(function);
             }
-            Err(ReadlineError::Interrupted) => {
+            Ok(Signal::CtrlC) => {
                 println!("CTRL-C");
                 break;
             }
-            Err(ReadlineError::Eof) => {
+            Ok(Signal::CtrlD) => {
                 println!("CTRL-D");
                 break;
+            }
+            Ok(Signal::CtrlL) => {
+                editor.clear_screen().unwrap();
             }
             Err(err) => {
                 println!("error: {:?}", err);

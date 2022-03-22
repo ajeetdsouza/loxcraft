@@ -35,12 +35,12 @@ pub fn report_err(name: &str, source: &str, err: ParserError) -> io::Result<()> 
         ParserError::UnrecognizedEOF { location, expected } => {
             label = "unrecognized EOF";
             range = location..location;
-            notes = vec![format!("expected one of: {}", expected.join(", "))];
+            notes = vec![format!("expected one of: {} after this token", expected.join(", "))];
         }
         ParserError::UnrecognizedToken { token, expected } => {
             label = "unrecognized token";
             range = token.0..token.2;
-            notes = vec![format!("expected one of: {}", expected.join(", "))];
+            notes = vec![format!("expected one of: {} after this token", expected.join(", "))];
         }
         ParserError::User { error: err } => {
             label = "unexpected input";

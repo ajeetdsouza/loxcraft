@@ -17,13 +17,14 @@ maintenance = { status = "actively-developed" }
 anyhow = "1.0.52"
 clap = { version = "3.1.0", features = ["derive"] }
 codespan-reporting = "0.11.1"
+crossterm = "0.23.1"
 fnv = "1.0.7"
 human-panic = "1.0.3"
 lalrpop-util = "0.19.6"
 logos = "0.12.0"
 mimalloc = { version = "0.1.27", default-features = false }
-pprof = { version = "0.6.2", features = ["flamegraph", "protobuf"] }
-rustyline = "9.1.2"
+pprof = { version = "0.7.0", features = ["flamegraph", "prost-codec"] }
+reedline = "0.3.0"
 thiserror = "1.0.30"
 
 [build-dependencies]
