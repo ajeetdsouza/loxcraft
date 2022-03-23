@@ -13,6 +13,9 @@ version = "0.1.0"
 [badges]
 maintenance = { status = "actively-developed" }
 
+[workspace]
+members = ["crates/tree-sitter-lox"]
+
 [dependencies]
 anyhow = "1.0.52"
 clap = { version = "3.1.0", features = ["derive"] }
@@ -23,9 +26,12 @@ human-panic = "1.0.3"
 lalrpop-util = "0.19.6"
 logos = "0.12.0"
 mimalloc = { version = "0.1.27", default-features = false }
+nu-ansi-term = "0.45.0"
 pprof = { version = "0.7.0", features = ["flamegraph", "prost-codec"] }
 reedline = "0.3.0"
 thiserror = "1.0.30"
+tree-sitter-highlight = "0.20.1"
+tree-sitter-lox = { path = "crates/tree-sitter-lox", version = "*" }
 
 [build-dependencies]
 lalrpop = { version = "0.19.1", default-features = false }

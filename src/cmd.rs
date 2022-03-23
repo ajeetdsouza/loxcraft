@@ -1,4 +1,4 @@
-use crate::repl::{LoxPrompt, LoxValidator};
+use crate::repl::{Highlighter, Prompt, Validator};
 use crate::syntax;
 use crate::vm::compiler::Compiler;
 use crate::vm::vm::VM;
@@ -35,18 +35,21 @@ impl Cmd {
 }
 
 pub fn repl(debug: bool, profile: bool) {
-    let validator = Box::new(LoxValidator);
-    let mut editor = Reedline::create().unwrap().with_validator(validator);
+    let highlighter = Box::new(Highlighter::new());
+    let validator = Box::new(Validator);
+    let mut editor = Reedline::create()
+        .expect("failed to create prompt")
+        .with_highlighter(highlighter)
+        .with_validator(validator);
 
     let stdout = io::stdout();
     let stdout = stdout.lock();
-
     let stderr = io::stdout();
     let stderr = stderr.lock();
-
     let mut vm = VM::new(stdout, stderr, debug, profile);
+
     loop {
-        match editor.read_line(&LoxPrompt) {
+        match editor.read_line(&Prompt) {
             Ok(Signal::Success(line)) => {
                 let program = match syntax::parse(&line) {
                     Ok(program) => program,
@@ -60,18 +63,19 @@ pub fn repl(debug: bool, profile: bool) {
                 vm.run(function);
             }
             Ok(Signal::CtrlC) => {
-                println!("CTRL-C");
-                break;
+                eprintln!("CTRL-C");
             }
             Ok(Signal::CtrlD) => {
-                println!("CTRL-D");
+                eprintln!("CTRL-D");
                 break;
             }
             Ok(Signal::CtrlL) => {
-                editor.clear_screen().unwrap();
+                if let Err(e) = editor.clear_screen() {
+                    eprintln!("error: unable to clear screen: {:?}", e)
+                };
             }
-            Err(err) => {
-                println!("error: {:?}", err);
+            Err(e) => {
+                eprintln!("error: {:?}", e);
                 break;
             }
         }
