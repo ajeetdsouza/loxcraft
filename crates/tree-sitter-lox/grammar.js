@@ -13,13 +13,22 @@ const commaSep = (rule) => seq(rule, repeat(seq(",", rule)));
 
 module.exports = grammar({
   name: "lox",
+  extras: ($) => [
+    /\s|\r?\n/,
+    $.comment,
+  ],
   rules: {
     // Program
     program: ($) => field("decl", repeat($.decl)),
-
     // Declarations
 
-    decl: ($) => choice($.decl_class, $.decl_fun, $.decl_var, $.decl_stmt),
+    decl: ($) =>
+      choice(
+        $.decl_class,
+        $.decl_fun,
+        $.decl_var,
+        $.decl_stmt,
+      ),
     decl_class: ($) =>
       seq(
         "class",
@@ -54,21 +63,23 @@ module.exports = grammar({
     stmt_for: ($) =>
       seq(
         "for",
+        field("paren", $.for_paren),
+        field("body", $.decl_stmt)
+      ),
+    for_paren: ($) =>
+      seq(
         "(",
         choice(field("init", choice($.stmt_expr, $.decl_var)), ";"),
         optional(field("cond", $._expr)),
         ";",
         optional(field("incr", choice($._expr))),
         ")",
-        field("body", $.decl_stmt)
       ),
     stmt_if: ($) =>
       prec.right(
         seq(
           "if",
-          "(",
-          field("cond", $._expr),
-          ")",
+          field("cond", $.grouping),
           field("then", $.decl_stmt),
           optional(seq("else", field("else", $.decl_stmt)))
         )
@@ -76,13 +87,7 @@ module.exports = grammar({
     stmt_print: ($) => seq("print", field("value", $._expr), ";"),
     stmt_return: ($) => seq("return", optional(field("value", $._expr)), ";"),
     stmt_while: ($) =>
-      seq(
-        "while",
-        "(",
-        field("cond", $._expr),
-        ")",
-        field("body", $.decl_stmt)
-      ),
+      seq("while", field("cond", $.grouping), field("body", $.decl_stmt)),
 
     // Expressions
     _expr: ($) =>
@@ -96,13 +101,13 @@ module.exports = grammar({
     expr_call: ($) =>
       prec.left(
         precTable.call,
-        seq(field("callee", $._expr), "(", optional(field("args", $.args)), ")")
+        seq(field("callee", $._expr), field("args", $.args))
       ),
-    expr_attribute: ($) =>
-      prec.left(
-        precTable.call,
-        seq(field("object", $._expr), ".", field("attribute", $.identifier))
-      ),
+    expr_attribute: ($) => prec.left(precTable.call, seq(
+      field("object", $._expr),
+      '.',
+      field("attribute", $.identifier)
+    )),
     expr_infix: ($) => {
       const table = [
         [prec.left, precTable.factor, choice("*", "/")],
@@ -128,17 +133,7 @@ module.exports = grammar({
         seq(field("op", choice("-", "!")), field("rt", $._expr))
       ),
 
-    expr_primary: ($) =>
-      choice(
-        $.bool,
-        $.nil,
-        $.this,
-        $.number,
-        $.string,
-        $.var,
-        $.grouping,
-        $.super
-      ),
+    expr_primary: ($) => choice($.bool, $.nil, $.this, $.number, $.string, $.var, $.grouping, $.super),
 
     // Primary Expressions
     bool: ($) => choice("false", "true"),
@@ -154,14 +149,13 @@ module.exports = grammar({
     function: ($) =>
       seq(
         field("name", $.identifier),
-        "(",
-        optional(field("params", $.params)),
-        ")",
+        field("params", $.params),
         field("body", $.stmt_block)
       ),
-    args: ($) => commaSep($._expr),
-    params: ($) => commaSep($.identifier),
-    identifier: ($) => /[a-zA-Z_][a-zA-Z0-9_]*/,
+    args: ($) => seq("(", optional(commaSep($._expr)), ")"),
+    params: ($) => seq("(", optional(commaSep($.identifier)), ")"),
+    comment: ($) => token(seq("//", /.*/)),
+    identifier: ($) => /[a-zA-Z_][a-zA-Z0-9_]*/
   },
   word: ($) => $.identifier,
 });

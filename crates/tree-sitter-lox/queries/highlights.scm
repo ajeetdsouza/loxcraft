@@ -80,7 +80,7 @@
 ; Function declaration
 (function
   name: (identifier) @function
-  params: (params (identifier)  @parameter)?
+  params: (params)? @parameter
 )
 
 ; Method call
@@ -97,3 +97,9 @@
 (super
   attribute: (identifier) @field
 )
+
+; Variable
+(identifier) @variable
+
+; Comments
+(comment) @comment

@@ -5,7 +5,7 @@
     "fields": {},
     "children": {
       "multiple": true,
-      "required": true,
+      "required": false,
       "types": [
         {
           "type": "expr_attribute",
@@ -243,7 +243,7 @@
     "fields": {
       "args": {
         "multiple": false,
-        "required": false,
+        "required": true,
         "types": [
           {
             "type": "args",
@@ -485,6 +485,78 @@
     }
   },
   {
+    "type": "for_paren",
+    "named": true,
+    "fields": {
+      "cond": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "expr_attribute",
+            "named": true
+          },
+          {
+            "type": "expr_call",
+            "named": true
+          },
+          {
+            "type": "expr_infix",
+            "named": true
+          },
+          {
+            "type": "expr_prefix",
+            "named": true
+          },
+          {
+            "type": "expr_primary",
+            "named": true
+          }
+        ]
+      },
+      "incr": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "expr_attribute",
+            "named": true
+          },
+          {
+            "type": "expr_call",
+            "named": true
+          },
+          {
+            "type": "expr_infix",
+            "named": true
+          },
+          {
+            "type": "expr_prefix",
+            "named": true
+          },
+          {
+            "type": "expr_primary",
+            "named": true
+          }
+        ]
+      },
+      "init": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "decl_var",
+            "named": true
+          },
+          {
+            "type": "stmt_expr",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "function",
     "named": true,
     "fields": {
@@ -510,7 +582,7 @@
       },
       "params": {
         "multiple": false,
-        "required": false,
+        "required": true,
         "types": [
           {
             "type": "params",
@@ -558,7 +630,7 @@
     "fields": {},
     "children": {
       "multiple": true,
-      "required": true,
+      "required": false,
       "types": [
         {
           "type": "identifier",
@@ -645,68 +717,12 @@
           }
         ]
       },
-      "cond": {
+      "paren": {
         "multiple": false,
-        "required": false,
+        "required": true,
         "types": [
           {
-            "type": "expr_attribute",
-            "named": true
-          },
-          {
-            "type": "expr_call",
-            "named": true
-          },
-          {
-            "type": "expr_infix",
-            "named": true
-          },
-          {
-            "type": "expr_prefix",
-            "named": true
-          },
-          {
-            "type": "expr_primary",
-            "named": true
-          }
-        ]
-      },
-      "incr": {
-        "multiple": false,
-        "required": false,
-        "types": [
-          {
-            "type": "expr_attribute",
-            "named": true
-          },
-          {
-            "type": "expr_call",
-            "named": true
-          },
-          {
-            "type": "expr_infix",
-            "named": true
-          },
-          {
-            "type": "expr_prefix",
-            "named": true
-          },
-          {
-            "type": "expr_primary",
-            "named": true
-          }
-        ]
-      },
-      "init": {
-        "multiple": false,
-        "required": false,
-        "types": [
-          {
-            "type": "decl_var",
-            "named": true
-          },
-          {
-            "type": "stmt_expr",
+            "type": "for_paren",
             "named": true
           }
         ]
@@ -722,23 +738,7 @@
         "required": true,
         "types": [
           {
-            "type": "expr_attribute",
-            "named": true
-          },
-          {
-            "type": "expr_call",
-            "named": true
-          },
-          {
-            "type": "expr_infix",
-            "named": true
-          },
-          {
-            "type": "expr_prefix",
-            "named": true
-          },
-          {
-            "type": "expr_primary",
+            "type": "grouping",
             "named": true
           }
         ]
@@ -848,23 +848,7 @@
         "required": true,
         "types": [
           {
-            "type": "expr_attribute",
-            "named": true
-          },
-          {
-            "type": "expr_call",
-            "named": true
-          },
-          {
-            "type": "expr_infix",
-            "named": true
-          },
-          {
-            "type": "expr_prefix",
-            "named": true
-          },
-          {
-            "type": "expr_primary",
+            "type": "grouping",
             "named": true
           }
         ]
@@ -978,6 +962,10 @@
   {
     "type": "class",
     "named": false
+  },
+  {
+    "type": "comment",
+    "named": true
   },
   {
     "type": "else",
