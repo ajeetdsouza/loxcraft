@@ -80,13 +80,13 @@
 ; Function declaration
 (function
   name: (identifier) @function
-  params: (params (identifier)  @parameter)?
+  params: (params)? @parameter
 )
 
 ; Method call
 (expr_call
   (expr_attribute
-     attribute: (identifier) @method
+    attribute: (identifier) @method
   )
 )
 
@@ -97,3 +97,9 @@
 (super
   attribute: (identifier) @field
 )
+
+; Variable
+(identifier) @variable
+
+; Comments
+(comment) @comment

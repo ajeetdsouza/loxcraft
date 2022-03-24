@@ -15,6 +15,7 @@ struct PaletteItem<'a> {
 
 const PALETTE: &[PaletteItem] = &[
     PaletteItem { name: "", fg: nat::Color::White },
+    PaletteItem { name: "comment", fg: nat::Color::DarkGray },
     PaletteItem { name: "conditional", fg: nat::Color::LightPurple },
     PaletteItem { name: "constant", fg: nat::Color::LightCyan },
     PaletteItem { name: "field", fg: nat::Color::LightBlue },
@@ -25,12 +26,13 @@ const PALETTE: &[PaletteItem] = &[
     PaletteItem { name: "method", fg: nat::Color::LightBlue },
     PaletteItem { name: "number", fg: nat::Color::LightCyan },
     PaletteItem { name: "operator", fg: nat::Color::White },
-    PaletteItem { name: "parameter", fg: nat::Color::LightRed }, // FIXME: more than one parameter doesn't highlight
+    PaletteItem { name: "parameter", fg: nat::Color::LightRed },
     PaletteItem { name: "punctuation.bracket", fg: nat::Color::White },
     PaletteItem { name: "punctuation.delimiter", fg: nat::Color::White },
     PaletteItem { name: "repeat", fg: nat::Color::LightPurple },
     PaletteItem { name: "string", fg: nat::Color::LightGreen },
     PaletteItem { name: "type", fg: nat::Color::LightYellow },
+    PaletteItem { name: "variable", fg: nat::Color::LightRed },
 ];
 
 pub struct Highlighter {
