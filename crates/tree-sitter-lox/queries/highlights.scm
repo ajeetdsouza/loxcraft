@@ -80,7 +80,7 @@
 ; Function declaration
 (function
   name: (identifier) @function
-  params: (params)? @parameter
+  params: (params (identifier)  @parameter)?
 )
 
 ; Method call

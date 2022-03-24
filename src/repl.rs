@@ -55,20 +55,28 @@ impl rl::Highlighter for Highlighter {
             highlighter.highlight(&self.config, line.as_bytes(), None, |_| None).unwrap();
 
         let mut output = rl::StyledText::new();
-        let mut fg = PALETTE[0].fg;
+        let mut curr_fg = PALETTE[0].fg;
+        let mut curr_end = 0;
 
         for event in highlights {
-            match event.unwrap() {
-                tsh::HighlightEvent::HighlightStart(highlight) => {
-                    fg = PALETTE[highlight.0].fg;
+            match event {
+                Ok(tsh::HighlightEvent::HighlightStart(highlight)) => {
+                    curr_fg = PALETTE[highlight.0].fg;
                 }
-                tsh::HighlightEvent::Source { start, end } => {
-                    let style = nat::Style::new().fg(fg);
+                Ok(tsh::HighlightEvent::Source { start, end }) => {
+                    let style = nat::Style::new().fg(curr_fg);
                     let text = line[start..end].to_string();
                     output.push((style, text));
+                    curr_end = end;
                 }
-                tsh::HighlightEvent::HighlightEnd => {
-                    fg = PALETTE[0].fg;
+                Ok(tsh::HighlightEvent::HighlightEnd) => {
+                    curr_fg = PALETTE[0].fg;
+                }
+                Err(_) => {
+                    let style = nat::Style::new().fg(PALETTE[0].fg);
+                    let text = line.get(curr_end..).unwrap_or_default().to_string();
+                    output.push((style, text));
+                    break;
                 }
             }
         }

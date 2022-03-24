@@ -94,12 +94,12 @@ module.exports = grammar({
         $.expr_attribute
       ),
     expr_call: ($) =>
-      prec(
+      prec.left(
         precTable.call,
         seq(field("callee", $._expr), "(", optional(field("args", $.args)), ")")
       ),
     expr_attribute: ($) =>
-      prec(
+      prec.left(
         precTable.call,
         seq(field("object", $._expr), ".", field("attribute", $.identifier))
       ),
@@ -157,7 +157,7 @@ module.exports = grammar({
         "(",
         optional(field("params", $.params)),
         ")",
-        field("block", $.stmt_block)
+        field("body", $.stmt_block)
       ),
     args: ($) => commaSep($._expr),
     params: ($) => commaSep($.identifier),

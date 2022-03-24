@@ -12,7 +12,7 @@
 #define ALIAS_COUNT 0
 #define TOKEN_COUNT 39
 #define EXTERNAL_TOKEN_COUNT 0
-#define FIELD_COUNT 22
+#define FIELD_COUNT 21
 #define MAX_ALIAS_SEQUENCE_LENGTH 8
 #define PRODUCTION_ID_COUNT 32
 
@@ -514,25 +514,24 @@ enum {
   field_args = 1,
   field_attribute = 2,
   field_base = 3,
-  field_block = 4,
-  field_body = 5,
-  field_callee = 6,
-  field_cond = 7,
-  field_decl = 8,
-  field_else = 9,
-  field_function = 10,
-  field_incr = 11,
-  field_init = 12,
-  field_inner = 13,
-  field_lt = 14,
-  field_method = 15,
-  field_name = 16,
-  field_object = 17,
-  field_op = 18,
-  field_params = 19,
-  field_rt = 20,
-  field_then = 21,
-  field_value = 22,
+  field_body = 4,
+  field_callee = 5,
+  field_cond = 6,
+  field_decl = 7,
+  field_else = 8,
+  field_function = 9,
+  field_incr = 10,
+  field_init = 11,
+  field_inner = 12,
+  field_lt = 13,
+  field_method = 14,
+  field_name = 15,
+  field_object = 16,
+  field_op = 17,
+  field_params = 18,
+  field_rt = 19,
+  field_then = 20,
+  field_value = 21,
 };
 
 static const char * const ts_field_names[] = {
@@ -540,7 +539,6 @@ static const char * const ts_field_names[] = {
   [field_args] = "args",
   [field_attribute] = "attribute",
   [field_base] = "base",
-  [field_block] = "block",
   [field_body] = "body",
   [field_callee] = "callee",
   [field_cond] = "cond",
@@ -633,7 +631,7 @@ static const TSFieldMapEntry ts_field_map_entries[] = {
     {field_method, 3},
     {field_name, 1},
   [21] =
-    {field_block, 3},
+    {field_body, 3},
     {field_name, 0},
   [23] =
     {field_name, 1},
@@ -648,7 +646,7 @@ static const TSFieldMapEntry ts_field_map_entries[] = {
     {field_base, 3},
     {field_name, 1},
   [31] =
-    {field_block, 4},
+    {field_body, 4},
     {field_name, 0},
     {field_params, 2},
   [34] =

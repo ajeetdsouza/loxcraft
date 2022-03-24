@@ -488,7 +488,7 @@
     "type": "function",
     "named": true,
     "fields": {
-      "block": {
+      "body": {
         "multiple": false,
         "required": true,
         "types": [

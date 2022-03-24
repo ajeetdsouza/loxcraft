@@ -495,7 +495,7 @@
       ]
     },
     "expr_call": {
-      "type": "PREC",
+      "type": "PREC_LEFT",
       "value": 8,
       "content": {
         "type": "SEQ",
@@ -536,7 +536,7 @@
       }
     },
     "expr_attribute": {
-      "type": "PREC",
+      "type": "PREC_LEFT",
       "value": 8,
       "content": {
         "type": "SEQ",
@@ -1031,7 +1031,7 @@
         },
         {
           "type": "FIELD",
-          "name": "block",
+          "name": "body",
           "content": {
             "type": "SYMBOL",
             "name": "stmt_block"
