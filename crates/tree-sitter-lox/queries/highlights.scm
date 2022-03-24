@@ -86,7 +86,7 @@
 ; Method call
 (expr_call
   (expr_attribute
-     attribute: (identifier) @method
+    attribute: (identifier) @method
   )
 )
 

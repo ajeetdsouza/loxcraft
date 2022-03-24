@@ -50,10 +50,10 @@
   body: (decl_stmt) @fold
 )
 
-; Function/Method call
+; Function/method call
 (expr_call
   args: (args) @fold
 )
 
-; Grouping Expression
+; Grouping expression
 (grouping) @fold
