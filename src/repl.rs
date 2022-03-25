@@ -1,12 +1,34 @@
 use crate::syntax;
 
-use lalrpop_util::ParseError;
+use anyhow::{Context, Result};
+use lalrpop_util as lu;
 use nu_ansi_term as nat;
 use reedline as rl;
 use tree_sitter_highlight as tsh;
 use tree_sitter_lox as tsl;
 
 use std::borrow::Cow;
+
+pub fn editor() -> Result<rl::Reedline> {
+    let highlighter = Box::new(Highlighter::new()?);
+
+    let data_dir = dirs::data_dir().context("could not find data directory")?;
+    let history_path = data_dir.join("lox/history.txt");
+    let history = Box::new(
+        rl::FileBackedHistory::with_file(10000, history_path.clone())
+            .with_context(|| format!("could not open history file: {}", history_path.display()))?,
+    );
+
+    let validator = Box::new(Validator);
+
+    let editor = rl::Reedline::create()
+        .context("failed to create prompt")?
+        .with_highlighter(highlighter)
+        .with_history(history)
+        .with_context(|| format!("could not load history: {}", history_path.display()))?
+        .with_validator(validator);
+    Ok(editor)
+}
 
 struct PaletteItem<'a> {
     name: &'a str,
@@ -35,18 +57,18 @@ const PALETTE: &[PaletteItem] = &[
     PaletteItem { name: "variable", fg: nat::Color::LightRed },
 ];
 
-pub struct Highlighter {
+struct Highlighter {
     config: tsh::HighlightConfiguration,
 }
 
 impl Highlighter {
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self> {
         let highlight_names = PALETTE.iter().map(|item| item.name).collect::<Vec<_>>();
         let mut config =
             tsh::HighlightConfiguration::new(tsl::language(), tsl::HIGHLIGHTS_QUERY, "", "")
-                .expect("failed to create highlight configuration");
+                .context("failed to create highlight configuration")?;
         config.configure(&highlight_names);
-        Self { config }
+        Ok(Self { config })
     }
 }
 
@@ -87,6 +109,17 @@ impl rl::Highlighter for Highlighter {
     }
 }
 
+struct Validator;
+
+impl rl::Validator for Validator {
+    fn validate(&self, line: &str) -> rl::ValidationResult {
+        match syntax::parse(line) {
+            Err(lu::ParseError::UnrecognizedEOF { .. }) => rl::ValidationResult::Incomplete,
+            _ => rl::ValidationResult::Complete,
+        }
+    }
+}
+
 pub struct Prompt;
 
 impl rl::Prompt for Prompt {
@@ -111,24 +144,11 @@ impl rl::Prompt for Prompt {
     }
 }
 
-pub struct Validator;
-
-impl rl::Validator for Validator {
-    fn validate(&self, line: &str) -> rl::ValidationResult {
-        match syntax::parse(line) {
-            Err(ParseError::UnrecognizedEOF { .. }) => rl::ValidationResult::Incomplete,
-            _ => rl::ValidationResult::Complete,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::Highlighter;
-
     #[test]
-    fn highlight_configuration() {
+    fn editor() {
         // This should not panic.
-        let _ = Highlighter::new();
+        let _ = super::editor();
     }
 }

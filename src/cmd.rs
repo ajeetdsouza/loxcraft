@@ -1,10 +1,10 @@
-use crate::repl::{Highlighter, Prompt, Validator};
+use crate::repl;
 use crate::syntax;
 use crate::vm::compiler::Compiler;
 use crate::vm::vm::VM;
 
 use clap::Parser;
-use reedline::{Reedline, Signal};
+use reedline::Signal;
 
 use std::fs;
 use std::io;
@@ -35,13 +35,7 @@ impl Cmd {
 }
 
 pub fn repl(debug: bool, profile: bool) {
-    let highlighter = Box::new(Highlighter::new());
-    let validator = Box::new(Validator);
-    let mut editor = Reedline::create()
-        .expect("failed to create prompt")
-        .with_highlighter(highlighter)
-        .with_validator(validator);
-
+    let mut editor = repl::editor().unwrap();
     let stdout = io::stdout();
     let stdout = stdout.lock();
     let stderr = io::stdout();
@@ -49,7 +43,7 @@ pub fn repl(debug: bool, profile: bool) {
     let mut vm = VM::new(stdout, stderr, debug, profile);
 
     loop {
-        match editor.read_line(&Prompt) {
+        match editor.read_line(&repl::Prompt) {
             Ok(Signal::Success(line)) => {
                 let program = match syntax::parse(&line) {
                     Ok(program) => program,
