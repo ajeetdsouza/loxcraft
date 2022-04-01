@@ -59,6 +59,13 @@
 
     <script>
       const editor = ace.edit("editor");
+
+      // Save editor text in localStorage.
+      const keyEditorText = "editorText";
+      editor.setValue(localStorage.getItem(keyEditorText) || "", -1);
+      editor.on("input", () =>
+        localStorage.setItem(keyEditorText, editor.getValue())
+      );
     </script>
   </body>
 </html>
