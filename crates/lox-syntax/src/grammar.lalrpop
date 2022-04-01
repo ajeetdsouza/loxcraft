@@ -1,4 +1,4 @@
-use crate::syntax::{ast, lexer};
+use crate::{ast, lexer};
 
 grammar;
 

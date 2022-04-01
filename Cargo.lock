@@ -899,16 +899,16 @@ dependencies = [
  "dirs",
  "fnv",
  "human-panic",
- "lalrpop",
  "lalrpop-util",
  "logos",
+ "lox-syntax",
+ "lox-vm",
  "mimalloc",
  "nu-ansi-term",
  "pprof",
  "pretty_assertions",
  "reedline",
  "test-generator",
- "thiserror",
  "tree-sitter-highlight",
  "tree-sitter-lox",
 ]
@@ -919,6 +919,25 @@ version = "0.1.0"
 dependencies = [
  "tokio",
  "warp",
+]
+
+[[package]]
+name = "lox-syntax"
+version = "0.1.0"
+dependencies = [
+ "lalrpop",
+ "lalrpop-util",
+ "logos",
+]
+
+[[package]]
+name = "lox-vm"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "fnv",
+ "lox-syntax",
+ "thiserror",
 ]
 
 [[package]]

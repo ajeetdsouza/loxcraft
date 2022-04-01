@@ -1,5 +1,3 @@
-use crate::syntax;
-
 use anyhow::{Context, Result};
 use lalrpop_util as lu;
 use nu_ansi_term as nat;
@@ -113,7 +111,7 @@ struct Validator;
 
 impl rl::Validator for Validator {
     fn validate(&self, line: &str) -> rl::ValidationResult {
-        match syntax::parse(line) {
+        match lox_syntax::parse(line) {
             Err(lu::ParseError::UnrecognizedEOF { .. }) => rl::ValidationResult::Incomplete,
             _ => rl::ValidationResult::Complete,
         }

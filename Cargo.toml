@@ -1,6 +1,5 @@
 [package]
 authors = ["Ajeet D'Souza <98ajeet@gmail.com>"]
-build = "build.rs"
 description = "A compiler / VM for the Lox programming language"
 edition = "2021"
 keywords = ["compiler", "interpreter", "language", "lox", "vm"]
@@ -14,7 +13,12 @@ version = "0.1.0"
 maintenance = { status = "actively-developed" }
 
 [workspace]
-members = ["crates/lox-playground", "crates/tree-sitter-lox"]
+members = [
+    "crates/lox-playground",
+    "crates/lox-syntax",
+    "crates/lox-vm",
+    "crates/tree-sitter-lox",
+]
 
 [dependencies]
 anyhow = "1.0.52"
@@ -26,16 +30,14 @@ fnv = "1.0.7"
 human-panic = "1.0.3"
 lalrpop-util = "0.19.6"
 logos = "0.12.0"
+lox-syntax = { path = "crates/lox-syntax" }
+lox-vm = { path = "crates/lox-vm" }
 mimalloc = { version = "0.1.27", default-features = false }
 nu-ansi-term = "0.45.0"
 pprof = { version = "0.7.0", features = ["flamegraph", "prost-codec"] }
 reedline = "0.3.0"
-thiserror = "1.0.30"
 tree-sitter-highlight = "0.20.1"
 tree-sitter-lox = { path = "crates/tree-sitter-lox", version = "*" }
-
-[build-dependencies]
-lalrpop = { version = "0.19.1", default-features = false }
 
 [dev-dependencies]
 pretty_assertions = "1.1.0"

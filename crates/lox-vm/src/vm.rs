@@ -1,5 +1,5 @@
-use crate::vm::op::Op;
-use crate::vm::value::{Closure, Function, Native, Value};
+use crate::op::Op;
+use crate::value::{Closure, Function, Native, Value};
 
 use fnv::FnvHashMap;
 use thiserror::Error;
@@ -20,11 +20,10 @@ pub struct VM<W1, W2> {
     stderr: W2,
 
     debug: bool,
-    profile: bool,
 }
 
 impl<W1, W2> VM<W1, W2> {
-    pub fn new(stdout: W1, stderr: W2, debug: bool, profile: bool) -> Self {
+    pub fn new(stdout: W1, stderr: W2, debug: bool) -> Self {
         let mut globals = FnvHashMap::default();
         globals.insert(Rc::new("clock".to_string()), Value::Native(Native::Clock));
 
@@ -37,42 +36,17 @@ impl<W1, W2> VM<W1, W2> {
             stdout,
             stderr,
             debug,
-            profile,
         }
     }
 }
 
 impl<W1: Write, W2: Write> VM<W1, W2> {
     pub fn run(&mut self, function: Function) {
-        let guard = if self.profile { Some(pprof::ProfilerGuard::new(100).unwrap()) } else { None };
-
         let closure = Closure { function: Rc::new(function) };
         self.frame = CallFrame::new(closure);
         if let Err(e) = self.run_internal() {
             writeln!(self.stderr, "{e}").unwrap();
             self.dump_trace();
-        }
-
-        if let Some(guard) = guard {
-            if let Ok(report) = guard.report().build() {
-                use pprof::protos::Message;
-                use std::fs::{self, File};
-                use std::path::PathBuf;
-
-                let dir = PathBuf::from("/tmp/lox");
-                fs::create_dir_all(&dir).unwrap();
-
-                let file = File::create(dir.join("flamegraph.svg")).unwrap();
-                report.flamegraph(file).unwrap();
-
-                let mut file = File::create(dir.join("profile.pb")).unwrap();
-                let profile = report.pprof().unwrap();
-                let mut content = Vec::new();
-                profile.encode(&mut content).unwrap();
-                file.write_all(&content).unwrap();
-
-                println!("profile written to {}", dir.display());
-            };
         }
     }
 

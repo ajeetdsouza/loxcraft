@@ -1,8 +1,7 @@
-use tokio::runtime;
 use warp::Filter;
 
 fn main() {
-    let _ = runtime::Builder::new_multi_thread().enable_all().build().unwrap().block_on(serve());
+    tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap().block_on(serve());
 }
 
 async fn serve() {

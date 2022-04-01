@@ -1,6 +1,5 @@
-use lox::syntax;
-use lox::vm::compiler::Compiler;
-use lox::vm::vm::VM;
+use lox_vm::compiler::Compiler;
+use lox_vm::vm::VM;
 
 use pretty_assertions::assert_eq;
 use test_generator::test_resources;
@@ -24,12 +23,12 @@ fn lox(path: &str) {
         }
     }
 
-    let program = syntax::parse(&source).unwrap();
+    let program = lox_syntax::parse(&source).unwrap();
     let function = Compiler::new().compile(&program).unwrap();
 
     let mut got_out = Vec::new();
     let mut got_err = Vec::new();
-    VM::new(&mut got_out, &mut got_err, false, false).run(function);
+    VM::new(&mut got_out, &mut got_err, false).run(function);
     let got_out = str::from_utf8(&got_out).unwrap();
     let got_err = str::from_utf8(&got_err).unwrap();
 

@@ -1,0 +1,10 @@
+[package]
+name = "lox-vm"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.52"
+fnv = "1.0.7"
+lox-syntax = { path = "../lox-syntax" }
+thiserror = "1.0.30"
