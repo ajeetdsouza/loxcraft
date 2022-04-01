@@ -14,7 +14,7 @@ version = "0.1.0"
 maintenance = { status = "actively-developed" }
 
 [workspace]
-members = ["crates/tree-sitter-lox"]
+members = ["crates/lox-playground", "crates/tree-sitter-lox"]
 
 [dependencies]
 anyhow = "1.0.52"

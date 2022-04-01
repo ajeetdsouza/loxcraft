@@ -1,0 +1,8 @@
+[package]
+name = "lox-playground"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1.17.0", features = ["full"] }
+warp = "0.3.2"
