@@ -4,5 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+http = "0.2.6"
 tokio = { version = "1.17.0", features = ["full"] }
 warp = "0.3.2"

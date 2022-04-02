@@ -37,7 +37,7 @@
         <!-- Navbar -->
         <nav class="navbar navbar-light bg-light">
           <div class="navbar-brand">Lox Playground</div>
-          <a class="btn btn-success bi bi-play-fill">Run</a>
+          <a id="run-btn" class="btn btn-success bi bi-play-fill">Run</a>
         </nav>
       </div>
       <div class="row gx-0 flex-grow-1">
@@ -49,6 +49,7 @@
         <!-- Output -->
         <div class="col border h-100">
           <textarea
+            id="output"
             class="font-monospace fs-6 h-100 w-100"
             style="resize: none"
             disabled
@@ -57,7 +58,7 @@
       </div>
     </div>
 
-    <script>
+    <script type="module">
       const editor = ace.edit("editor");
 
       // Save editor text in localStorage.
@@ -66,6 +67,15 @@
       editor.on("input", () =>
         localStorage.setItem(keyEditorText, editor.getValue())
       );
+
+      import init, { lox_run } from "./lox.js";
+      (async () => {
+        await init("./lox.wasm");
+        document.getElementById("run-btn").addEventListener("click", () => {
+          const source = editor.getValue();
+          lox_run(source);
+        });
+      })();
     </script>
   </body>
 </html>
