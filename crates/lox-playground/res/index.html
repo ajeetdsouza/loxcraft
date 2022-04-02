@@ -1,81 +1,78 @@
 <!DOCTYPE html>
 <html class="h-100" lang="en">
-  <head>
-    <title>Lox Playground</title>
-    <link rel="icon" type="image/x-icon" href="favicon.png" />
 
-    <!-- Required by Bootstrap -->
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+<head>
+  <title>Lox Playground</title>
+  <link rel="icon" type="image/x-icon" href="favicon.png" />
+  <!-- Required by Bootstrap -->
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <!-- Bootstrap -->
-    <link
-      href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css"
-      rel="stylesheet"
-      integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3"
-      crossorigin="anonymous"
-    />
+  <!-- Bootstrap -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous" />
 
-    <!-- Bootstrap Icons -->
-    <link
-      rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css"
-    />
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css" />
 
-    <!-- Ace Editor -->
-    <script
-      src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.14/ace.js"
-      integrity="sha512-6ts6Fu561/yzWvD6uwQp3XVYwiWNpWnZ0hdeQrETqtnQiGjTfOS06W76aUDnq51hl1SxXtJaqy7IsZ3oP/uZEg=="
-      crossorigin="anonymous"
-      referrerpolicy="no-referrer"
-    ></script>
-  </head>
+  <!-- Ace Editor -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.14/ace.js"
+    integrity="sha512-6ts6Fu561/yzWvD6uwQp3XVYwiWNpWnZ0hdeQrETqtnQiGjTfOS06W76aUDnq51hl1SxXtJaqy7IsZ3oP/uZEg=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+</head>
 
-  <body class="h-100 overflow-hidden">
-    <div class="container-fluid px-0 d-flex flex-column h-100">
-      <div class="row px-2">
-        <!-- Navbar -->
-        <nav class="navbar navbar-light bg-light">
-          <div class="navbar-brand">Lox Playground</div>
-          <a id="run-btn" class="btn btn-success bi bi-play-fill">Run</a>
-        </nav>
+<body class="h-100">
+  <div class="px-0 d-flex flex-column vh-100 overflow-hidden">
+    <div class="d-flex flex-row px-2">
+      <!-- Navbar -->
+      <nav class="navbar navbar-light bg-light flex-fill">
+        <div class="navbar-brand">Lox Playground</div>
+        <a id="run-btn" class="btn btn-success bi bi-play-fill">Run</a>
+      </nav>
+    </div>
+    <div class="d-flex flex-row gx-0 flex-grow-1">
+      <!-- Editor -->
+      <div class="border border-end-0 flex-fill">
+        <div id="editor" class="font-monospace fs-6 h-100"></div>
       </div>
-      <div class="row gx-0 flex-grow-1">
-        <!-- Editor -->
-        <div class="col border border-end-0 h-100">
-          <div id="editor" class="font-monospace fs-6 h-100"></div>
-        </div>
 
-        <!-- Output -->
-        <div class="col border h-100">
-          <textarea
-            id="output"
-            class="font-monospace fs-6 h-100 w-100"
-            style="resize: none"
-            disabled
-          ></textarea>
-        </div>
+      <!-- Output -->
+			<div class="border flex-fill vh-100 overflow-auto">
+        <pre id="output" class="font-monospace fs-6 bg-light p-0" style="resize: none"></pre>
+        <pre id="output-error" class="font-monospace fs-6 bg-light p-0 text-danger" style="resize: none"></pre>
       </div>
     </div>
+  </div>
+  </div>
 
-    <script type="module">
-      const editor = ace.edit("editor");
+  <script type="module">
+    const editor = ace.edit("editor");
 
-      // Save editor text in localStorage.
-      const keyEditorText = "editorText";
-      editor.setValue(localStorage.getItem(keyEditorText) || "", -1);
-      editor.on("input", () =>
-        localStorage.setItem(keyEditorText, editor.getValue())
-      );
+    // Save editor text in localStorage.
+    const keyEditorText = "editorText";
+    editor.setValue(localStorage.getItem(keyEditorText) || "", -1);
+    editor.on("input", () =>
+      localStorage.setItem(keyEditorText, editor.getValue())
+    );
+    var worker = new Worker('worker.js', { type: 'module' });
+    var chan_stdin = new MessageChannel();
+    var chan_stdout = new MessageChannel();
+    var chan_stderr = new MessageChannel();
+    worker.postMessage([chan_stdin.port2, chan_stdout.port2, chan_stderr.port2], [chan_stdin.port2, chan_stdout.port2, chan_stderr.port2]);
+    chan_stdout.port1.onmessage = function (e) {
+      document.getElementById('output').insertAdjacentHTML('beforeend', e.data);
+    }
+    chan_stderr.port1.onmessage = function (e) {
+      document.getElementById('output-error').insertAdjacentHTML('beforeend', e.data);
+    }
 
-      import init, { lox_run } from "./lox.js";
-      (async () => {
-        await init("./lox.wasm");
-        document.getElementById("run-btn").addEventListener("click", () => {
-          const source = editor.getValue();
-          lox_run(source);
-        });
-      })();
-    </script>
-  </body>
+    document.getElementById("run-btn").addEventListener("click", () => {
+      const source = editor.getValue();
+      document.getElementById('output').innerHTML = "";
+      document.getElementById('output-error').innerHTML = "";
+      chan_stdin.port1.postMessage(source);
+    });
+  </script>
+</body>
+
 </html>
