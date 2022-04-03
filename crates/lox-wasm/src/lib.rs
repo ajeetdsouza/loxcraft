@@ -1,10 +1,19 @@
-use std::io::Write;
+#![allow(clippy::unused_unit)]
 
 use lox_syntax::parser::ParserError;
 use lox_vm::vm::VM;
-use wasm_bindgen::prelude::*;
+use serde::Serialize;
+use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsValue;
 use web_sys::MessagePort;
+
+use std::io::Write;
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "type")]
+enum Message {
+    Output { text: String },
+}
 
 struct Output(MessagePort);
 
@@ -14,10 +23,11 @@ impl Output {
     }
 }
 
-impl Write for &mut Output {
+impl Write for &Output {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let buf = std::str::from_utf8(buf).unwrap();
-        self.0.post_message(&JsValue::from_str(buf)).unwrap();
+        let message = Message::Output { text: String::from_utf8_lossy(buf).to_string() };
+        let message = serde_json::to_string(&message).unwrap();
+        self.0.post_message(&JsValue::from_str(&message)).unwrap();
         Ok(buf.len())
     }
 
@@ -27,13 +37,12 @@ impl Write for &mut Output {
 }
 
 #[wasm_bindgen]
-pub fn lox_run(source: &str, ws_stdout: MessagePort, ws_stderr: MessagePort) {
-    let stdout = &mut Output::new(ws_stdout);
-    let mut stderr = &mut Output::new(ws_stderr);
+pub fn lox_run(source: &str, ws_stdout: MessagePort) {
+    let output = Output::new(ws_stdout);
     let program = match lox_syntax::parse(source) {
         Ok(val) => val,
         Err(err) => {
-            report_err(source, err, stderr);
+            report_err(source, err, &output);
             return;
         }
     };
@@ -41,14 +50,14 @@ pub fn lox_run(source: &str, ws_stdout: MessagePort, ws_stderr: MessagePort) {
     let function = match compiler.compile(&program) {
         Ok(val) => val,
         Err(err) => {
-            write!(stderr, "{:?}", err).unwrap();
+            write!(&output, "{:?}", err).unwrap();
             return;
         }
     };
-    VM::new(stdout, stderr, false).run(function);
+    VM::new(&output, &output, false).run(function);
 }
 
-fn report_err(source: &str, err: ParserError, stderr: &mut Output) {
+fn report_err(source: &str, err: ParserError, stderr: &Output) {
     use codespan_reporting::diagnostic::{Diagnostic, Label};
     use codespan_reporting::files::SimpleFile;
     use codespan_reporting::term::termcolor;
