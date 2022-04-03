@@ -5,5 +5,5 @@ edition = "2021"
 
 [dependencies]
 http = "0.2.6"
-tokio = { version = "1.17.0", features = ["full"] }
+tokio = { version = "1.17.0", features = ["rt-multi-thread"] }
 warp = "0.3.2"

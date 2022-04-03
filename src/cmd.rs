@@ -12,6 +12,10 @@ use std::io;
 #[derive(Clap, Debug)]
 #[clap(about, author, disable_help_subcommand = true, propagate_version = true, version)]
 pub enum Cmd {
+    Playground {
+        #[clap(long, default_value = "3000")]
+        port: u16,
+    },
     REPL {
         #[clap(long)]
         debug: bool,
@@ -26,10 +30,16 @@ pub enum Cmd {
 impl Cmd {
     pub fn run(&self) {
         match self {
+            Cmd::Playground { port } => lox_playground::serve(*port),
             Cmd::REPL { debug } => repl(*debug),
             Cmd::Run { path, debug } => run(path, *debug),
         }
     }
+}
+
+pub fn playground() {
+    // lox_playground::run();
+    // lox_playground::;
 }
 
 pub fn repl(debug: bool) {

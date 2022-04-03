@@ -1,1 +1,0 @@
-../../lox-wasm/pkg/lox_wasm.js
