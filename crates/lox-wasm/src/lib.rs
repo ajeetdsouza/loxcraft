@@ -7,7 +7,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsValue;
 use web_sys::MessagePort;
 
-use std::io::Write;
+use std::io::{self, Write};
 
 #[derive(Debug, Serialize)]
 #[serde(tag = "type")]
@@ -24,14 +24,14 @@ impl Output {
 }
 
 impl Write for &Output {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         let message = Message::Output { text: String::from_utf8_lossy(buf).to_string() };
         let message = serde_json::to_string(&message).unwrap();
         self.0.post_message(&JsValue::from_str(&message)).unwrap();
         Ok(buf.len())
     }
 
-    fn flush(&mut self) -> std::io::Result<()> {
+    fn flush(&mut self) -> io::Result<()> {
         Ok(())
     }
 }
