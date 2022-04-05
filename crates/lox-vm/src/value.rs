@@ -1,5 +1,5 @@
-use crate::vm::chunk::Chunk;
-use crate::vm::vm::RuntimeError;
+use crate::chunk::Chunk;
+use crate::vm::RuntimeError;
 
 use std::cmp::Ordering;
 use std::fmt;
@@ -150,8 +150,8 @@ impl PartialOrd for Native {
 }
 
 mod native {
-    use crate::vm::value::Value;
-    use crate::vm::vm::RuntimeError;
+    use crate::value::Value;
+    use crate::vm::RuntimeError;
 
     use std::time::{SystemTime, UNIX_EPOCH};
 

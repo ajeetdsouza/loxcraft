@@ -1,10 +1,10 @@
-use crate::syntax::ast::{
+use crate::op::{ArgCount, ConstantIdx, JumpOffset, Op, StackIdx};
+use crate::value::{Function, Value};
+use lox_syntax::ast::{
     Expr, ExprAssign, ExprCall, ExprInfix, ExprLiteral, ExprPrefix, ExprVariable, OpInfix,
     OpPrefix, Program, Stmt, StmtBlock, StmtExpr, StmtFor, StmtFun, StmtIf, StmtPrint, StmtReturn,
     StmtVar, StmtWhile,
 };
-use crate::vm::op::{ArgCount, ConstantIdx, JumpOffset, Op, StackIdx};
-use crate::vm::value::{Function, Value};
 
 use anyhow::{bail, Context, Result};
 

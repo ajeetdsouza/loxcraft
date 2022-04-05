@@ -13,6 +13,10 @@ jobs:
         with:
           components: clippy
           toolchain: stable
+      - uses: actions-rs/cargo@v1
+        with:
+          command: xtask
+          args: codegen
       - uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -24,6 +28,10 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
+      - uses: actions-rs/cargo@v1
+        with:
+          command: xtask
+          args: codegen
       - uses: actions-rs/cargo@v1
         with:
           command: test

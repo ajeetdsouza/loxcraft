@@ -1,24 +1,19 @@
-pub mod ast;
-pub mod lexer;
-pub mod parser;
+#![allow(clippy::new_without_default, clippy::module_inception)]
 
-use crate::syntax::ast::Program;
-use crate::syntax::lexer::Lexer;
-use crate::syntax::parser::{Parser, ParserError};
+mod chunk;
+pub mod compiler;
+mod op;
+mod value;
+pub mod vm;
 
-use std::io;
+use lox_syntax::parser::ParserError;
 
-pub fn parse(source: &str) -> Result<Program, ParserError> {
-    let lexer = Lexer::new(source);
-    let parser = Parser::new();
-    parser.parse(lexer.into_iter())
-}
+use std::io::Write;
 
-pub fn report_err(name: &str, source: &str, err: ParserError) -> io::Result<()> {
+pub fn report_err<W: Write>(source: &str, err: ParserError, mut writer: W) {
     use codespan_reporting::diagnostic::{Diagnostic, Label};
-    use codespan_reporting::files::{Error, SimpleFile};
-    use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
-    use codespan_reporting::term::{self, Config};
+    use codespan_reporting::files::SimpleFile;
+    use codespan_reporting::term;
 
     let (label, range, notes);
     match err {
@@ -49,17 +44,14 @@ pub fn report_err(name: &str, source: &str, err: ParserError) -> io::Result<()> 
         }
     };
 
-    let writer = StandardStream::stderr(ColorChoice::Auto);
-    let config = Config::default();
-    let file = SimpleFile::new(name, source);
+    let mut buffer = termcolor::Buffer::ansi();
+    let config = term::Config::default();
+    let file = SimpleFile::new("<script>", source);
     let diagnostic = Diagnostic::error()
         .with_message(label)
         .with_labels(vec![Label::primary((), range)])
         .with_notes(notes);
-    term::emit(&mut writer.lock(), &config, &file, &diagnostic).map_err(|err| match err {
-        Error::Io(err) => err,
-        _ => panic!("invalid error generated: {err}"),
-    })?;
+    term::emit(&mut buffer, &config, &file, &diagnostic).unwrap();
 
-    Ok(())
+    writer.write_all(&buffer.into_inner()).unwrap();
 }

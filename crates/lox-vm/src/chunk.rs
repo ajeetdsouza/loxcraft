@@ -1,5 +1,5 @@
-use crate::vm::op::Op;
-use crate::vm::value::Value;
+use crate::op::Op;
+use crate::value::Value;
 
 use super::op::{ConstantIdx, JumpOffset};
 

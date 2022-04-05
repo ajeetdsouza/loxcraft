@@ -1,17 +1,20 @@
 use crate::repl;
-use crate::syntax;
-use crate::vm::compiler::Compiler;
-use crate::vm::vm::VM;
+use lox_vm::compiler::Compiler;
+use lox_vm::vm::VM;
 
-use clap::Parser;
+use clap::Parser as Clap;
 use reedline::Signal;
 
 use std::fs;
 use std::io;
 
-#[derive(Debug, Parser)]
+#[derive(Clap, Debug)]
 #[clap(about, author, disable_help_subcommand = true, propagate_version = true, version)]
 pub enum Cmd {
+    Playground {
+        #[clap(long, default_value = "3000")]
+        port: u16,
+    },
     REPL {
         #[clap(long)]
         debug: bool,
@@ -20,35 +23,39 @@ pub enum Cmd {
         path: String,
         #[clap(long)]
         debug: bool,
-        #[clap(long)]
-        profile: bool,
     },
 }
 
 impl Cmd {
     pub fn run(&self) {
         match self {
-            Cmd::REPL { debug } => repl(*debug, false),
-            Cmd::Run { path, debug, profile } => run(path, *debug, *profile),
+            Cmd::Playground { port } => lox_playground::serve(*port),
+            Cmd::REPL { debug } => repl(*debug),
+            Cmd::Run { path, debug } => run(path, *debug),
         }
     }
 }
 
-pub fn repl(debug: bool, profile: bool) {
+pub fn playground() {
+    // lox_playground::run();
+    // lox_playground::;
+}
+
+pub fn repl(debug: bool) {
     let mut editor = repl::editor().unwrap();
     let stdout = io::stdout();
     let stdout = stdout.lock();
-    let stderr = io::stdout();
+    let stderr = io::stderr();
     let stderr = stderr.lock();
-    let mut vm = VM::new(stdout, stderr, debug, profile);
+    let mut vm = VM::new(stdout, stderr, debug);
 
     loop {
         match editor.read_line(&repl::Prompt) {
             Ok(Signal::Success(line)) => {
-                let program = match syntax::parse(&line) {
+                let program = match lox_syntax::parse(&line) {
                     Ok(program) => program,
                     Err(err) => {
-                        syntax::report_err("<stdin>", &line, err).unwrap();
+                        lox_vm::report_err(&line, err, io::stderr());
                         continue;
                     }
                 };
@@ -76,12 +83,12 @@ pub fn repl(debug: bool, profile: bool) {
     }
 }
 
-fn run(path: &str, debug: bool, profile: bool) {
+fn run(path: &str, debug: bool) {
     let source = fs::read_to_string(&path).unwrap();
-    let program = match syntax::parse(&source) {
+    let program = match lox_syntax::parse(&source) {
         Ok(program) => program,
         Err(err) => {
-            syntax::report_err(path, &source, err).unwrap();
+            lox_vm::report_err(&source, err, io::stderr());
             return;
         }
     };
@@ -94,6 +101,6 @@ fn run(path: &str, debug: bool, profile: bool) {
     let stderr = io::stderr();
     let stderr = stderr.lock();
 
-    let mut vm = VM::new(stdout, stderr, debug, profile);
+    let mut vm = VM::new(stdout, stderr, debug);
     vm.run(function);
 }
