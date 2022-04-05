@@ -1,5 +1,8 @@
 [package]
-authors = ["Ajeet D'Souza <98ajeet@gmail.com>", "Kartik Sharma <kartik.sharma522@gmail.com>"]
+authors = [
+    "Ajeet D'Souza <98ajeet@gmail.com>",
+    "Kartik Sharma <kartik.sharma522@gmail.com>",
+]
 description = "A compiler / VM for the Lox programming language"
 edition = "2021"
 keywords = ["compiler", "interpreter", "language", "lox", "vm"]
@@ -37,7 +40,6 @@ lox-syntax = { path = "crates/lox-syntax" }
 lox-vm = { path = "crates/lox-vm" }
 mimalloc = { version = "0.1.27", default-features = false }
 nu-ansi-term = "0.45.0"
-pprof = { version = "0.7.0", features = ["flamegraph", "prost-codec"] }
 reedline = "0.3.0"
 tree-sitter-highlight = "0.20.1"
 tree-sitter-lox = { path = "crates/tree-sitter-lox", version = "*" }

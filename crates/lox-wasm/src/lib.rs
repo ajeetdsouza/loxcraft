@@ -10,10 +10,13 @@ use std::panic;
 #[derive(Debug, Serialize)]
 #[serde(tag = "type")]
 enum Message {
-    Output { text: String },
+    Output {
+        text: String,
+    },
     CompileSuccess,
     CompileFailure,
     ExitSuccess,
+    #[allow(dead_code)]
     ExitFailure,
 }
 

@@ -26,6 +26,10 @@ jobs:
           toolchain: stable
       - uses: actions-rs/cargo@v1
         with:
+          command: xtask
+          args: codegen
+      - uses: actions-rs/cargo@v1
+        with:
           command: test
           args: --all-features --all-targets
   audit:
