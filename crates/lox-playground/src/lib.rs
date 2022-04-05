@@ -27,7 +27,7 @@ async fn playground(port: u16) {
     let lox_js = warp::path("lox.js").map(|| {
         http::response::Builder::new().header("Content-Type", "text/javascript").body(LOX_JS)
     });
-    let lox_png = warp::path("favicon.png")
+    let lox_png = warp::path("lox.png")
         .map(|| http::response::Builder::new().header("Content-Type", "image/png").body(LOX_PNG));
     let worker_js = warp::path("worker.js").map(|| {
         http::response::Builder::new().header("Content-Type", "text/javascript").body(WORKER_JS)
@@ -35,5 +35,10 @@ async fn playground(port: u16) {
 
     // Serve routes.
     let routes = warp::get().and(index_html.or(lox_bg_wasm).or(lox_js).or(lox_png).or(worker_js));
+    let url = format!("http://127.0.0.1:{port}");
+    eprintln!("Running playground on {url}");
+    if let Err(e) = webbrowser::open(&url) {
+        eprintln!("Failed to open browser: {e}");
+    }
     warp::serve(routes).run(([127, 0, 0, 1], port)).await;
 }
