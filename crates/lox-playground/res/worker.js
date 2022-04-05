@@ -1,9 +1,6 @@
 import init, { lox_run } from "./lox.js";
+(async () => await init("./lox_bg.wasm"))();
 
 onmessage = (event) => {
-  (async () => await init("./lox_bg.wasm"))();
-  const port = event.ports[0];
-  port.onmessage = (event) => {
-    lox_run(event.data, port);
-  };
+  lox_run(event.data);
 };

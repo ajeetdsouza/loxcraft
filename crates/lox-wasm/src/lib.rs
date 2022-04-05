@@ -4,30 +4,38 @@ use lox_syntax::parser::ParserError;
 use lox_vm::vm::VM;
 use serde::Serialize;
 use wasm_bindgen::prelude::wasm_bindgen;
-use wasm_bindgen::JsValue;
-use web_sys::MessagePort;
 
 use std::io::{self, Write};
+use std::panic;
 
 #[derive(Debug, Serialize)]
 #[serde(tag = "type")]
 enum Message {
     Output { text: String },
+    CompileSuccess,
+    CompileFailure,
+    ExitSuccess,
+    ExitFailure,
 }
 
-struct Output(MessagePort);
+#[wasm_bindgen]
+extern "C" {
+    fn postMessage(s: &str);
+}
+
+struct Output;
 
 impl Output {
-    fn new(port: MessagePort) -> Self {
-        Self(port)
+    fn new() -> Self {
+        Self
     }
 }
 
 impl Write for &Output {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let message = Message::Output { text: String::from_utf8_lossy(buf).to_string() };
-        let message = serde_json::to_string(&message).unwrap();
-        self.0.post_message(&JsValue::from_str(&message)).unwrap();
+        let text = ansi_to_html::convert_escaped(&String::from_utf8_lossy(buf)).unwrap();
+        let message = serde_json::to_string(&Message::Output { text }).unwrap();
+        postMessage(&message);
         Ok(buf.len())
     }
 
@@ -37,8 +45,15 @@ impl Write for &Output {
 }
 
 #[wasm_bindgen]
-pub fn lox_run(source: &str, ws_stdout: MessagePort) {
-    let output = Output::new(ws_stdout);
+pub fn lox_setup_panic() {
+    panic::set_hook(Box::new(console_error_panic_hook::hook));
+}
+
+#[wasm_bindgen]
+pub fn lox_run(source: &str) {
+    console_error_panic_hook::set_once();
+
+    let output = Output::new();
     let program = match lox_syntax::parse(source) {
         Ok(val) => val,
         Err(err) => {
@@ -46,22 +61,31 @@ pub fn lox_run(source: &str, ws_stdout: MessagePort) {
             return;
         }
     };
+
     let compiler = lox_vm::compiler::Compiler::new();
-    let function = match compiler.compile(&program) {
-        Ok(val) => val,
+    let result = compiler.compile(&program);
+
+    let message = if result.is_ok() { Message::CompileSuccess } else { Message::CompileFailure };
+    postMessage(&serde_json::to_string(&message).unwrap());
+
+    let function = match result {
+        Ok(function) => function,
         Err(err) => {
             write!(&output, "{:?}", err).unwrap();
             return;
         }
     };
     VM::new(&output, &output, false).run(function);
+
+    let message = Message::ExitSuccess; // TODO: VM::run() should return a Result.
+    postMessage(&serde_json::to_string(&message).unwrap());
 }
 
-fn report_err(source: &str, err: ParserError, stderr: &Output) {
+fn report_err(source: &str, err: ParserError, mut output: &Output) {
     use codespan_reporting::diagnostic::{Diagnostic, Label};
     use codespan_reporting::files::SimpleFile;
+    use codespan_reporting::term;
     use codespan_reporting::term::termcolor;
-    use codespan_reporting::term::{self, Config};
 
     let (label, range, notes);
     match err {
@@ -91,12 +115,15 @@ fn report_err(source: &str, err: ParserError, stderr: &Output) {
             notes = Vec::new();
         }
     };
-    let mut writer = termcolor::NoColor::new(stderr);
-    let config = Config::default();
-    let file = SimpleFile::new("src_file", source);
+
+    let mut buffer = termcolor::Buffer::ansi();
+    let config = term::Config::default();
+    let file = SimpleFile::new("<script>", source);
     let diagnostic = Diagnostic::error()
         .with_message(label)
         .with_labels(vec![Label::primary((), range)])
         .with_notes(notes);
-    term::emit(&mut writer, &config, &file, &diagnostic).unwrap();
+    term::emit(&mut buffer, &config, &file, &diagnostic).unwrap();
+
+    output.write_all(&buffer.into_inner()).unwrap();
 }

@@ -1,8 +1,9 @@
 <!DOCTYPE html>
-<html class="h-100" lang="en">
+<html class="vh-100" lang="en">
   <head>
     <title>Lox Playground</title>
-    <link rel="icon" type="image/x-icon" href="favicon.png" />
+    <link rel="icon" type="image/x-icon" href="lox.png" />
+
     <!-- Required by Bootstrap -->
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -14,8 +15,6 @@
       integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3"
       crossorigin="anonymous"
     />
-
-    <!-- Bootstrap Icons -->
     <link
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css"
@@ -28,38 +27,47 @@
       crossorigin="anonymous"
       referrerpolicy="no-referrer"
     ></script>
+
+    <!-- Custom CSS -->
+    <style>
+      :root {
+        --header-height: 56px;
+      }
+      header {
+        height: var(--header-height);
+      }
+      main {
+        height: calc(100vh - var(--header-height));
+      }
+    </style>
   </head>
 
-  <body class="h-100">
-    <div class="px-0 d-flex flex-column vh-100 overflow-hidden">
-      <div class="d-flex flex-row px-2">
-        <!-- Navbar -->
-        <nav class="navbar navbar-light bg-light flex-fill">
-          <div class="navbar-brand">Lox Playground</div>
-          <a id="run-btn" class="btn btn-success bi bi-play-fill">Run</a>
-        </nav>
-      </div>
-      <div class="d-flex flex-row gx-0 flex-grow-1">
-        <!-- Editor -->
-        <div class="border border-end-0 flex-fill">
-          <div id="editor" class="font-monospace fs-6 h-100"></div>
+  <body class="vh-100">
+    <header>
+      <!-- Navigation -->
+      <nav class="navbar navbar-light bg-light h-100 px-3">
+        <div class="navbar-brand">
+          <img src="lox.png" class="me-1" />
+          Lox Playground
         </div>
+        <a id="run-btn" class="btn btn-success bi bi-play-fill">Run</a>
+      </nav>
+    </header>
 
-        <!-- Output -->
-        <div class="border flex-fill vh-100 overflow-auto">
-          <pre
-            id="output"
-            class="font-monospace fs-6 bg-light p-0"
-            style="resize: none"
-          ></pre>
-          <pre
-            id="output-error"
-            class="font-monospace fs-6 bg-light p-0 text-danger"
-            style="resize: none"
-          ></pre>
-        </div>
+    <main class="d-flex">
+      <!-- Editor -->
+      <div class="w-50 border border-end-0">
+        <div id="editor" class="h-100 font-monospace fs-6"></div>
       </div>
-    </div>
+
+      <!-- Output -->
+      <div class="w-50 border">
+        <pre
+          id="output"
+          class="h-100 px-1 bg-light font-monospace fs-6 overflow-auto"
+        ></pre>
+      </div>
+    </main>
 
     <script type="module">
       const editor = ace.edit("editor");
@@ -70,16 +78,23 @@
       editor.on("input", () =>
         localStorage.setItem(keyEditorText, editor.getValue())
       );
+
+      const writeToOutput = (text) =>
+        document.getElementById("output").insertAdjacentHTML("beforeend", text);
+
+      // Start WASM worker.
       const worker = new Worker("worker.js", { type: "module" });
-      const channel = new MessageChannel();
-      worker.postMessage([channel.port2], [channel.port2]);
-      channel.port1.onmessage = function (event) {
+      worker.onmessage = function (event) {
         event = JSON.parse(event.data);
         switch (event.type) {
           case "Output":
-            document
-              .getElementById("output")
-              .insertAdjacentHTML("beforeend", event.text);
+            writeToOutput(event.text);
+            break;
+          case "ExitSuccess":
+            writeToOutput("---\nCommand exited successfully.");
+            break;
+          case "ExitFailure":
+            writeToOutput("---\nCommand exited with an error.");
             break;
         }
       };
@@ -87,8 +102,7 @@
       document.getElementById("run-btn").addEventListener("click", () => {
         const source = editor.getValue();
         document.getElementById("output").innerHTML = "";
-        document.getElementById("output-error").innerHTML = "";
-        channel.port1.postMessage(source);
+        worker.postMessage(source);
       });
     </script>
   </body>

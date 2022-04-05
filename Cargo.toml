@@ -1,5 +1,5 @@
 [package]
-authors = ["Ajeet D'Souza <98ajeet@gmail.com>"]
+authors = ["Ajeet D'Souza <98ajeet@gmail.com>", "Kartik Sharma <kartik.sharma522@gmail.com>"]
 description = "A compiler / VM for the Lox programming language"
 edition = "2021"
 keywords = ["compiler", "interpreter", "language", "lox", "vm"]
@@ -47,6 +47,6 @@ pretty_assertions = "1.1.0"
 test-generator = "0.3.0"
 
 [profile.release]
-# codegen-units = 1
-# lto = true
-# strip = true
+codegen-units = 1
+lto = true
+strip = true
