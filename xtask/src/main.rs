@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 
+use std::fs;
 use std::path::PathBuf;
 
 #[derive(Debug, Parser)]
@@ -16,12 +17,11 @@ fn main() -> Result<()> {
 }
 
 fn run_codegen() -> Result<()> {
-    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .context("could not find workspace root")?
-        .join("crates/lox-wasm");
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let manifest_dir = manifest_dir.parent().context("could not find workspace root")?;
+
     let build_opts = wasm_pack::command::build::BuildOptions {
-        path: Some(dir),
+        path: Some(manifest_dir.join("crates/lox-wasm")),
         disable_dts: true,
         target: wasm_pack::command::build::Target::Web,
         release: true,
@@ -32,5 +32,16 @@ fn run_codegen() -> Result<()> {
     wasm_pack::command::build::Build::try_from_opts(build_opts)
         .map_err(|e| anyhow!(e.to_string()))?
         .run()
-        .map_err(|e| anyhow!(e.to_string()))
+        .map_err(|e| anyhow!(e.to_string()))?;
+
+    fs::copy(
+        manifest_dir.join("crates/lox-wasm/pkg/lox_bg.wasm"),
+        manifest_dir.join("crates/lox-playground/res/lox_bg.wasm"),
+    )?;
+    fs::copy(
+        manifest_dir.join("crates/lox-wasm/pkg/lox.js"),
+        manifest_dir.join("crates/lox-playground/res/lox.js"),
+    )?;
+
+    Ok(())
 }
