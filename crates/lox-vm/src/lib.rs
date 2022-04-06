@@ -15,43 +15,51 @@ pub fn report_err<W: Write>(source: &str, err: ParserError, mut writer: W) {
     use codespan_reporting::files::SimpleFile;
     use codespan_reporting::term;
 
-    let (label, range, notes);
-    match err {
-        ParserError::ExtraToken { token } => {
-            label = "unexpected token";
-            range = token.0..token.2;
-            notes = Vec::new();
-        }
-        ParserError::InvalidToken { location } => {
-            label = "invalid token";
-            range = location..location;
-            notes = Vec::new();
-        }
-        ParserError::UnrecognizedEOF { location, expected } => {
-            label = "unrecognized EOF";
-            range = location..location;
-            notes = vec![format!("expected one of: {} after this token", expected.join(", "))];
-        }
-        ParserError::UnrecognizedToken { token, expected } => {
-            label = "unrecognized token";
-            range = token.0..token.2;
-            notes = vec![format!("expected one of: {} after this token", expected.join(", "))];
-        }
-        ParserError::User { error: err } => {
-            label = "unexpected input";
-            range = err.location..err.location + 1;
-            notes = Vec::new();
-        }
+    let file = SimpleFile::new("<script>", source);
+    let diagnostic = match err {
+        ParserError::ExtraToken { token: (start, _, end) } => Diagnostic::error()
+            .with_message(format!("extraneous input: {:?}", &source[start..end]))
+            .with_labels(vec![Label::primary((), start..end)]),
+        ParserError::InvalidToken { location } => Diagnostic::error()
+            .with_message("invalid input")
+            .with_labels(vec![Label::primary((), location..location)]),
+        ParserError::UnrecognizedEOF { location, expected } => Diagnostic::error()
+            .with_message("unexpected end of file")
+            .with_labels(vec![Label::primary((), location..location)])
+            .with_notes(vec![format!("expected: {}", one_of(&expected))]),
+        ParserError::UnrecognizedToken { token: (start, _, end), expected } => Diagnostic::error()
+            .with_message(format!("unexpected {:?}", &source[start..end]))
+            .with_labels(vec![Label::primary((), start..end)])
+            .with_notes(vec![format!("expected: {}", one_of(&expected))]),
+        ParserError::User { error } => Diagnostic::error()
+            .with_message(error.message.unwrap_or_else(|| {
+                format!("unexpected {:?}", &source[error.span.start..error.span.end])
+            }))
+            .with_labels(vec![Label::primary((), error.span)]),
     };
 
     let mut buffer = termcolor::Buffer::ansi();
     let config = term::Config::default();
-    let file = SimpleFile::new("<script>", source);
-    let diagnostic = Diagnostic::error()
-        .with_message(label)
-        .with_labels(vec![Label::primary((), range)])
-        .with_notes(notes);
     term::emit(&mut buffer, &config, &file, &diagnostic).unwrap();
 
     writer.write_all(&buffer.into_inner()).unwrap();
+}
+
+fn one_of(tokens: &[String]) -> String {
+    let (token_last, tokens) = match tokens.split_last() {
+        Some((token_last, &[])) => return token_last.to_string(),
+        Some((token_last, tokens)) => (token_last, tokens),
+        None => return "nothing".to_string(),
+    };
+
+    let mut output = String::new();
+    for token in tokens {
+        output.push_str(token);
+        output.push_str(", ");
+    }
+    output.pop();
+    output.pop();
+    output.push_str(" or ");
+    output.push_str(token_last);
+    output
 }

@@ -1,14 +1,16 @@
 use logos::Logos;
 
 use std::num::ParseFloatError;
+use std::ops::Range;
 
 pub struct Lexer<'a> {
     inner: logos::Lexer<'a, Token>,
+    pending: Option<(usize, Token, usize)>,
 }
 
 impl<'a> Lexer<'a> {
     pub fn new(source: &'a str) -> Self {
-        Self { inner: Token::lexer(source) }
+        Self { inner: Token::lexer(source), pending: None }
     }
 }
 
@@ -16,17 +18,46 @@ impl<'a> Iterator for Lexer<'a> {
     type Item = Result<(usize, Token, usize), LexerError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let span = self.inner.span();
+        if let Some(token) = self.pending.take() {
+            return Some(Ok(token));
+        }
+
         match self.inner.next()? {
-            Token::Error => Some(Err(LexerError { location: span.start })),
-            token => Some(Ok((span.start, token, span.end))),
+            Token::Error => {
+                let mut span = self.inner.span();
+
+                // Check for unterminated string.
+                if self.inner.slice().starts_with('"') {
+                    let message = Some("unterminated string".to_string());
+                    return Some(Err(LexerError { message, span }));
+                }
+
+                // Recover error.
+                while let Some(token) = self.inner.next() {
+                    let span_new = self.inner.span();
+                    if span.end == span_new.start {
+                        span.end = span_new.end;
+                    } else {
+                        self.pending = Some((span_new.start, token, span_new.end));
+                        break;
+                    }
+                }
+
+                let message = None;
+                Some(Err(LexerError { message, span }))
+            }
+            token => {
+                let span = self.inner.span();
+                Some(Ok((span.start, token, span.end)))
+            }
         }
     }
 }
 
 #[derive(Debug)]
 pub struct LexerError {
-    pub location: usize,
+    pub message: Option<String>,
+    pub span: Range<usize>,
 }
 
 #[derive(Clone, Debug, Logos, PartialEq)]
@@ -115,9 +146,9 @@ pub enum Token {
     #[token("while")]
     While,
 
-    #[error]
     #[regex(r"//.*", logos::skip)]
     #[regex(r"[ \r\n\t\f]+", logos::skip)]
+    #[error]
     Error,
 }
 

@@ -10,11 +10,11 @@ Decl = {
 }
 
 DeclFun: ast::Stmt =
-    "fun" <name:Identifier> "(" <params:Params> ")" <body:StmtBlockInternal> =>
+    "fun" <name:identifier> "(" <params:Params> ")" <body:StmtBlockInternal> =>
         ast::Stmt::Fun(Box::new(ast::StmtFun { <> }));
 
 Params: Vec<String> = {
-    <first:Identifier> <rest:("," <Identifier>)*> => {
+    <first:identifier> <rest:("," <identifier>)*> => {
         let mut params = Vec::with_capacity(1 + rest.len());
         params.push(first);
         params.extend(rest);
@@ -89,16 +89,16 @@ StmtReturn: ast::Stmt =
     "return" <value:Expr?> ";" => ast::Stmt::Return(ast::StmtReturn { <> });
 
 StmtVar: ast::Stmt = {
-    "var" <name:Identifier> "=" <value:Expr> ";" =>
+    "var" <name:identifier> "=" <value:Expr> ";" =>
         ast::Stmt::Var(ast::StmtVar { name, value: Some(value) }),
-    "var" <name:Identifier> ";" =>
+    "var" <name:identifier> ";" =>
         ast::Stmt::Var(ast::StmtVar { name, value: None }),
 };
 
 Expr = ExprAssign;
 
 ExprAssign = {
-    <name:Identifier> "=" <value:Expr> =>
+    <name:identifier> "=" <value:Expr> =>
         ast::Expr::Assign(Box::new(ast::ExprAssign { <> })),
     ExprLogicOr,
 }
@@ -172,12 +172,12 @@ ExprLiteral: ast::ExprLiteral = {
     "nil" => ast::ExprLiteral::Nil,
     "false" => ast::ExprLiteral::Bool(false),
     "true" => ast::ExprLiteral::Bool(true),
-    String => ast::ExprLiteral::String(<>),
-    Number => ast::ExprLiteral::Number(<>),
+    string => ast::ExprLiteral::String(<>),
+    number => ast::ExprLiteral::Number(<>),
 }
 
 ExprVariable: ast::ExprVariable =
-    <name:Identifier> => ast::ExprVariable { <> };
+    <name:identifier> => ast::ExprVariable { <> };
 
 ExprInfix<Lt, Op, Rt>: ast::Expr = {
     <lt:Lt> <op:Op> <rt:Rt> =>
@@ -214,9 +214,9 @@ extern {
         "<=" => lexer::Token::LessEqual,
 
         // Literals.
-        Identifier => lexer::Token::Identifier(<String>),
-        String => lexer::Token::String(<String>),
-        Number => lexer::Token::Number(<f64>),
+        identifier => lexer::Token::Identifier(<String>),
+        string => lexer::Token::String(<String>),
+        number => lexer::Token::Number(<f64>),
 
         // Keywords.
         "and" => lexer::Token::And,
