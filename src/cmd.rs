@@ -52,15 +52,14 @@ pub fn repl(debug: bool) {
     loop {
         match editor.read_line(&repl::Prompt) {
             Ok(Signal::Success(line)) => {
-                let program = match lox_syntax::parse(&line) {
-                    Ok(program) => program,
+                let compiler = Compiler::new();
+                let function = match compiler.compile(&line) {
+                    Ok(function) => function,
                     Err(err) => {
                         lox_vm::report_err(&line, err, io::stderr());
                         continue;
                     }
                 };
-                let compiler = Compiler::new();
-                let function = compiler.compile(&program).unwrap();
                 vm.run(function);
             }
             Ok(Signal::CtrlC) => {
@@ -85,15 +84,14 @@ pub fn repl(debug: bool) {
 
 fn run(path: &str, debug: bool) {
     let source = fs::read_to_string(&path).unwrap();
-    let program = match lox_syntax::parse(&source) {
+    let compiler = Compiler::new();
+    let function = match compiler.compile(&source) {
         Ok(program) => program,
         Err(err) => {
             lox_vm::report_err(&source, err, io::stderr());
             return;
         }
     };
-    let compiler = Compiler::new();
-    let function = compiler.compile(&program).unwrap();
 
     let stdout = io::stdout();
     let stdout = stdout.lock();

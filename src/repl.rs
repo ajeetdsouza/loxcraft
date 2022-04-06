@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use lalrpop_util as lu;
 use nu_ansi_term as nat;
 use reedline as rl;
 use tree_sitter_highlight as tsh;
@@ -111,9 +110,10 @@ struct Validator;
 
 impl rl::Validator for Validator {
     fn validate(&self, line: &str) -> rl::ValidationResult {
-        match lox_syntax::parse(line) {
-            Err(lu::ParseError::UnrecognizedEOF { .. }) => rl::ValidationResult::Incomplete,
-            _ => rl::ValidationResult::Complete,
+        if lox_syntax::is_complete(line) {
+            rl::ValidationResult::Complete
+        } else {
+            rl::ValidationResult::Incomplete
         }
     }
 }

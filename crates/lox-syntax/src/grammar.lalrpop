@@ -5,9 +5,11 @@ grammar;
 pub Program: ast::Program = <stmts:Decl*> => ast::Program { <> };
 
 Decl = {
-    DeclFun,
+    DeclFunS,
     Stmt,
 }
+
+DeclFunS: ast::Spanned<ast::Stmt> = <l:@L> <fun:DeclFun> <r:@R> => (fun, l..r);
 
 DeclFun: ast::Stmt =
     "fun" <name:identifier> "(" <params:Params> ")" <body:StmtBlockInternal> =>
@@ -25,28 +27,32 @@ Params: Vec<String> = {
 
 // https://en.wikipedia.org/wiki/Dangling_else#Avoiding_the_conflict_in_LR_parsers
 Stmt = {
-    StmtOpen,
-    StmtClosed,
+    StmtOpenS,
+    StmtClosedS,
 }
+
+StmtOpenS: ast::Spanned<ast::Stmt> = <l:@L> <stmt:StmtOpen> <r:@R> => (stmt, l..r);
 
 StmtOpen: ast::Stmt = {
     "if" "(" <cond:Expr> ")" <then:Stmt> =>
         ast::Stmt::If(Box::new(ast::StmtIf { <>, else_: None })),
-    "if" "(" <cond:Expr> ")" <then:StmtClosed> "else" <else_:StmtOpen> =>
+    "if" "(" <cond:Expr> ")" <then:StmtClosedS> "else" <else_:StmtOpenS> =>
         ast::Stmt::If(Box::new(ast::StmtIf { cond, then, else_: Some(else_) })),
-    "while" "(" <cond:Expr> ")" <body:StmtOpen> =>
+    "while" "(" <cond:Expr> ")" <body:StmtOpenS> =>
         ast::Stmt::While(Box::new(ast::StmtWhile { <> })),
-    "for" "(" <init:ForInit> <cond:ForCond> <incr:ForIncr> ")" <body:StmtOpen> =>
+    "for" "(" <init:ForInit> <cond:ForCond> <incr:ForIncr> ")" <body:StmtOpenS> =>
         ast::Stmt::For(Box::new(ast::StmtFor { <> })),
 }
 
+StmtClosedS: ast::Spanned<ast::Stmt> = <l:@L> <stmt:StmtClosed> <r:@R> => (stmt, l..r);
+
 StmtClosed: ast::Stmt = {
     StmtSimple,
-    "if" "(" <cond:Expr> ")" <then:StmtClosed> "else" <else_:StmtClosed> =>
+    "if" "(" <cond:Expr> ")" <then:StmtClosedS> "else" <else_:StmtClosedS> =>
         ast::Stmt::If(Box::new(ast::StmtIf { cond, then, else_: Some(else_) })),
-    "while" "(" <cond:Expr> ")" <body:StmtClosed> =>
+    "while" "(" <cond:Expr> ")" <body:StmtClosedS> =>
         ast::Stmt::While(Box::new(ast::StmtWhile { <> })),
-    "for" "(" <init:ForInit> <cond:ForCond> <incr:ForIncr> ")" <body:StmtClosed> =>
+    "for" "(" <init:ForInit> <cond:ForCond> <incr:ForIncr> ")" <body:StmtClosedS> =>
         ast::Stmt::For(Box::new(ast::StmtFor { <> })),
 }
 

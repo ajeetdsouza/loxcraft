@@ -7,16 +7,14 @@ use wasm_bindgen::prelude::wasm_bindgen;
 use std::io::{self, Write};
 use std::panic;
 
+#[allow(dead_code)]
 #[derive(Debug, Serialize)]
 #[serde(tag = "type")]
 enum Message {
-    Output {
-        text: String,
-    },
+    Output { text: String },
     CompileSuccess,
     CompileFailure,
     ExitSuccess,
-    #[allow(dead_code)]
     ExitFailure,
 }
 
@@ -56,7 +54,8 @@ pub fn lox_run(source: &str) {
     console_error_panic_hook::set_once();
 
     let output = Output::new();
-    let program = match lox_syntax::parse(source) {
+    let compiler = lox_vm::compiler::Compiler::new();
+    let function = match compiler.compile(source) {
         Ok(val) => val,
         Err(err) => {
             lox_vm::report_err(source, err, &output);
@@ -64,19 +63,6 @@ pub fn lox_run(source: &str) {
         }
     };
 
-    let compiler = lox_vm::compiler::Compiler::new();
-    let result = compiler.compile(&program);
-
-    let message = if result.is_ok() { Message::CompileSuccess } else { Message::CompileFailure };
-    postMessage(&serde_json::to_string(&message).unwrap());
-
-    let function = match result {
-        Ok(function) => function,
-        Err(err) => {
-            write!(&output, "{:?}", err).unwrap();
-            return;
-        }
-    };
     VM::new(&output, &output, false).run(function);
 
     let message = Message::ExitSuccess; // TODO: VM::run() should return a Result.

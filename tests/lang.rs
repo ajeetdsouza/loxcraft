@@ -23,9 +23,7 @@ fn lox(path: &str) {
         }
     }
 
-    let program = lox_syntax::parse(&source).unwrap();
-    let function = Compiler::new().compile(&program).unwrap();
-
+    let function = Compiler::new().compile(&source).unwrap();
     let mut got_out = Vec::new();
     let mut got_err = Vec::new();
     VM::new(&mut got_out, &mut got_err, false).run(function);

@@ -54,7 +54,7 @@ impl<'a> Iterator for Lexer<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct LexerError {
     pub message: Option<String>,
     pub span: Range<usize>,
@@ -165,4 +165,29 @@ fn lex_string(lexer: &mut logos::Lexer<Token>) -> String {
 fn lex_identifier(lexer: &mut logos::Lexer<Token>) -> String {
     let slice = lexer.slice();
     slice.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn lex_invalid_token() {
+        let exp = vec![
+            Err(LexerError { message: None, span: 0..4 }),
+            Ok((5, Token::Identifier("bar".to_string()), 8)),
+        ];
+        let got = Lexer::new("@foo bar").collect::<Vec<_>>();
+        assert_eq!(exp, got);
+    }
+
+    #[test]
+    fn lex_unterminated_string() {
+        let exp =
+            vec![Err(LexerError { message: Some("unterminated string".to_string()), span: 0..5 })];
+        let got = Lexer::new("\"\nfoo").collect::<Vec<_>>();
+        assert_eq!(exp, got);
+    }
 }

@@ -1,5 +1,10 @@
+use std::ops::Range;
+
+pub type Spanned<T> = (T, Span);
+pub type Span = Range<usize>;
+
 pub struct Program {
-    pub stmts: Vec<Stmt>,
+    pub stmts: Vec<Spanned<Stmt>>,
 }
 
 #[derive(Debug)]
@@ -17,7 +22,7 @@ pub enum Stmt {
 
 #[derive(Debug)]
 pub struct StmtBlock {
-    pub stmts: Vec<Stmt>,
+    pub stmts: Vec<Spanned<Stmt>>,
 }
 
 /// An expression statement evaluates an expression and discards the result.
@@ -31,7 +36,7 @@ pub struct StmtFor {
     pub init: Option<Stmt>,
     pub cond: Option<Expr>,
     pub incr: Option<Expr>,
-    pub body: Stmt,
+    pub body: Spanned<Stmt>,
 }
 
 #[derive(Debug)]
@@ -44,8 +49,8 @@ pub struct StmtFun {
 #[derive(Debug)]
 pub struct StmtIf {
     pub cond: Expr,
-    pub then: Stmt,
-    pub else_: Option<Stmt>,
+    pub then: Spanned<Stmt>,
+    pub else_: Option<Spanned<Stmt>>,
 }
 
 #[derive(Debug)]
@@ -67,7 +72,7 @@ pub struct StmtVar {
 #[derive(Debug)]
 pub struct StmtWhile {
     pub cond: Expr,
-    pub body: Stmt,
+    pub body: Spanned<Stmt>,
 }
 
 #[derive(Debug)]
