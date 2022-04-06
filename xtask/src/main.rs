@@ -23,7 +23,7 @@ fn run_codegen() -> Result<()> {
     let build_opts = wasm_pack::command::build::BuildOptions {
         path: Some(manifest_dir.join("crates/lox-wasm")),
         disable_dts: true,
-        target: wasm_pack::command::build::Target::Web,
+        target: wasm_pack::command::build::Target::NoModules,
         release: true,
         out_dir: "pkg".to_string(),
         out_name: Some("lox".to_string()),
