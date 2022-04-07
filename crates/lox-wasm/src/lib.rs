@@ -5,7 +5,6 @@ use serde::Serialize;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use std::io::{self, Write};
-use std::panic;
 
 #[allow(dead_code)]
 #[derive(Debug, Serialize)]
@@ -20,6 +19,7 @@ enum Message {
 
 #[wasm_bindgen]
 extern "C" {
+    #[wasm_bindgen(js_namespace = self)]
     fn postMessage(s: &str);
 }
 
@@ -45,12 +45,8 @@ impl Write for &Output {
 }
 
 #[wasm_bindgen]
-pub fn lox_setup_panic() {
-    panic::set_hook(Box::new(console_error_panic_hook::hook));
-}
-
-#[wasm_bindgen]
-pub fn lox_run(source: &str) {
+#[allow(non_snake_case)]
+pub fn loxRun(source: &str) {
     console_error_panic_hook::set_once();
 
     let output = Output::new();
@@ -59,10 +55,10 @@ pub fn lox_run(source: &str) {
         Ok(val) => val,
         Err(err) => {
             lox_vm::report_err(source, err, &output);
+            postMessage(&serde_json::to_string(&Message::CompileFailure).unwrap());
             return;
         }
     };
-
     VM::new(&output, &output, false).run(function);
 
     let message = Message::ExitSuccess; // TODO: VM::run() should return a Result.

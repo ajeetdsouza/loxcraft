@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html class="vh-100" lang="en">
+<html class="vh-100 overflow-hidden" lang="en">
   <head>
     <title>Lox Playground</title>
     <link rel="icon" type="image/x-icon" href="lox.png" />
@@ -28,6 +28,111 @@
       referrerpolicy="no-referrer"
     ></script>
 
+    <!-- Custom JS -->
+    <script type="module">
+      // Setup editor.
+      const editor = ace.edit("editor");
+
+      const editorTextKey = "editorText";
+      editor.setValue(localStorage.getItem(editorTextKey) || "", -1);
+      editor.on("input", () =>
+        localStorage.setItem(editorTextKey, editor.getValue())
+      );
+
+      const editorInitResizeable = () => {
+        const leftPane = document.getElementById("editor");
+        const rightPane = document.getElementById("output");
+        const resizer = document.getElementById("resizer");
+        const container = document.getElementById("content");
+
+        resizer.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          window.addEventListener("mousemove", doResize);
+          window.addEventListener("mouseup", stopResize);
+        });
+
+        const doResize = (e) => {
+          leftPane.style.width = e.pageX + "px";
+          rightPane.style.width =
+            container.getBoundingClientRect().right - e.pageX + "px";
+        };
+
+        const stopResize = () => {
+          window.removeEventListener("mousemove", doResize);
+          editor.resize();
+        };
+      };
+      editorInitResizeable();
+
+      // Setup Lox.
+      let loxWorker = null;
+      let loxIsRunning = false;
+
+      const loxClearOutput = () =>
+        (document.getElementById("output").innerHTML = "");
+      const loxWriteOutput = (text) =>
+        (document.getElementById("output").innerHTML += text);
+
+      const loxResetButton = () => {
+        const button = document.getElementById("run-btn");
+        if (loxIsRunning) {
+          button.innerText = "Stop";
+          button.classList.add("btn-danger", "bi-stop-fill");
+          button.classList.remove("btn-success", "bi-play-fill");
+        } else {
+          button.innerText = "Run";
+          button.classList.add("btn-success", "bi-play-fill");
+          button.classList.remove("btn-danger", "bi-stop-fill");
+        }
+      };
+      loxResetButton();
+
+      const loxResetWorker = () => {
+        if (loxWorker !== null) {
+          loxWorker.terminate();
+        }
+        loxWorker = new Worker("./worker.js");
+        loxWorker.onmessage = (event) => {
+          event = JSON.parse(event.data);
+          switch (event.type) {
+            case "Output":
+              loxWriteOutput(event.text);
+              break;
+            case "ExitSuccess":
+              loxWriteOutput("---\nCommand exited successfully.");
+              loxIsRunning = false;
+              loxResetButton();
+              break;
+            case "ExitFailure":
+              loxWriteOutput("---\nCommand exited with an error.");
+              loxIsRunning = false;
+              loxResetButton();
+              break;
+            case "CompileFailure":
+              loxWriteOutput("---\nCompiler exited with an error.");
+              loxIsRunning = false;
+              loxResetButton();
+              break;
+          }
+        };
+      };
+      loxResetWorker();
+
+      document.getElementById("run-btn").addEventListener("click", () => {
+        if (loxIsRunning) {
+          loxWriteOutput("\n---\nExecution was interrupted.");
+          loxIsRunning = false;
+          loxResetButton();
+          loxResetWorker();
+        } else {
+          loxClearOutput();
+          loxIsRunning = true;
+          loxResetButton();
+          loxWorker.postMessage(editor.getValue());
+        }
+      });
+    </script>
+
     <!-- Custom CSS -->
     <style>
       :root {
@@ -39,13 +144,20 @@
       main {
         height: calc(100vh - var(--header-height));
       }
+      #editor,
+      #output {
+        width: 50%;
+      }
+      #resizer {
+        cursor: col-resize;
+      }
     </style>
   </head>
 
   <body class="vh-100">
+    <!-- Navigation -->
     <header>
-      <!-- Navigation -->
-      <nav class="navbar navbar-light bg-light h-100 px-3">
+      <nav class="navbar navbar-light border bg-light h-100 px-3">
         <div class="navbar-brand">
           <img src="lox.png" class="me-1" />
           Lox Playground
@@ -54,56 +166,14 @@
       </nav>
     </header>
 
-    <main class="d-flex">
-      <!-- Editor -->
-      <div class="w-50 border border-end-0">
-        <div id="editor" class="h-100 font-monospace fs-6"></div>
-      </div>
-
-      <!-- Output -->
-      <div class="w-50 border">
-        <pre
-          id="output"
-          class="h-100 px-1 bg-light font-monospace fs-6 overflow-auto"
-        ></pre>
-      </div>
+    <!-- Content -->
+    <main id="content" class="d-flex">
+      <div id="editor" class="h-100 font-monospace fs-6"></div>
+      <div id="resizer" class="vr border border-secondary border-3 h-100"></div>
+      <pre
+        id="output"
+        class="h-100 bg-light font-monospace fs-6 overflow-auto"
+      ></pre>
     </main>
-
-    <script type="module">
-      const editor = ace.edit("editor");
-
-      // Save editor text in localStorage.
-      const keyEditorText = "editorText";
-      editor.setValue(localStorage.getItem(keyEditorText) || "", -1);
-      editor.on("input", () =>
-        localStorage.setItem(keyEditorText, editor.getValue())
-      );
-
-      const writeToOutput = (text) =>
-        document.getElementById("output").insertAdjacentHTML("beforeend", text);
-
-      // Start WASM worker.
-      const worker = new Worker("worker.js", { type: "module" });
-      worker.onmessage = function (event) {
-        event = JSON.parse(event.data);
-        switch (event.type) {
-          case "Output":
-            writeToOutput(event.text);
-            break;
-          case "ExitSuccess":
-            writeToOutput("---\nCommand exited successfully.");
-            break;
-          case "ExitFailure":
-            writeToOutput("---\nCommand exited with an error.");
-            break;
-        }
-      };
-
-      document.getElementById("run-btn").addEventListener("click", () => {
-        const source = editor.getValue();
-        document.getElementById("output").innerHTML = "";
-        worker.postMessage(source);
-      });
-    </script>
   </body>
 </html>

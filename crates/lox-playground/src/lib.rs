@@ -12,8 +12,8 @@ async fn playground(port: u16) {
     // Statically include all files required by the playground.
     // Some of these need to be generated first using `cargo xtask codegen`.
     const INDEX_HTML: &str = include_str!("../res/index.html");
-    const LOX_BG_WASM: &[u8] = include_bytes!("../../lox-wasm/pkg/lox_bg.wasm");
-    const LOX_JS: &str = include_str!("../../lox-wasm/pkg/lox.js");
+    const LOX_BG_WASM: &[u8] = include_bytes!("../res/lox_bg.wasm");
+    const LOX_JS: &str = include_str!("../res/lox.js");
     const LOX_PNG: &[u8] = include_bytes!("../res/lox.png");
     const WORKER_JS: &str = include_str!("../res/worker.js");
 
