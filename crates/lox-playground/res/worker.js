@@ -1,11 +1,10 @@
 importScripts("./lox.js");
 
-const { lox_run } = wasm_bindgen;
-
-async function init_wasm_in_worker() {
+const { loxRun } = wasm_bindgen;
+const loxInit = async () => {
   await wasm_bindgen("./lox_bg.wasm");
   self.onmessage = (event) => {
-    lox_run(event.data);
+    loxRun(event.data);
   };
-}
-init_wasm_in_worker();
+};
+loxInit();

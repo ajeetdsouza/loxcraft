@@ -28,93 +28,109 @@
       referrerpolicy="no-referrer"
     ></script>
 
-    <!-- Index.js -->
+    <!-- Custom JS -->
     <script type="module">
+      // Setup editor.
       const editor = ace.edit("editor");
-      let isRunning = false;
 
-      // Save editor text in localStorage.
-      const keyEditorText = "editorText";
-      editor.setValue(localStorage.getItem(keyEditorText) || "", -1);
+      const editorTextKey = "editorText";
+      editor.setValue(localStorage.getItem(editorTextKey) || "", -1);
       editor.on("input", () =>
-        localStorage.setItem(keyEditorText, editor.getValue())
+        localStorage.setItem(editorTextKey, editor.getValue())
       );
 
-      const writeToOutput = (text) =>
-        document.getElementById("output").insertAdjacentHTML("beforeend", text);
+      const editorInitResizeable = () => {
+        const leftPane = document.getElementById("editor");
+        const rightPane = document.getElementById("output");
+        const resizer = document.getElementById("resizer");
+        const container = document.getElementById("content");
 
-      // Start WASM worker.
-      let worker = new Worker("./worker.js");
-      const resetButton = () => {
-        document.getElementById("run-btn").innerHTML = "Run";
-        document.getElementById("run-btn").className =
-          "btn btn-success bi bi-play-fill";
-        isRunning = false;
-      };
-      worker.onmessage = function (event) {
-        event = JSON.parse(event.data);
-        switch (event.type) {
-          case "Output":
-            writeToOutput(event.text);
-            break;
-          case "ExitSuccess":
-            writeToOutput("---\nCommand exited successfully.");
-            resetButton();
-            break;
-          case "ExitFailure":
-            writeToOutput("\n---\nCommand exited with an error.");
-            resetButton();
-            break;
-          case "CompileFailure":
-            writeToOutput(
-              "\n---\nError: could not compile due to previous error."
-            );
-            resetButton();
-            break;
-        }
-      };
-
-      document.getElementById("run-btn").addEventListener("click", () => {
-        if (!isRunning) {
-          const source = editor.getValue();
-          document.getElementById("run-btn").className =
-            "btn btn-danger bi bi-stop-fill";
-          document.getElementById("run-btn").innerHTML = "Stop";
-          document.getElementById("output").innerHTML = "";
-          worker.postMessage(source);
-          isRunning = true;
-        } else {
-          worker.terminate();
-          worker = new Worker("./worker.js");
-          writeToOutput("---\nError: Execution was interrupted");
-          resetButton();
-          isRunning = false;
-        }
-      });
-
-      function makeEditorResizeable() {
-        const leftElement = document.getElementById("editor-div");
-        const rightElement = document.getElementById("output-div");
-        const currentResizer = document.getElementById("resizer");
-        const mainDiv = document.getElementById("main-div");
-        currentResizer.addEventListener("mousedown", function (e) {
+        resizer.addEventListener("mousedown", (e) => {
           e.preventDefault();
-          window.addEventListener("mousemove", resize);
+          window.addEventListener("mousemove", doResize);
           window.addEventListener("mouseup", stopResize);
         });
 
-        function resize(e) {
-          leftElement.style.width = e.pageX + "px";
-          rightElement.style.width =
-            mainDiv.getBoundingClientRect().right - e.pageX + "px";
-        }
+        const doResize = (e) => {
+          leftPane.style.width = e.pageX + "px";
+          rightPane.style.width =
+            container.getBoundingClientRect().right - e.pageX + "px";
+        };
 
-        function stopResize() {
-          window.removeEventListener("mousemove", resize);
+        const stopResize = () => {
+          window.removeEventListener("mousemove", doResize);
           editor.resize();
+        };
+      };
+      editorInitResizeable();
+
+      // Setup Lox.
+      let loxWorker = null;
+      let loxIsRunning = false;
+
+      const loxClearOutput = () =>
+        (document.getElementById("output").innerHTML = "");
+      const loxWriteOutput = (text) =>
+        (document.getElementById("output").innerHTML += text);
+
+      const loxResetButton = () => {
+        const button = document.getElementById("run-btn");
+        if (loxIsRunning) {
+          button.innerText = "Stop";
+          button.classList.add("btn-danger", "bi-stop-fill");
+          button.classList.remove("btn-success", "bi-play-fill");
+        } else {
+          button.innerText = "Run";
+          button.classList.add("btn-success", "bi-play-fill");
+          button.classList.remove("btn-danger", "bi-stop-fill");
         }
-      }
-      makeEditorResizeable();
+      };
+      loxResetButton();
+
+      const loxResetWorker = () => {
+        if (loxWorker !== null) {
+          loxWorker.terminate();
+        }
+        loxWorker = new Worker("./worker.js");
+        loxWorker.onmessage = (event) => {
+          event = JSON.parse(event.data);
+          switch (event.type) {
+            case "Output":
+              loxWriteOutput(event.text);
+              break;
+            case "ExitSuccess":
+              loxWriteOutput("---\nCommand exited successfully.");
+              loxIsRunning = false;
+              loxResetButton();
+              break;
+            case "ExitFailure":
+              loxWriteOutput("---\nCommand exited with an error.");
+              loxIsRunning = false;
+              loxResetButton();
+              break;
+            case "CompileFailure":
+              loxWriteOutput("---\nCompiler exited with an error.");
+              loxIsRunning = false;
+              loxResetButton();
+              break;
+          }
+        };
+      };
+      loxResetWorker();
+
+      document.getElementById("run-btn").addEventListener("click", () => {
+        if (loxIsRunning) {
+          loxWriteOutput("\n---\nExecution was interrupted.");
+          loxIsRunning = false;
+          loxResetButton();
+          loxResetWorker();
+        } else {
+          loxClearOutput();
+          loxIsRunning = true;
+          loxResetButton();
+          loxWorker.postMessage(editor.getValue());
+        }
+      });
     </script>
 
     <!-- Custom CSS -->
@@ -128,25 +144,20 @@
       main {
         height: calc(100vh - var(--header-height));
       }
-      .resizeable {
+      #editor,
+      #output {
         width: 50%;
-        height: 100%;
       }
-      .resizeable,
-      .resizer {
-        border: 3px solid #4286f4;
-      }
-      .resizer.right {
-        right: -5px;
+      #resizer {
         cursor: col-resize;
       }
     </style>
   </head>
 
   <body class="vh-100">
+    <!-- Navigation -->
     <header>
-      <!-- Navigation -->
-      <nav class="navbar navbar-light bg-light h-100 px-3">
+      <nav class="navbar navbar-light border bg-light h-100 px-3">
         <div class="navbar-brand">
           <img src="lox.png" class="me-1" />
           Lox Playground
@@ -155,20 +166,14 @@
       </nav>
     </header>
 
-    <main id="main-div" class="d-flex">
-      <!-- Editor -->
-      <div id="editor-div" class="border border-end-0 resizeable">
-        <div id="editor" class="h-100 font-monospace fs-6"></div>
-      </div>
-
-      <div id="resizer" class="vr resizer right h-100"></div>
-      <!-- Output -->
-      <div id="output-div" class="border resizeable bg-light">
-        <pre
-          id="output"
-          class="h-100 px-1 bg-light font-monospace fs-6 overflow-auto w-100"
-        ></pre>
-      </div>
+    <!-- Content -->
+    <main id="content" class="d-flex">
+      <div id="editor" class="h-100 font-monospace fs-6"></div>
+      <div id="resizer" class="vr border border-secondary border-3 h-100"></div>
+      <pre
+        id="output"
+        class="h-100 px-1 bg-light font-monospace fs-6 overflow-auto"
+      ></pre>
     </main>
   </body>
 </html>

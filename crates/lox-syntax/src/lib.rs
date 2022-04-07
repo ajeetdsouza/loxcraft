@@ -53,9 +53,7 @@ fn one_of(tokens: &[String]) -> String {
         output.push_str(token);
         output.push_str(", ");
     }
-    output.pop();
-    output.pop();
-    output.push_str(" or ");
+    output.push_str("or ");
     output.push_str(token_last);
     output
 }

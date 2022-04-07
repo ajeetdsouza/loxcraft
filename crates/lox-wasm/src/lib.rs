@@ -5,7 +5,6 @@ use serde::Serialize;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use std::io::{self, Write};
-use std::panic;
 
 #[allow(dead_code)]
 #[derive(Debug, Serialize)]
@@ -46,12 +45,8 @@ impl Write for &Output {
 }
 
 #[wasm_bindgen]
-pub fn lox_setup_panic() {
-    panic::set_hook(Box::new(console_error_panic_hook::hook));
-}
-
-#[wasm_bindgen]
-pub fn lox_run(source: &str) {
+#[allow(non_snake_case)]
+pub fn loxRun(source: &str) {
     console_error_panic_hook::set_once();
 
     let output = Output::new();
