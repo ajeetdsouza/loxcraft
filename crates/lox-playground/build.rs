@@ -12,11 +12,19 @@ fn main() {
         }
     };
     if !Command::new("npm")
-        .args(&["--yes", "--", "run", "build"])
-        .current_dir(ui_dir)
+        .arg("install")
+        .current_dir(&ui_dir)
         .status()
         .map_or(false, |status| status.success())
     {
-        panic!("npm exited with an error");
+        panic!("`npm install` exited with an error");
+    }
+    if !Command::new("npm")
+        .args(&["run", "build"])
+        .current_dir(&ui_dir)
+        .status()
+        .map_or(false, |status| status.success())
+    {
+        panic!("`npm run build` exited with an error");
     }
 }
