@@ -4,49 +4,53 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+env:
+  CARGO_INCREMENTAL: 0
 jobs:
-  clippy:
+  ci:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v3
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Install Node
+        uses: actions/setup-node@v3
         with:
           node-version: 18
-      - uses: actions-rs/toolchain@v1
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
         with:
-          components: clippy
+          components: clippy, rustfmt
+          profile: minimal
           toolchain: stable
-      - uses: actions-rs/install@v0.1
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v1
+      - name: Install cargo-audit
+        uses: actions-rs/install@v0.1
+        with:
+          crate: cargo-audit
+          version: 0.16.0
+      - name: Install wasm-pack
+        uses: actions-rs/install@v0.1
         with:
           crate: wasm-pack
           version: 0.10.2
-      - uses: actions-rs/clippy-check@v1
+      - name: cargo fmt
+        uses: actions-rs/cargo@v1
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: --all-features --all-targets -- -D warnings
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v3
+          command: fmt
+          args: --all -- --check --color=always --files-with-diff
+      - name: cargo clippy
+        uses: actions-rs/cargo@v1
         with:
-          node-version: 18
-      - uses: actions-rs/toolchain@v1
-        with:
-          components: clippy
-          toolchain: stable
-      - uses: actions-rs/install@v0.1
-        with:
-          crate: wasm-pack
-          version: 0.10.2
-      - uses: actions-rs/cargo@v1
+          command: clippy
+          args: --all --all-features --all-targets --color=always -- --deny=warnings
+      - name: cargo test
+        uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --all-features --all-targets
-  audit:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/audit-check@v1
+          args: --all --all-features --all-targets --color=always --no-fail-fast
+      - name: cargo audit
+        uses: actions-rs/cargo@v1
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          command: audit
+          args: --color=always --deny=warnings
