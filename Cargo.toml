@@ -21,7 +21,6 @@ members = [
     "crates/lox-syntax",
     "crates/lox-vm",
     "crates/tree-sitter-lox",
-    "xtask",
 ]
 
 [dependencies]
