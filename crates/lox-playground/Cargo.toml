@@ -5,6 +5,7 @@ version = "0.1.0"
 
 [dependencies]
 http = "0.2.6"
+include_dir = "0.7.2"
 tokio = { version = "1.17.0", features = ["rt-multi-thread"] }
 warp = "0.3.2"
 webbrowser = "0.6.0"

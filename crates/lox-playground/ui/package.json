@@ -1,0 +1,18 @@
+{
+	"source": "src/index.html",
+	"scripts": {
+		"start": "npx parcel serve",
+		"build": "npm run build:wasm && npx parcel build --no-source-maps",
+		"build:wasm": "cd lox-wasm && wasm-pack build --target web --out-dir pkg"
+	},
+	"dependencies": {
+		"lox-wasm": "file:lox-wasm/pkg",
+		"react": "^18.1.0",
+		"react-dom": "^18.1.0"
+	},
+	"devDependencies": {
+		"@types/react": "^18.0.8",
+		"@types/react-dom": "^18.0.3",
+		"parcel": "^2.5.0"
+	}
+}

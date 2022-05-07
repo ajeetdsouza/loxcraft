@@ -20,7 +20,6 @@ members = [
     "crates/lox-playground",
     "crates/lox-syntax",
     "crates/lox-vm",
-    "crates/lox-wasm",
     "crates/tree-sitter-lox",
     "xtask",
 ]

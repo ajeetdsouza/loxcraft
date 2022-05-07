@@ -27,16 +27,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ansi-to-html"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19ee82de0545b181a17cbdef44fce80ecaf394e001da7ea279008bf2e0944bee"
-dependencies = [
- "regex",
- "thiserror",
-]
-
-[[package]]
 name = "ansi_term"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -426,16 +416,6 @@ dependencies = [
  "terminal_size",
  "unicode-width",
  "winapi 0.3.9",
-]
-
-[[package]]
-name = "console_error_panic_hook"
-version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a06aeb73f470f66dcdbf7223caeebb85984942f22f1adb2a088cf9668146bbbc"
-dependencies = [
- "cfg-if 1.0.0",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -1346,6 +1326,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "include_dir"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "482a2e29200b7eed25d7fdbd14423326760b7f6658d21a4cf12d55a50713c69f"
+dependencies = [
+ "include_dir_macros",
+]
+
+[[package]]
+name = "include_dir_macros"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e074c19deab2501407c91ba1860fa3d6820bfde307db6d8cb851b55a10be89b"
+dependencies = [
+ "proc-macro2 1.0.37",
+ "quote 1.0.17",
+]
+
+[[package]]
 name = "indexmap"
 version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1613,6 +1612,7 @@ name = "lox-playground"
 version = "0.1.0"
 dependencies = [
  "http 0.2.6",
+ "include_dir",
  "tokio 1.17.0",
  "warp",
  "webbrowser",
@@ -1638,19 +1638,6 @@ dependencies = [
  "lox-syntax",
  "termcolor",
  "thiserror",
-]
-
-[[package]]
-name = "lox-wasm"
-version = "0.1.0"
-dependencies = [
- "ansi-to-html",
- "console_error_panic_hook",
- "lox-syntax",
- "lox-vm",
- "serde",
- "serde_json",
- "wasm-bindgen",
 ]
 
 [[package]]
