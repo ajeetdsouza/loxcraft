@@ -19,10 +19,8 @@ pub fn editor() -> Result<rl::Reedline> {
     let validator = Box::new(Validator);
 
     let editor = rl::Reedline::create()
-        .context("failed to create prompt")?
         .with_highlighter(highlighter)
         .with_history(history)
-        .with_context(|| format!("could not load history: {}", history_path.display()))?
         .with_validator(validator);
     Ok(editor)
 }

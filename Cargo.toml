@@ -20,27 +20,20 @@ members = [
     "crates/lox-playground",
     "crates/lox-syntax",
     "crates/lox-vm",
-    "crates/lox-wasm",
     "crates/tree-sitter-lox",
-    "xtask",
 ]
 
 [dependencies]
 anyhow = "1.0.52"
 clap = { version = "3.1.0", features = ["derive"] }
-codespan-reporting = "0.11.1"
-crossterm = "0.23.1"
 dirs = "4.0.0"
-fnv = "1.0.7"
 human-panic = "1.0.3"
-lalrpop-util = "0.19.6"
-logos = "0.12.0"
 lox-playground = { path = "crates/lox-playground" }
 lox-syntax = { path = "crates/lox-syntax" }
 lox-vm = { path = "crates/lox-vm" }
 mimalloc = { version = "0.1.27", default-features = false }
 nu-ansi-term = "0.45.0"
-reedline = "0.3.0"
+reedline = "0.5.0"
 tree-sitter-highlight = "0.20.1"
 tree-sitter-lox = { path = "crates/tree-sitter-lox", version = "*" }
 
@@ -48,7 +41,11 @@ tree-sitter-lox = { path = "crates/tree-sitter-lox", version = "*" }
 pretty_assertions = "1.1.0"
 test-generator = "0.3.0"
 
+[profile.dev]
+debug = 0
+
 [profile.release]
 codegen-units = 1
+debug = 0
 lto = true
 strip = true

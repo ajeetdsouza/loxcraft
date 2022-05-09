@@ -69,11 +69,6 @@ pub fn repl(debug: bool) {
                 eprintln!("CTRL-D");
                 break;
             }
-            Ok(Signal::CtrlL) => {
-                if let Err(e) = editor.clear_screen() {
-                    eprintln!("error: unable to clear screen: {:?}", e)
-                };
-            }
             Err(e) => {
                 eprintln!("error: {:?}", e);
                 break;

@@ -1,7 +1,7 @@
 use crate::op::Op;
 use crate::value::{Closure, Function, Native, Value};
 
-use fnv::FnvHashMap;
+use fxhash::FxHashMap;
 use thiserror::Error;
 
 use std::io::Write;
@@ -14,7 +14,7 @@ pub struct VM<W1, W2> {
     pub frame: CallFrame,
     frames: Vec<CallFrame>,
     stack: Vec<Value>,
-    globals: FnvHashMap<Rc<String>, Value>,
+    globals: FxHashMap<Rc<String>, Value>,
 
     stdout: W1,
     stderr: W2,
@@ -24,7 +24,7 @@ pub struct VM<W1, W2> {
 
 impl<W1, W2> VM<W1, W2> {
     pub fn new(stdout: W1, stderr: W2, debug: bool) -> Self {
-        let mut globals = FnvHashMap::default();
+        let mut globals = FxHashMap::default();
         globals.insert(Rc::new("clock".to_string()), Value::Native(Native::Clock));
 
         let closure = Closure { function: Rc::new(Function::new("", 0)) };
