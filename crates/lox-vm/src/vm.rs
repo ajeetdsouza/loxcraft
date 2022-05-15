@@ -10,14 +10,14 @@ use std::rc::Rc;
 
 use super::op::ConstantIdx;
 
-pub struct VM<W1, W2> {
+pub struct VM<Stdout, Stderr> {
     pub frame: CallFrame,
     frames: Vec<CallFrame>,
     stack: Vec<Value>,
     globals: FxHashMap<Rc<String>, Value>,
 
-    stdout: W1,
-    stderr: W2,
+    stdout: Stdout,
+    stderr: Stderr,
 
     debug: bool,
 }

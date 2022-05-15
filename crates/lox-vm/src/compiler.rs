@@ -32,12 +32,14 @@ impl Compiler {
         }
     }
 
-    pub fn compile(mut self, source: &str) -> CompileResult<Function> {
-        let program = lox_syntax::parse(source)?;
+    pub fn compile(mut self, source: &str, errors: &mut Vec<Diagnostic<()>>) -> Function {
+        let program = lox_syntax::parse(source, errors);
         for (stmt, span) in &program.stmts {
-            self.compile_stmt(stmt, span)?;
+            if let Err(err) = self.compile_stmt(stmt, span) {
+                errors.push(err);
+            }
         }
-        Ok(self.ctx.function)
+        self.ctx.function
     }
 
     fn compile_stmt(&mut self, stmt: &Stmt, span: &Span) -> CompileResult {
@@ -51,6 +53,7 @@ impl Compiler {
             Stmt::Return(return_) => self.compile_stmt_return(return_, span),
             Stmt::Var(var) => self.compile_stmt_var(var, span),
             Stmt::While(while_) => self.compile_stmt_while(while_, span),
+            Stmt::Error => Ok(()),
         }
     }
 

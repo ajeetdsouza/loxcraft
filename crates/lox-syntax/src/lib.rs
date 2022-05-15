@@ -6,39 +6,62 @@ use crate::ast::Program;
 use crate::lexer::Lexer;
 use crate::parser::Parser;
 
+use ast::Stmt;
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use lalrpop_util::ParseError;
 
 pub fn is_complete(source: &str) -> bool {
     let lexer = Lexer::new(source);
     let parser = Parser::new();
-    !matches!(parser.parse(lexer), Err(ParseError::UnrecognizedEOF { .. }))
+    let mut errors = Vec::new();
+    let error = match parser.parse(&mut errors, lexer) {
+        Ok(program) if matches!(program.stmts.last(), Some((Stmt::Error, _))) => errors.pop(),
+        Err(e) => Some(e),
+        _ => None,
+    };
+    !matches!(error, Some(ParseError::UnrecognizedEOF { .. }))
 }
 
-pub fn parse(source: &str) -> Result<Program, Diagnostic<()>> {
+pub fn parse(source: &str, errors: &mut Vec<Diagnostic<()>>) -> Program {
     let lexer = Lexer::new(source);
     let parser = Parser::new();
-    parser.parse(lexer).map_err(|err| match err {
-        ParseError::ExtraToken { token: (start, _, end) } => Diagnostic::error()
-            .with_message(format!("extraneous input: {:?}", &source[start..end]))
-            .with_labels(vec![Label::primary((), start..end)]),
-        ParseError::InvalidToken { location } => Diagnostic::error()
-            .with_message("invalid input")
-            .with_labels(vec![Label::primary((), location..location)]),
-        ParseError::UnrecognizedEOF { location, expected } => Diagnostic::error()
-            .with_message("unexpected end of file")
-            .with_labels(vec![Label::primary((), location..location)])
-            .with_notes(vec![format!("expected: {}", one_of(&expected))]),
-        ParseError::UnrecognizedToken { token: (start, _, end), expected } => Diagnostic::error()
-            .with_message(format!("unexpected {:?}", &source[start..end]))
-            .with_labels(vec![Label::primary((), start..end)])
-            .with_notes(vec![format!("expected: {}", one_of(&expected))]),
-        ParseError::User { error } => Diagnostic::error()
-            .with_message(error.message.unwrap_or_else(|| {
-                format!("unexpected {:?}", &source[error.span.start..error.span.end])
-            }))
-            .with_labels(vec![Label::primary((), error.span)]),
-    })
+
+    let mut parser_errors = Vec::new();
+    let program = match parser.parse(&mut parser_errors, lexer) {
+        Ok(program) => program,
+        Err(err) => {
+            parser_errors.push(err);
+            Program::default()
+        }
+    };
+
+    errors.extend(parser_errors.into_iter().map(|err| {
+        match err {
+            ParseError::ExtraToken { token: (start, _, end) } => Diagnostic::error()
+                .with_message(format!("extraneous input: {:?}", &source[start..end]))
+                .with_labels(vec![Label::primary((), start..end)]),
+            ParseError::InvalidToken { location } => Diagnostic::error()
+                .with_message("invalid input")
+                .with_labels(vec![Label::primary((), location..location)]),
+            ParseError::UnrecognizedEOF { location, expected } => Diagnostic::error()
+                .with_message("unexpected end of file")
+                .with_labels(vec![Label::primary((), location..location)])
+                .with_notes(vec![format!("expected: {}", one_of(&expected))]),
+            ParseError::UnrecognizedToken { token: (start, _, end), expected } => {
+                Diagnostic::error()
+                    .with_message(format!("unexpected {:?}", &source[start..end]))
+                    .with_labels(vec![Label::primary((), start..end)])
+                    .with_notes(vec![format!("expected: {}", one_of(&expected))])
+            }
+            ParseError::User { error } => Diagnostic::error()
+                .with_message(error.message.unwrap_or_else(|| {
+                    format!("unexpected {:?}", &source[error.span.start..error.span.end])
+                }))
+                .with_labels(vec![Label::primary((), error.span)]),
+        }
+    }));
+
+    program
 }
 
 fn one_of(tokens: &[String]) -> String {

@@ -1,6 +1,8 @@
 use crate::{ast, lexer};
 
-grammar;
+use lalrpop_util::ParseError;
+
+grammar<'err>(errors: &'err mut Vec<ParseError<usize, lexer::Token, lexer::Error>>);
 
 pub Program: ast::Program = <stmts:Decl*> => ast::Program { <> };
 
@@ -26,9 +28,13 @@ Params: Vec<String> = {
 };
 
 // https://en.wikipedia.org/wiki/Dangling_else#Avoiding_the_conflict_in_LR_parsers
-Stmt = {
+Stmt: ast::Spanned<ast::Stmt> = {
     StmtOpenS,
     StmtClosedS,
+    <l:@L> <e:!> <r:@R> => {
+        errors.push(e.error);
+        (ast::Stmt::Error, l..r)
+    },
 }
 
 StmtOpenS: ast::Spanned<ast::Stmt> = <l:@L> <stmt:StmtOpen> <r:@R> => (stmt, l..r);
@@ -193,7 +199,7 @@ ExprInfix<Lt, Op, Rt>: ast::Expr = {
 
 extern {
     type Location = usize;
-    type Error = lexer::LexerError;
+    type Error = lexer::Error;
 
     enum lexer::Token {
         // Single-character tokens.

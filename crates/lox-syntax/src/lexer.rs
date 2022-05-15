@@ -15,7 +15,7 @@ impl<'a> Lexer<'a> {
 }
 
 impl<'a> Iterator for Lexer<'a> {
-    type Item = Result<(usize, Token, usize), LexerError>;
+    type Item = Result<(usize, Token, usize), Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(token) = self.pending.take() {
@@ -29,7 +29,7 @@ impl<'a> Iterator for Lexer<'a> {
                 // Check for unterminated string.
                 if self.inner.slice().starts_with('"') {
                     let message = Some("unterminated string".to_string());
-                    return Some(Err(LexerError { message, span }));
+                    return Some(Err(Error { message, span }));
                 }
 
                 // Recover error.
@@ -44,7 +44,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
 
                 let message = None;
-                Some(Err(LexerError { message, span }))
+                Some(Err(Error { message, span }))
             }
             token => {
                 let span = self.inner.span();
@@ -55,7 +55,7 @@ impl<'a> Iterator for Lexer<'a> {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct LexerError {
+pub struct Error {
     pub message: Option<String>,
     pub span: Range<usize>,
 }
@@ -176,7 +176,7 @@ mod tests {
     #[test]
     fn lex_invalid_token() {
         let exp = vec![
-            Err(LexerError { message: None, span: 0..4 }),
+            Err(Error { message: None, span: 0..4 }),
             Ok((5, Token::Identifier("bar".to_string()), 8)),
         ];
         let got = Lexer::new("@foo bar").collect::<Vec<_>>();
@@ -185,8 +185,7 @@ mod tests {
 
     #[test]
     fn lex_unterminated_string() {
-        let exp =
-            vec![Err(LexerError { message: Some("unterminated string".to_string()), span: 0..5 })];
+        let exp = vec![Err(Error { message: Some("unterminated string".to_string()), span: 0..5 })];
         let got = Lexer::new("\"\nfoo").collect::<Vec<_>>();
         assert_eq!(exp, got);
     }

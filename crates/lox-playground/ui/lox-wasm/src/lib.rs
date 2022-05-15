@@ -16,16 +16,15 @@ pub fn loxRun(source: &str) {
 
     let output = Output::new();
     let compiler = lox_vm::compiler::Compiler::new();
-    let function = match compiler.compile(source) {
-        Ok(val) => val,
-        Err(err) => {
-            lox_vm::report_err(source, err, &output);
-            postMessage(&serde_json::to_string(&Message::CompileFailure).unwrap());
-            return;
-        }
+    let mut errors = Vec::new();
+    let function = compiler.compile(source, &mut errors);
+    if !errors.is_empty() {
+        lox_vm::report_err(source, errors, &output);
+        postMessage(&serde_json::to_string(&Message::CompileFailure).unwrap());
+        return;
     };
-    VM::new(&output, &output, false).run(function);
 
+    VM::new(&output, &output, false).run(function);
     let message = Message::ExitSuccess; // TODO: VM::run() should return a Result.
     postMessage(&serde_json::to_string(&message).unwrap());
 }

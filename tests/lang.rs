@@ -23,7 +23,10 @@ fn lox(path: &str) {
         }
     }
 
-    let function = Compiler::new().compile(&source).unwrap();
+    let mut errors = Vec::new();
+    let function = Compiler::new().compile(&source, &mut errors);
+    assert_eq!(errors, Vec::new());
+
     let mut got_out = Vec::new();
     let mut got_err = Vec::new();
     VM::new(&mut got_out, &mut got_err, false).run(function);

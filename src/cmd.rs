@@ -53,13 +53,12 @@ pub fn repl(debug: bool) {
         match editor.read_line(&repl::Prompt) {
             Ok(Signal::Success(line)) => {
                 let compiler = Compiler::new();
-                let function = match compiler.compile(&line) {
-                    Ok(function) => function,
-                    Err(err) => {
-                        lox_vm::report_err(&line, err, io::stderr());
-                        continue;
-                    }
-                };
+                let mut errors = Vec::new();
+                let function = compiler.compile(&line, &mut errors);
+                if !errors.is_empty() {
+                    lox_vm::report_err(&line, errors, io::stderr());
+                    continue;
+                }
                 vm.run(function);
             }
             Ok(Signal::CtrlC) => {
@@ -80,12 +79,11 @@ pub fn repl(debug: bool) {
 fn run(path: &str, debug: bool) {
     let source = fs::read_to_string(&path).unwrap();
     let compiler = Compiler::new();
-    let function = match compiler.compile(&source) {
-        Ok(program) => program,
-        Err(err) => {
-            lox_vm::report_err(&source, err, io::stderr());
-            return;
-        }
+    let mut errors = Vec::new();
+    let function = compiler.compile(&source, &mut errors);
+    if !errors.is_empty() {
+        lox_vm::report_err(&source, errors, io::stderr());
+        return;
     };
 
     let stdout = io::stdout();
