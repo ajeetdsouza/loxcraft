@@ -1,8 +1,9 @@
-use serde::Serialize;
-use std::io::{self, Write};
-
+use lox_vm::compiler::Compiler;
 use lox_vm::vm::VM;
+use serde::Serialize;
 use wasm_bindgen::prelude::*;
+
+use std::io::{self, Write};
 
 #[wasm_bindgen]
 pub fn add(a: i32, b: i32) -> i32 {
@@ -15,7 +16,7 @@ pub fn loxRun(source: &str) {
     console_error_panic_hook::set_once();
 
     let output = Output::new();
-    let compiler = lox_vm::compiler::Compiler::new();
+    let compiler = Compiler::new();
     let mut errors = Vec::new();
     let function = compiler.compile(source, &mut errors);
     if !errors.is_empty() {

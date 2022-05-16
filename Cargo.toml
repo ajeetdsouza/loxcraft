@@ -9,7 +9,7 @@ keywords = ["compiler", "interpreter", "language", "lox", "vm"]
 license = "MIT"
 name = "lox"
 repository = "https://github.com/ajeetdsouza/lox"
-rust-version = "1.59"
+rust-version = "1.61"
 version = "0.1.0"
 
 [badges]
@@ -26,6 +26,7 @@ members = [
 [dependencies]
 anyhow = "1.0.52"
 clap = { version = "3.1.0", features = ["derive"] }
+crossterm = "0.23.2"
 dirs = "4.0.0"
 human-panic = "1.0.3"
 lox-playground = { path = "crates/lox-playground" }

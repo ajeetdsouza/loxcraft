@@ -1,6 +1,5 @@
 use lox_vm::compiler::Compiler;
 use lox_vm::vm::VM;
-
 use pretty_assertions::assert_eq;
 use test_generator::test_resources;
 

@@ -1,5 +1,6 @@
 use crate::op::{ArgCount, ConstantIdx, JumpOffset, Op, StackIdx};
 use crate::value::{Function, Value};
+
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use lox_syntax::ast::{
     Expr, ExprAssign, ExprCall, ExprInfix, ExprLiteral, ExprPrefix, ExprVariable, OpInfix,

@@ -1,6 +1,6 @@
 use http::header::CONTENT_TYPE;
 use http::HeaderValue;
-use include_dir::include_dir;
+use include_dir::{include_dir, Dir};
 use warp::reply::Response;
 use warp::{path::Tail, Filter, Rejection, Reply};
 
@@ -34,7 +34,7 @@ async fn serve_asset(path: Tail) -> Result<impl Reply, Rejection> {
 }
 
 fn serve_impl(path: &str) -> Result<impl Reply, Rejection> {
-    static ASSETS: include_dir::Dir = include_dir!("$CARGO_MANIFEST_DIR/ui/dist");
+    static ASSETS: Dir = include_dir!("$CARGO_MANIFEST_DIR/ui/dist");
     let contents = ASSETS.get_file(path).ok_or_else(warp::reject::not_found)?.contents();
     let mut response = Response::new(contents.into());
     if let Some(mime) = guess_mime(path) {

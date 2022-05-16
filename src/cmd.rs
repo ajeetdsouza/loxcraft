@@ -1,8 +1,8 @@
-use crate::repl;
-use lox_vm::compiler::Compiler;
-use lox_vm::vm::VM;
+use crate::repl::{self, Prompt};
 
 use clap::Parser as Clap;
+use lox_vm::compiler::Compiler;
+use lox_vm::vm::VM;
 use reedline::Signal;
 
 use std::fs;
@@ -15,7 +15,7 @@ pub enum Cmd {
         #[clap(long, default_value = "3000")]
         port: u16,
     },
-    REPL {
+    Repl {
         #[clap(long)]
         debug: bool,
     },
@@ -30,27 +30,20 @@ impl Cmd {
     pub fn run(&self) {
         match self {
             Cmd::Playground { port } => lox_playground::serve(*port),
-            Cmd::REPL { debug } => repl(*debug),
+            Cmd::Repl { debug } => repl(*debug),
             Cmd::Run { path, debug } => run(path, *debug),
         }
     }
 }
 
-pub fn playground() {
-    // lox_playground::run();
-    // lox_playground::;
-}
-
 pub fn repl(debug: bool) {
-    let mut editor = repl::editor().unwrap();
-    let stdout = io::stdout();
-    let stdout = stdout.lock();
-    let stderr = io::stderr();
-    let stderr = stderr.lock();
+    let stdout = io::stdout().lock();
+    let stderr = io::stderr().lock();
     let mut vm = VM::new(stdout, stderr, debug);
+    let mut editor = repl::editor().unwrap();
 
     loop {
-        match editor.read_line(&repl::Prompt) {
+        match editor.read_line(&Prompt) {
             Ok(Signal::Success(line)) => {
                 let compiler = Compiler::new();
                 let mut errors = Vec::new();
@@ -61,13 +54,8 @@ pub fn repl(debug: bool) {
                 }
                 vm.run(function);
             }
-            Ok(Signal::CtrlC) => {
-                eprintln!("CTRL-C");
-            }
-            Ok(Signal::CtrlD) => {
-                eprintln!("CTRL-D");
-                break;
-            }
+            Ok(Signal::CtrlC) => eprintln!("^C"),
+            Ok(Signal::CtrlD) => break,
             Err(e) => {
                 eprintln!("error: {:?}", e);
                 break;
@@ -86,12 +74,8 @@ fn run(path: &str, debug: bool) {
         return;
     };
 
-    let stdout = io::stdout();
-    let stdout = stdout.lock();
-
-    let stderr = io::stderr();
-    let stderr = stderr.lock();
-
+    let stdout = io::stdout().lock();
+    let stderr = io::stderr().lock();
     let mut vm = VM::new(stdout, stderr, debug);
     vm.run(function);
 }

@@ -1,24 +1,36 @@
 use anyhow::{Context, Result};
-use nu_ansi_term as nat;
-use reedline as rl;
-use tree_sitter_highlight as tsh;
-use tree_sitter_lox as tsl;
+use crossterm::event::{KeyCode, KeyModifiers};
+use nu_ansi_term::{Color, Style};
+use reedline::{
+    EditCommand, Emacs, FileBackedHistory, PromptEditMode, PromptHistorySearch, Reedline,
+    ReedlineEvent, StyledText, ValidationResult,
+};
+use tree_sitter_highlight::{self, HighlightConfiguration, HighlightEvent};
+use tree_sitter_lox::{self, HIGHLIGHTS_QUERY};
 
 use std::borrow::Cow;
 
-pub fn editor() -> Result<rl::Reedline> {
+pub fn editor() -> Result<Reedline> {
+    let mut keybindings = reedline::default_emacs_keybindings();
+    keybindings.add_binding(
+        KeyModifiers::ALT,
+        KeyCode::Enter,
+        ReedlineEvent::Edit(vec![EditCommand::InsertNewline]),
+    );
+
     let highlighter = Box::new(Highlighter::new()?);
 
     let data_dir = dirs::data_dir().context("could not find data directory")?;
     let history_path = data_dir.join("lox/history.txt");
     let history = Box::new(
-        rl::FileBackedHistory::with_file(10000, history_path.clone())
+        FileBackedHistory::with_file(10000, history_path.clone())
             .with_context(|| format!("could not open history file: {}", history_path.display()))?,
     );
 
     let validator = Box::new(Validator);
 
-    let editor = rl::Reedline::create()
+    let editor = Reedline::create()
+        .with_edit_mode(Box::new(Emacs::new(keybindings)))
         .with_highlighter(highlighter)
         .with_history(history)
         .with_validator(validator);
@@ -27,72 +39,72 @@ pub fn editor() -> Result<rl::Reedline> {
 
 struct PaletteItem<'a> {
     name: &'a str,
-    fg: nat::Color,
+    fg: Color,
 }
 
 const PALETTE: &[PaletteItem] = &[
-    PaletteItem { name: "", fg: nat::Color::White },
-    PaletteItem { name: "comment", fg: nat::Color::DarkGray },
-    PaletteItem { name: "conditional", fg: nat::Color::LightPurple },
-    PaletteItem { name: "constant", fg: nat::Color::LightCyan },
-    PaletteItem { name: "field", fg: nat::Color::LightBlue },
-    PaletteItem { name: "function", fg: nat::Color::LightBlue },
-    PaletteItem { name: "keyword.function", fg: nat::Color::LightPurple },
-    PaletteItem { name: "keyword.return", fg: nat::Color::LightPurple },
-    PaletteItem { name: "keyword", fg: nat::Color::LightPurple },
-    PaletteItem { name: "method", fg: nat::Color::LightBlue },
-    PaletteItem { name: "number", fg: nat::Color::LightCyan },
-    PaletteItem { name: "operator", fg: nat::Color::White },
-    PaletteItem { name: "parameter", fg: nat::Color::LightRed },
-    PaletteItem { name: "punctuation.bracket", fg: nat::Color::White },
-    PaletteItem { name: "punctuation.delimiter", fg: nat::Color::White },
-    PaletteItem { name: "repeat", fg: nat::Color::LightPurple },
-    PaletteItem { name: "string", fg: nat::Color::LightGreen },
-    PaletteItem { name: "type", fg: nat::Color::LightYellow },
-    PaletteItem { name: "variable", fg: nat::Color::LightRed },
+    PaletteItem { name: "", fg: Color::White },
+    PaletteItem { name: "comment", fg: Color::DarkGray },
+    PaletteItem { name: "conditional", fg: Color::LightPurple },
+    PaletteItem { name: "constant", fg: Color::LightCyan },
+    PaletteItem { name: "field", fg: Color::LightBlue },
+    PaletteItem { name: "function", fg: Color::LightBlue },
+    PaletteItem { name: "keyword.function", fg: Color::LightPurple },
+    PaletteItem { name: "keyword.return", fg: Color::LightPurple },
+    PaletteItem { name: "keyword", fg: Color::LightPurple },
+    PaletteItem { name: "method", fg: Color::LightBlue },
+    PaletteItem { name: "number", fg: Color::LightCyan },
+    PaletteItem { name: "operator", fg: Color::White },
+    PaletteItem { name: "parameter", fg: Color::LightRed },
+    PaletteItem { name: "punctuation.bracket", fg: Color::White },
+    PaletteItem { name: "punctuation.delimiter", fg: Color::White },
+    PaletteItem { name: "repeat", fg: Color::LightPurple },
+    PaletteItem { name: "string", fg: Color::LightGreen },
+    PaletteItem { name: "type", fg: Color::LightYellow },
+    PaletteItem { name: "variable", fg: Color::LightRed },
 ];
 
 struct Highlighter {
-    config: tsh::HighlightConfiguration,
+    config: HighlightConfiguration,
 }
 
 impl Highlighter {
     pub fn new() -> Result<Self> {
         let highlight_names = PALETTE.iter().map(|item| item.name).collect::<Vec<_>>();
         let mut config =
-            tsh::HighlightConfiguration::new(tsl::language(), tsl::HIGHLIGHTS_QUERY, "", "")
+            HighlightConfiguration::new(tree_sitter_lox::language(), HIGHLIGHTS_QUERY, "", "")
                 .context("failed to create highlight configuration")?;
         config.configure(&highlight_names);
         Ok(Self { config })
     }
 }
 
-impl rl::Highlighter for Highlighter {
-    fn highlight(&self, line: &str, _: usize) -> rl::StyledText {
-        let mut highlighter = tsh::Highlighter::new();
+impl reedline::Highlighter for Highlighter {
+    fn highlight(&self, line: &str, _: usize) -> StyledText {
+        let mut highlighter = tree_sitter_highlight::Highlighter::new();
         let highlights =
             highlighter.highlight(&self.config, line.as_bytes(), None, |_| None).unwrap();
 
-        let mut output = rl::StyledText::new();
+        let mut output = StyledText::new();
         let mut curr_fg = PALETTE[0].fg;
         let mut curr_end = 0;
 
         for event in highlights {
             match event {
-                Ok(tsh::HighlightEvent::HighlightStart(highlight)) => {
+                Ok(HighlightEvent::HighlightStart(highlight)) => {
                     curr_fg = PALETTE[highlight.0].fg;
                 }
-                Ok(tsh::HighlightEvent::Source { start, end }) => {
-                    let style = nat::Style::new().fg(curr_fg);
+                Ok(HighlightEvent::Source { start, end }) => {
+                    let style = Style::new().fg(curr_fg);
                     let text = line[start..end].to_string();
                     output.push((style, text));
                     curr_end = end;
                 }
-                Ok(tsh::HighlightEvent::HighlightEnd) => {
+                Ok(HighlightEvent::HighlightEnd) => {
                     curr_fg = PALETTE[0].fg;
                 }
                 Err(_) => {
-                    let style = nat::Style::new().fg(PALETTE[0].fg);
+                    let style = Style::new().fg(PALETTE[0].fg);
                     let text = line.get(curr_end..).unwrap_or_default().to_string();
                     output.push((style, text));
                     break;
@@ -106,19 +118,19 @@ impl rl::Highlighter for Highlighter {
 
 struct Validator;
 
-impl rl::Validator for Validator {
-    fn validate(&self, line: &str) -> rl::ValidationResult {
+impl reedline::Validator for Validator {
+    fn validate(&self, line: &str) -> ValidationResult {
         if lox_syntax::is_complete(line) {
-            rl::ValidationResult::Complete
+            ValidationResult::Complete
         } else {
-            rl::ValidationResult::Incomplete
+            ValidationResult::Incomplete
         }
     }
 }
 
 pub struct Prompt;
 
-impl rl::Prompt for Prompt {
+impl reedline::Prompt for Prompt {
     fn render_prompt_left(&self) -> Cow<str> {
         Cow::Borrowed(">>> ")
     }
@@ -127,7 +139,7 @@ impl rl::Prompt for Prompt {
         Cow::Borrowed("")
     }
 
-    fn render_prompt_indicator(&self, _: rl::PromptEditMode) -> Cow<str> {
+    fn render_prompt_indicator(&self, _: PromptEditMode) -> Cow<str> {
         Cow::Borrowed("")
     }
 
@@ -135,16 +147,7 @@ impl rl::Prompt for Prompt {
         Cow::Borrowed("... ")
     }
 
-    fn render_prompt_history_search_indicator(&self, _: rl::PromptHistorySearch) -> Cow<str> {
+    fn render_prompt_history_search_indicator(&self, _: PromptHistorySearch) -> Cow<str> {
         Cow::Borrowed("")
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn editor() {
-        // This should not panic.
-        let _ = super::editor();
     }
 }

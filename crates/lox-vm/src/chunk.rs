@@ -1,7 +1,5 @@
-use crate::op::Op;
+use crate::op::{ConstantIdx, JumpOffset, Op};
 use crate::value::Value;
-
-use super::op::{ConstantIdx, JumpOffset};
 
 #[derive(Debug)]
 pub struct Chunk {

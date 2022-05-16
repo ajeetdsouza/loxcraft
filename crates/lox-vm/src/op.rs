@@ -68,3 +68,17 @@ pub type StackIdx = u8;
 
 /// Used as an offset for jump instructions.
 pub type JumpOffset = u16;
+
+#[cfg(test)]
+mod tests {
+    use super::Op;
+
+    use std::mem;
+
+    #[test]
+    /// To keep our bytecode VM efficient, we ensure that the opcode size never
+    /// exceeds 4 bytes.
+    fn opcode_is_4_bytes() {
+        assert!(mem::size_of::<Op>() == 4);
+    }
+}

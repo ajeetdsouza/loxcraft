@@ -2,7 +2,7 @@ use crate::chunk::Chunk;
 use crate::vm::RuntimeError;
 
 use std::cmp::Ordering;
-use std::fmt;
+use std::fmt::{self, Display, Formatter};
 use std::rc::Rc;
 
 #[derive(Clone, Debug)]
@@ -33,8 +33,8 @@ impl Value {
     }
 }
 
-impl fmt::Display for Value {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Display for Value {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Value::Bool(bool) => write!(f, "{bool}"),
             Value::Closure(closure) => write!(f, "{closure}"),
@@ -77,8 +77,8 @@ pub struct Closure {
     pub function: Rc<Function>,
 }
 
-impl fmt::Display for Closure {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Display for Closure {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.function)
     }
 }
@@ -97,8 +97,8 @@ impl Function {
     }
 }
 
-impl fmt::Display for Function {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Display for Function {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if self.name.is_empty() {
             write!(f, "<script>")
         } else {
@@ -136,8 +136,8 @@ impl Native {
     }
 }
 
-impl fmt::Display for Native {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Display for Native {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "<native function>")
     }
 }

@@ -2,11 +2,10 @@ pub mod ast;
 pub mod lexer;
 pub mod parser;
 
-use crate::ast::Program;
+use crate::ast::{Program, Stmt};
 use crate::lexer::Lexer;
 use crate::parser::Parser;
 
-use ast::Stmt;
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use lalrpop_util::ParseError;
 
