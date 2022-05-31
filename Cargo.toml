@@ -34,7 +34,7 @@ lox-syntax = { path = "crates/lox-syntax" }
 lox-vm = { path = "crates/lox-vm" }
 mimalloc = { version = "0.1.27", default-features = false }
 nu-ansi-term = "0.45.0"
-reedline = "0.5.0"
+reedline = "0.6.0"
 tree-sitter-highlight = "0.20.1"
 tree-sitter-lox = { path = "crates/tree-sitter-lox", version = "*" }
 

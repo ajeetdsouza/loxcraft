@@ -1,10 +1,18 @@
-use http::header::CONTENT_TYPE;
+use http::header::{CONTENT_ENCODING, CONTENT_TYPE};
 use http::HeaderValue;
-use include_dir::{include_dir, Dir};
+use rust_embed::RustEmbed;
 use warp::reply::Response;
 use warp::{path::Tail, Filter, Rejection, Reply};
 
 use std::path::Path;
+
+#[derive(RustEmbed)]
+#[folder = "ui/dist/"]
+#[exclude = "*.css"]
+#[exclude = "*.js"]
+#[exclude = "*.wasm"]
+#[exclude = "*.woff"]
+struct Asset;
 
 pub fn serve(port: u16) {
     tokio::runtime::Builder::new_multi_thread()
@@ -34,12 +42,21 @@ async fn serve_asset(path: Tail) -> Result<impl Reply, Rejection> {
 }
 
 fn serve_impl(path: &str) -> Result<impl Reply, Rejection> {
-    static ASSETS: Dir = include_dir!("$CARGO_MANIFEST_DIR/ui/dist");
-    let contents = ASSETS.get_file(path).ok_or_else(warp::reject::not_found)?.contents();
+    let compressed_br = [".css", ".js", ".wasm"].iter().any(|ext| path.ends_with(ext));
+    let contents = if compressed_br { Asset::get(&format!("{path}.br")) } else { Asset::get(path) }
+        .ok_or_else(warp::reject::not_found)?
+        .data;
+
     let mut response = Response::new(contents.into());
+    let headers = response.headers_mut();
+
     if let Some(mime) = guess_mime(path) {
-        response.headers_mut().insert(CONTENT_TYPE, HeaderValue::from_static(mime));
+        headers.insert(CONTENT_TYPE, HeaderValue::from_static(mime));
     }
+    if compressed_br {
+        headers.insert(CONTENT_ENCODING, HeaderValue::from_static("br"));
+    }
+
     Ok(response)
 }
 

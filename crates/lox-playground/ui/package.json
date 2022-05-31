@@ -2,7 +2,7 @@
 	"source": "src/index.html",
 	"scripts": {
 		"start": "npx parcel serve --open --port 3000",
-		"build": "npm run build:wasm && npx parcel build --no-source-maps",
+		"build": "npm run build:wasm && npx rimraf dist/ && npx parcel build --no-source-maps",
 		"build:wasm": "cd lox-wasm && wasm-pack build --out-dir pkg --release --target web"
 	},
 	"dependencies": {
@@ -17,11 +17,13 @@
 		"react-split": "^2.0.14"
 	},
 	"devDependencies": {
+		"@parcel/compressor-brotli": "^2.6.0",
 		"@parcel/css": "^1.8.2",
 		"@parcel/transformer-html": "^2.5.0",
 		"@types/bootstrap": "^5.1.11",
 		"@types/react": "^18.0.8",
 		"@types/react-dom": "^18.0.3",
-		"parcel": "^2.5.0"
+		"parcel": "^2.5.0",
+		"rimraf": "^3.0.2"
 	}
 }

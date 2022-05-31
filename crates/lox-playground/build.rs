@@ -1,6 +1,4 @@
 use std::env;
-use std::fs;
-use std::io;
 use std::path::Path;
 use std::process::Command;
 
@@ -13,11 +11,6 @@ fn main() {
     println!("cargo:rerun-if-changed=ui/package.json");
 
     let ui_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("ui");
-    if let Err(e) = fs::remove_dir_all(ui_dir.join("dist")) {
-        if e.kind() != io::ErrorKind::NotFound {
-            panic!("unable to remove directory: ui/dist/")
-        }
-    };
     if !Command::new("npm")
         .arg("ci")
         .current_dir(&ui_dir)
