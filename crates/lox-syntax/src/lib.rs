@@ -2,7 +2,7 @@ pub mod ast;
 pub mod lexer;
 pub mod parser;
 
-use crate::ast::{Program, Stmt};
+use crate::ast::Program;
 use crate::lexer::Lexer;
 use crate::parser::Parser;
 
@@ -13,12 +13,10 @@ pub fn is_complete(source: &str) -> bool {
     let lexer = Lexer::new(source);
     let parser = Parser::new();
     let mut errors = Vec::new();
-    let error = match parser.parse(&mut errors, lexer) {
-        Ok(program) if matches!(program.stmts.last(), Some((Stmt::Error, _))) => errors.pop(),
-        Err(e) => Some(e),
-        _ => None,
+    if let Err(e) = parser.parse(&mut errors, lexer) {
+        errors.push(e);
     };
-    !matches!(error, Some(ParseError::UnrecognizedEOF { .. }))
+    !errors.iter().any(|e| matches!(e, ParseError::UnrecognizedEOF { .. }))
 }
 
 pub fn parse(source: &str, errors: &mut Vec<Diagnostic<()>>) -> Program {
