@@ -6,7 +6,7 @@ use lox_vm::vm::VM;
 use reedline::Signal;
 
 use std::fs;
-use std::io;
+use std::io::{self, Write};
 
 #[derive(Clap, Debug)]
 #[clap(about, author, disable_help_subcommand = true, propagate_version = true, version)]
@@ -49,7 +49,9 @@ pub fn repl(debug: bool) {
                 let mut errors = Vec::new();
                 let function = compiler.compile(&line, &mut errors);
                 if !errors.is_empty() {
-                    lox_vm::report_err(&line, errors, io::stderr());
+                    let mut buffer = termcolor::Buffer::ansi();
+                    lox_vm::report_err(&mut buffer, &line, errors);
+                    io::stderr().write_all(buffer.as_slice()).unwrap();
                     continue;
                 }
                 vm.run(function);
@@ -70,7 +72,9 @@ fn run(path: &str, debug: bool) {
     let mut errors = Vec::new();
     let function = compiler.compile(&source, &mut errors);
     if !errors.is_empty() {
-        lox_vm::report_err(&source, errors, io::stderr());
+        let mut buffer = termcolor::Buffer::ansi();
+        lox_vm::report_err(&mut buffer, &source, errors);
+        io::stderr().write_all(buffer.as_slice()).unwrap();
         return;
     };
 

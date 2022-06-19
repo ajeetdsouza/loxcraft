@@ -9,20 +9,17 @@ pub mod vm;
 use codespan_reporting::diagnostic::Diagnostic;
 use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;
+use termcolor::WriteColor;
 
-use std::io::Write;
-
-pub fn report_err<W: Write>(source: &str, mut errors: Vec<Diagnostic<()>>, mut writer: W) {
+pub fn report_err(writer: &mut dyn WriteColor, source: &str, mut errors: Vec<Diagnostic<()>>) {
     errors.sort_unstable_by_key(|e| {
         e.labels.first().map(|label| (label.range.start, label.range.end))
     });
 
     let file = SimpleFile::new("<script>", source);
-    let mut buffer = termcolor::Buffer::ansi();
     let config = term::Config::default();
-    for err in errors {
-        term::emit(&mut buffer, &config, &file, &err).unwrap();
-    }
 
-    writer.write_all(buffer.as_slice()).unwrap();
+    for err in errors {
+        term::emit(writer, &config, &file, &err).unwrap();
+    }
 }
