@@ -1,11 +1,3 @@
-#![allow(clippy::new_without_default, clippy::module_inception)]
-
-mod chunk;
-pub mod compiler;
-mod op;
-mod value;
-pub mod vm;
-
 use codespan_reporting::diagnostic::Diagnostic;
 use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;

@@ -1,5 +1,3 @@
-use lox_vm::compiler::Compiler;
-use lox_vm::vm::VM;
 use serde::Serialize;
 use termcolor::{Color, WriteColor};
 use wasm_bindgen::prelude::*;
@@ -11,21 +9,22 @@ use std::io::{self, Write};
 pub fn loxRun(source: &str) {
     console_error_panic_hook::set_once();
 
-    let compiler = Compiler::new();
-    let mut errors = Vec::new();
-    let function = compiler.compile(source, &mut errors);
-    let output = Output::new();
+    todo!()
+    // let compiler = Compiler::new();
+    // let mut errors = Vec::new();
+    // let function = compiler.compile(source, &mut errors);
+    // let output = Output::new();
 
-    if !errors.is_empty() {
-        let mut writer = HtmlWriter::new(&output);
-        lox_vm::report_err(&mut writer, source, errors);
-        postMessage(&serde_json::to_string(&Message::CompileFailure).unwrap());
-        return;
-    };
+    // if !errors.is_empty() {
+    //     let mut writer = HtmlWriter::new(&output);
+    //     lox_vm::report_err(&mut writer, source, errors);
+    //     postMessage(&serde_json::to_string(&Message::CompileFailure).unwrap());
+    //     return;
+    // };
 
-    VM::new(&output, &output, false).run(function);
-    let message = Message::ExitSuccess; // TODO: VM::run() should return a Result.
-    postMessage(&serde_json::to_string(&message).unwrap());
+    // VM::new(&output, &output, false).run(function);
+    // let message = Message::ExitSuccess; // TODO: VM::run() should return a Result.
+    // postMessage(&serde_json::to_string(&message).unwrap());
 }
 
 #[allow(dead_code)]

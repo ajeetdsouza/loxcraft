@@ -11,7 +11,7 @@ Decl = {
     Stmt,
 }
 
-DeclFunS: ast::Spanned<ast::Stmt> = <l:@L> <fun:DeclFun> <r:@R> => (fun, l..r);
+DeclFunS: ast::StmtS = <l:@L> <fun:DeclFun> <r:@R> => (fun, l..r);
 
 DeclFun: ast::Stmt =
     "fun" <name:identifier> "(" <params:Params> ")" <body:StmtBlockInternal> =>
@@ -28,7 +28,7 @@ Params: Vec<String> = {
 };
 
 // https://en.wikipedia.org/wiki/Dangling_else#Avoiding_the_conflict_in_LR_parsers
-Stmt: ast::Spanned<ast::Stmt> = {
+Stmt: ast::StmtS = {
     StmtOpenS,
     StmtClosedS,
     <l:@L> <e:!> <r:@R> => {
@@ -37,7 +37,7 @@ Stmt: ast::Spanned<ast::Stmt> = {
     },
 }
 
-StmtOpenS: ast::Spanned<ast::Stmt> = <l:@L> <stmt:StmtOpen> <r:@R> => (stmt, l..r);
+StmtOpenS: ast::StmtS = <l:@L> <stmt:StmtOpen> <r:@R> => (stmt, l..r);
 
 StmtOpen: ast::Stmt = {
     "if" "(" <cond:Expr> ")" <then:Stmt> =>
@@ -50,7 +50,7 @@ StmtOpen: ast::Stmt = {
         ast::Stmt::For(Box::new(ast::StmtFor { <> })),
 }
 
-StmtClosedS: ast::Spanned<ast::Stmt> = <l:@L> <stmt:StmtClosed> <r:@R> => (stmt, l..r);
+StmtClosedS: ast::StmtS = <l:@L> <stmt:StmtClosed> <r:@R> => (stmt, l..r);
 
 StmtClosed: ast::Stmt = {
     StmtSimple,
@@ -62,9 +62,9 @@ StmtClosed: ast::Stmt = {
         ast::Stmt::For(Box::new(ast::StmtFor { <> })),
 }
 
-ForInit: Option<ast::Stmt> = {
-    <StmtVar> => Some(<>),
-    <StmtExpr> => Some(<>),
+ForInit: Option<ast::StmtS> = {
+    <l:@L> <stmt:StmtVar> <r:@R> => Some((stmt, l..r)),
+    <l:@L> <stmt:StmtExpr> <r:@R> => Some((stmt, l..r)),
     ";" => None,
 }
 

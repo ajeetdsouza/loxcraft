@@ -1,14 +1,18 @@
+use std::fmt::{self, Display, Formatter};
 use std::ops::Range;
 
 pub type Spanned<T> = (T, Span);
 pub type Span = Range<usize>;
 
+pub type StmtS = Spanned<Stmt>;
+pub type ExprS = Expr;
+
 #[derive(Debug, Default)]
 pub struct Program {
-    pub stmts: Vec<Spanned<Stmt>>,
+    pub stmts: Vec<StmtS>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Stmt {
     Block(StmtBlock),
     Expr(StmtExpr),
@@ -22,62 +26,62 @@ pub enum Stmt {
     Error,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct StmtBlock {
-    pub stmts: Vec<Spanned<Stmt>>,
+    pub stmts: Vec<StmtS>,
 }
 
 /// An expression statement evaluates an expression and discards the result.
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct StmtExpr {
-    pub value: Expr,
+    pub value: ExprS,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct StmtFor {
-    pub init: Option<Stmt>,
-    pub cond: Option<Expr>,
-    pub incr: Option<Expr>,
-    pub body: Spanned<Stmt>,
+    pub init: Option<StmtS>,
+    pub cond: Option<ExprS>,
+    pub incr: Option<ExprS>,
+    pub body: StmtS,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct StmtFun {
     pub name: String,
     pub params: Vec<String>,
     pub body: StmtBlock,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct StmtIf {
-    pub cond: Expr,
-    pub then: Spanned<Stmt>,
-    pub else_: Option<Spanned<Stmt>>,
+    pub cond: ExprS,
+    pub then: StmtS,
+    pub else_: Option<StmtS>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct StmtPrint {
-    pub value: Expr,
+    pub value: ExprS,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct StmtReturn {
-    pub value: Option<Expr>,
+    pub value: Option<ExprS>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct StmtVar {
     pub name: String,
-    pub value: Option<Expr>,
+    pub value: Option<ExprS>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct StmtWhile {
-    pub cond: Expr,
-    pub body: Spanned<Stmt>,
+    pub cond: ExprS,
+    pub body: StmtS,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Expr {
     Assign(Box<ExprAssign>),
     Call(Box<ExprCall>),
@@ -87,19 +91,19 @@ pub enum Expr {
     Variable(ExprVariable),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ExprAssign {
     pub name: String,
-    pub value: Expr,
+    pub value: ExprS,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ExprCall {
-    pub callee: Expr,
-    pub args: Vec<Expr>,
+    pub callee: ExprS,
+    pub args: Vec<ExprS>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ExprLiteral {
     Nil,
     Bool(bool),
@@ -107,14 +111,14 @@ pub enum ExprLiteral {
     String(String),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ExprInfix {
-    pub lt: Expr,
+    pub lt: ExprS,
     pub op: OpInfix,
-    pub rt: Expr,
+    pub rt: ExprS,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum OpInfix {
     /// Short-circuiting logical OR.
     LogicOr,
@@ -132,19 +136,49 @@ pub enum OpInfix {
     Divide,
 }
 
-#[derive(Debug, PartialEq)]
-pub struct ExprPrefix {
-    pub op: OpPrefix,
-    pub rt: Expr,
+impl Display for OpInfix {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let op = match self {
+            OpInfix::Add => "+",
+            OpInfix::Subtract => "-",
+            OpInfix::Multiply => "*",
+            OpInfix::Divide => "/",
+            OpInfix::Less => "<",
+            OpInfix::LessEqual => "<=",
+            OpInfix::Greater => ">",
+            OpInfix::GreaterEqual => ">=",
+            OpInfix::Equal => "==",
+            OpInfix::NotEqual => "!=",
+            OpInfix::LogicAnd => "and",
+            OpInfix::LogicOr => "or",
+        };
+        write!(f, "{}", op)
+    }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
+pub struct ExprPrefix {
+    pub op: OpPrefix,
+    pub rt: ExprS,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum OpPrefix {
     Negate,
     Not,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+impl Display for OpPrefix {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let op = match self {
+            OpPrefix::Negate => "-",
+            OpPrefix::Not => "!",
+        };
+        write!(f, "{}", op)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ExprVariable {
     pub name: String,
 }

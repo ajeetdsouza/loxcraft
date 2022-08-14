@@ -1,5 +1,3 @@
-use lox_vm::compiler::Compiler;
-use lox_vm::vm::VM;
 use pretty_assertions::assert_eq;
 use test_generator::test_resources;
 
@@ -22,16 +20,17 @@ fn lox(path: &str) {
         }
     }
 
-    let mut errors = Vec::new();
-    let function = Compiler::new().compile(&source, &mut errors);
-    assert_eq!(errors, Vec::new());
+    todo!()
+    // let mut errors = Vec::new();
+    // let function = Compiler::new().compile(&source, &mut errors);
+    // assert_eq!(errors, Vec::new());
 
-    let mut got_out = Vec::new();
-    let mut got_err = Vec::new();
-    VM::new(&mut got_out, &mut got_err, false).run(function);
-    let got_out = str::from_utf8(&got_out).unwrap();
-    let got_err = str::from_utf8(&got_err).unwrap();
+    // let mut got_out = Vec::new();
+    // let mut got_err = Vec::new();
+    // VM::new(&mut got_out, &mut got_err, false).run(function);
+    // let got_out = str::from_utf8(&got_out).unwrap();
+    // let got_err = str::from_utf8(&got_err).unwrap();
 
-    assert_eq!(exp_out, got_out);
-    assert_eq!(exp_err, got_err);
+    // assert_eq!(exp_out, got_out);
+    // assert_eq!(exp_err, got_err);
 }
