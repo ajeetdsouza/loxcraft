@@ -17,8 +17,12 @@ impl Env {
         Self { node: Rc::new(RefCell::new(node)) }
     }
 
-    pub fn read(&self, name: &str, span: &Span) -> Result<Object> {
-        self.node.borrow().read(name, span)
+    pub fn read(&self, name: &str) -> Option<Object> {
+        self.node.borrow().read(name)
+    }
+
+    pub fn read_at(&self, name: &str, depth: usize) -> Object {
+        self.node.borrow().read_at(name, depth)
     }
 
     pub fn define(&mut self, name: &str, value: Object, span: &Span) -> Result<()> {
@@ -41,16 +45,22 @@ impl EnvNode {
         Self { map: FxHashMap::default(), parent: Some(parent) }
     }
 
-    fn read(&self, name: &str, span: &Span) -> Result<Object> {
-        if let Some(object) = self.map.get(name) {
-            Ok(object.clone())
-        } else if let Some(parent) = &self.parent {
-            parent.as_ref().borrow().read(name, span)
+    fn read(&self, name: &str) -> Option<Object> {
+        self.map.get(name).cloned()
+    }
+
+    fn read_at(&self, name: &str, depth: usize) -> Object {
+        if depth == 0 {
+            self.map
+                .get(name)
+                .unwrap_or_else(|| unreachable!("local does not exist in scope"))
+                .clone()
         } else {
-            Err(RuntimeError::NameError(NameError::NotDefined {
-                name: name.to_string(),
-                span: span.clone(),
-            }))
+            self.parent
+                .as_ref()
+                .unwrap_or_else(|| unreachable!("local pointed to invalid scope"))
+                .borrow()
+                .read_at(name, depth - 1)
         }
     }
 

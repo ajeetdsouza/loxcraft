@@ -1,19 +1,26 @@
 mod env;
 pub mod error;
 mod object;
+mod resolver;
 
 use crate::env::Env;
 use crate::object::{Callable, Function, Native, Object};
+use crate::resolver::Resolver;
 use lox_syntax::ast::{Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Program, Span, Stmt, StmtS};
 
+use rustc_hash::FxHashMap;
 use thiserror::Error;
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
 type Result<T, E = RuntimeError> = std::result::Result<T, E>;
 
+type Locals = FxHashMap<Span, usize>;
+
+#[derive(Debug)]
 pub struct Interpreter {
     globals: Env,
+    locals: Locals,
 }
 
 impl Default for Interpreter {
@@ -22,46 +29,47 @@ impl Default for Interpreter {
         globals
             .define("clock", Object::Native(Native::Clock), &(0..0))
             .unwrap_or_else(|_| unreachable!("unable to define clock in global scope"));
-
-        Self { globals }
+        Self { globals, locals: FxHashMap::default() }
     }
 }
 
 impl Interpreter {
     pub fn run(&mut self, program: &Program) -> Result<()> {
+        self.locals = Resolver::default().resolve(program)?;
+        let globals = &mut self.globals.clone();
         for stmt in &program.stmts {
-            Self::run_stmt(&mut self.globals, stmt)?;
+            self.run_stmt(globals, stmt)?;
         }
         Ok(())
     }
 
-    fn run_stmt(env: &mut Env, stmt_s: &StmtS) -> Result<()> {
+    fn run_stmt(&self, env: &mut Env, stmt_s: &StmtS) -> Result<()> {
         let (stmt, span) = stmt_s;
         match stmt {
             Stmt::Block(block) => {
                 let env = &mut Env::with_parent(env);
                 for stmt in &block.stmts {
-                    Self::run_stmt(env, stmt)?;
+                    self.run_stmt(env, stmt)?;
                 }
                 Ok(())
             }
             Stmt::Expr(expr) => {
-                Self::run_expr(env, &expr.value)?;
+                self.run_expr(env, &expr.value)?;
                 Ok(())
             }
             Stmt::For(for_) => {
                 let env = &mut Env::with_parent(env);
                 if let Some(init) = &for_.init {
-                    Self::run_stmt(env, init)?;
+                    self.run_stmt(env, init)?;
                 }
                 let cond = match &for_.cond {
                     Some(cond) => cond,
                     None => &(Expr::Literal(ExprLiteral::Bool(true)), 0..0),
                 };
-                while Self::run_expr(env, cond)?.bool() {
-                    Self::run_stmt(env, &for_.body)?;
+                while self.run_expr(env, cond)?.bool() {
+                    self.run_stmt(env, &for_.body)?;
                     if let Some(incr) = &for_.incr {
-                        Self::run_expr(env, incr)?;
+                        self.run_expr(env, incr)?;
                     }
                 }
                 Ok(())
@@ -71,22 +79,22 @@ impl Interpreter {
                 env.define(&fun.name, object, span)
             }
             Stmt::If(if_) => {
-                let cond = Self::run_expr(env, &if_.cond)?;
+                let cond = self.run_expr(env, &if_.cond)?;
                 if cond.bool() {
-                    Self::run_stmt(env, &if_.then)?;
+                    self.run_stmt(env, &if_.then)?;
                 } else if let Some(else_) = &if_.else_ {
-                    Self::run_stmt(env, else_)?;
+                    self.run_stmt(env, else_)?;
                 }
                 Ok(())
             }
             Stmt::Print(print) => {
-                let value = Self::run_expr(env, &print.value)?;
+                let value = self.run_expr(env, &print.value)?;
                 println!("{}", value);
                 Ok(())
             }
             Stmt::Return(return_) => {
                 let object = match &return_.value {
-                    Some(value) => Self::run_expr(env, value)?,
+                    Some(value) => self.run_expr(env, value)?,
                     None => Object::Nil,
                 };
                 Err(RuntimeError::SyntaxError(SyntaxError::ReturnOutsideFunction {
@@ -96,14 +104,14 @@ impl Interpreter {
             }
             Stmt::Var(var) => {
                 let value = match &var.value {
-                    Some(value) => Self::run_expr(env, value)?,
+                    Some(value) => self.run_expr(env, value)?,
                     None => Object::Nil,
                 };
                 env.define(&var.name, value, span)
             }
             Stmt::While(while_) => {
-                while Self::run_expr(env, &while_.cond)?.bool() {
-                    Self::run_stmt(env, &while_.body)?;
+                while self.run_expr(env, &while_.cond)?.bool() {
+                    self.run_stmt(env, &while_.body)?;
                 }
                 Ok(())
             }
@@ -111,11 +119,11 @@ impl Interpreter {
         }
     }
 
-    fn run_expr(env: &mut Env, expr_s: &ExprS) -> Result<Object> {
+    fn run_expr(&self, env: &mut Env, expr_s: &ExprS) -> Result<Object> {
         let (expr, span) = expr_s;
         match expr {
             Expr::Assign(assign) => {
-                let value = Self::run_expr(env, &assign.value)?;
+                let value = self.run_expr(env, &assign.value)?;
                 env.assign(&assign.name, value.clone(), span)?;
                 Ok(value)
             }
@@ -123,9 +131,9 @@ impl Interpreter {
                 let args = call
                     .args
                     .iter()
-                    .map(|arg| Self::run_expr(env, arg))
+                    .map(|arg| self.run_expr(env, arg))
                     .collect::<Result<Vec<_>>>()?;
-                let callee = Self::run_expr(env, &call.callee)?;
+                let callee = self.run_expr(env, &call.callee)?;
 
                 match callee {
                     Object::Function(function) => {
@@ -144,7 +152,7 @@ impl Interpreter {
                                 env.define(param, arg, span)?;
                             }
                             for stmt in function.stmts().iter() {
-                                match Self::run_stmt(env, stmt) {
+                                match self.run_stmt(env, stmt) {
                                     Err(RuntimeError::SyntaxError(
                                         SyntaxError::ReturnOutsideFunction { object, .. },
                                     )) => return Ok(object),
@@ -184,8 +192,8 @@ impl Interpreter {
                 }
             }
             Expr::Infix(infix) => {
-                let lt = Self::run_expr(env, &infix.lt)?;
-                let mut rt = || Self::run_expr(env, &infix.rt);
+                let lt = self.run_expr(env, &infix.lt)?;
+                let mut rt = || self.run_expr(env, &infix.rt);
                 match infix.op {
                     OpInfix::LogicAnd => Ok(Object::Bool(lt.bool() && rt()?.bool())),
                     OpInfix::LogicOr => Ok(Object::Bool(lt.bool() || rt()?.bool())),
@@ -240,7 +248,7 @@ impl Interpreter {
                 ExprLiteral::String(string) => Object::String(string.clone()),
             }),
             Expr::Prefix(prefix) => {
-                let rt = Self::run_expr(env, &prefix.rt)?;
+                let rt = self.run_expr(env, &prefix.rt)?;
                 match prefix.op {
                     OpPrefix::Negate => match &rt {
                         Object::Number(number) => Ok(Object::Number(-number)),
@@ -253,7 +261,15 @@ impl Interpreter {
                     OpPrefix::Not => Ok(Object::Bool(!rt.bool())),
                 }
             }
-            Expr::Variable(var) => env.read(&var.name, span),
+            Expr::Variable(var) => match self.locals.get(span) {
+                Some(depth) => Ok(env.read_at(&var.name, *depth)),
+                None => self.globals.read(&var.name).ok_or_else(|| {
+                    RuntimeError::NameError(NameError::NotDefined {
+                        name: var.name.to_string(),
+                        span: span.clone(),
+                    })
+                }),
+            },
         }
     }
 }
