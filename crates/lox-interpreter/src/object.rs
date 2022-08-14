@@ -1,8 +1,8 @@
 use crate::env::Env;
 
-use std::fmt::{self, Display, Formatter};
-
 use lox_syntax::ast::{Spanned, Stmt, StmtFun};
+
+use std::fmt::{self, Display, Formatter};
 
 #[derive(Clone, Debug)]
 pub enum Object {

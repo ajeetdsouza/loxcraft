@@ -1,4 +1,5 @@
-use crate::{Locals, NameError, Result, RuntimeError};
+use crate::error::{Error, NameError, Result};
+use crate::interpreter::Locals;
 
 use lox_syntax::ast::{Expr, ExprS, Program, Span, Stmt, StmtS};
 use rustc_hash::FxHashSet;
@@ -54,7 +55,7 @@ impl Resolver {
                 self.resolve_expr(&if_.cond);
                 self.resolve_stmt(&if_.then)?;
                 if let Some(else_) = &if_.else_ {
-                    self.resolve_stmt(&else_)?;
+                    self.resolve_stmt(else_)?;
                 }
             }
             Stmt::Print(print) => self.resolve_expr(&print.value),
@@ -106,7 +107,7 @@ impl Resolver {
     fn define(&mut self, name: &str, span: &Span) -> Result<()> {
         if let Some(scope) = self.scopes.last_mut() {
             if scope.contains(name) {
-                Err(RuntimeError::NameError(NameError::AlreadyDefined {
+                Err(Error::NameError(NameError::AlreadyDefined {
                     name: name.to_string(),
                     span: span.clone(),
                 }))

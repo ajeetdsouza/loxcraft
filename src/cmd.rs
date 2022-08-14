@@ -17,8 +17,6 @@ pub enum Cmd {
     Repl,
     Run {
         path: String,
-        #[clap(long)]
-        debug: bool,
     },
 }
 
@@ -27,13 +25,14 @@ impl Cmd {
         match self {
             Cmd::Playground { port } => lox_playground::serve(*port),
             Cmd::Repl => repl(),
-            Cmd::Run { path, debug } => run(path, *debug),
+            Cmd::Run { path } => run(path),
         }
     }
 }
 
 pub fn repl() {
-    let mut interpreter = Interpreter::default();
+    let stdout = io::stdout();
+    let mut interpreter = Interpreter::new(stdout);
     let mut editor = repl::editor().unwrap();
 
     loop {
@@ -43,7 +42,7 @@ pub fn repl() {
                 let program = lox_syntax::parse(&line, &mut errors);
                 if !errors.is_empty() {
                     let mut buffer = termcolor::Buffer::ansi();
-                    lox_interpreter::error::report_err(&mut buffer, &line, errors);
+                    lox_interpreter::report_err(&mut buffer, &line, errors);
                     io::stderr().write_all(buffer.as_slice()).unwrap();
                     continue;
                 }
@@ -61,7 +60,7 @@ pub fn repl() {
     }
 }
 
-fn run(path: &str, debug: bool) {
+fn run(path: &str) {
     let source = fs::read_to_string(&path).unwrap();
     todo!()
     // let compiler = Compiler::new();
