@@ -5,7 +5,7 @@ pub type Spanned<T> = (T, Span);
 pub type Span = Range<usize>;
 
 pub type StmtS = Spanned<Stmt>;
-pub type ExprS = Expr;
+pub type ExprS = Spanned<Expr>;
 
 #[derive(Debug, Default)]
 pub struct Program {

@@ -4,11 +4,10 @@ mod object;
 
 use crate::env::Env;
 use crate::object::{Callable, Function, Native, Object};
-use lox_syntax::ast::{Expr, ExprLiteral, OpInfix, OpPrefix, Program, Span, Stmt};
+use lox_syntax::ast::{Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Program, Span, Stmt, StmtS};
 
 use thiserror::Error;
 
-use std::ops::Range;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 type Result<T, E = RuntimeError> = std::result::Result<T, E>;
@@ -30,39 +29,39 @@ impl Default for Interpreter {
 
 impl Interpreter {
     pub fn run(&mut self, program: &Program) -> Result<()> {
-        for (stmt, span) in &program.stmts {
-            Self::run_stmt(&mut self.globals, stmt, span)?;
+        for stmt in &program.stmts {
+            Self::run_stmt(&mut self.globals, stmt)?;
         }
         Ok(())
     }
 
-    fn run_stmt(env: &mut Env, stmt: &Stmt, span: &Range<usize>) -> Result<()> {
+    fn run_stmt(env: &mut Env, stmt_s: &StmtS) -> Result<()> {
+        let (stmt, span) = stmt_s;
         match stmt {
             Stmt::Block(block) => {
                 let env = &mut Env::with_parent(env);
-                for (stmt, span) in &block.stmts {
-                    Self::run_stmt(env, stmt, span)?;
+                for stmt in &block.stmts {
+                    Self::run_stmt(env, stmt)?;
                 }
                 Ok(())
             }
             Stmt::Expr(expr) => {
-                Self::run_expr(env, &expr.value, span)?;
+                Self::run_expr(env, &expr.value)?;
                 Ok(())
             }
             Stmt::For(for_) => {
                 let env = &mut Env::with_parent(env);
-                if let Some((init, init_span)) = &for_.init {
-                    Self::run_stmt(env, init, init_span)?;
+                if let Some(init) = &for_.init {
+                    Self::run_stmt(env, init)?;
                 }
                 let cond = match &for_.cond {
                     Some(cond) => cond,
-                    None => &Expr::Literal(ExprLiteral::Bool(true)),
+                    None => &(Expr::Literal(ExprLiteral::Bool(true)), 0..0),
                 };
-                while Self::run_expr(env, cond, span)?.bool() {
-                    let (body, body_span) = &for_.body;
-                    Self::run_stmt(env, body, body_span)?;
+                while Self::run_expr(env, cond)?.bool() {
+                    Self::run_stmt(env, &for_.body)?;
                     if let Some(incr) = &for_.incr {
-                        Self::run_expr(env, incr, span)?;
+                        Self::run_expr(env, incr)?;
                     }
                 }
                 Ok(())
@@ -72,23 +71,22 @@ impl Interpreter {
                 env.define(&fun.name, object, span)
             }
             Stmt::If(if_) => {
-                let cond = Self::run_expr(env, &if_.cond, span)?;
+                let cond = Self::run_expr(env, &if_.cond)?;
                 if cond.bool() {
-                    let (then, span) = &if_.then;
-                    Self::run_stmt(env, then, span)?;
-                } else if let Some((else_, span)) = &if_.else_ {
-                    Self::run_stmt(env, else_, span)?;
+                    Self::run_stmt(env, &if_.then)?;
+                } else if let Some(else_) = &if_.else_ {
+                    Self::run_stmt(env, else_)?;
                 }
                 Ok(())
             }
             Stmt::Print(print) => {
-                let value = Self::run_expr(env, &print.value, span)?;
+                let value = Self::run_expr(env, &print.value)?;
                 println!("{}", value);
                 Ok(())
             }
             Stmt::Return(return_) => {
                 let object = match &return_.value {
-                    Some(value) => Self::run_expr(env, value, span)?,
+                    Some(value) => Self::run_expr(env, value)?,
                     None => Object::Nil,
                 };
                 Err(RuntimeError::SyntaxError(SyntaxError::ReturnOutsideFunction {
@@ -98,15 +96,14 @@ impl Interpreter {
             }
             Stmt::Var(var) => {
                 let value = match &var.value {
-                    Some(value) => Self::run_expr(env, value, span)?,
+                    Some(value) => Self::run_expr(env, value)?,
                     None => Object::Nil,
                 };
                 env.define(&var.name, value, span)
             }
             Stmt::While(while_) => {
-                while Self::run_expr(env, &while_.cond, span)?.bool() {
-                    let (body, span) = &while_.body;
-                    Self::run_stmt(env, body, span)?;
+                while Self::run_expr(env, &while_.cond)?.bool() {
+                    Self::run_stmt(env, &while_.body)?;
                 }
                 Ok(())
             }
@@ -114,10 +111,11 @@ impl Interpreter {
         }
     }
 
-    fn run_expr(env: &mut Env, expr: &Expr, span: &Range<usize>) -> Result<Object> {
+    fn run_expr(env: &mut Env, expr_s: &ExprS) -> Result<Object> {
+        let (expr, span) = expr_s;
         match expr {
             Expr::Assign(assign) => {
-                let value = Self::run_expr(env, &assign.value, span)?;
+                let value = Self::run_expr(env, &assign.value)?;
                 env.assign(&assign.name, value.clone(), span)?;
                 Ok(value)
             }
@@ -125,9 +123,9 @@ impl Interpreter {
                 let args = call
                     .args
                     .iter()
-                    .map(|arg| Self::run_expr(env, arg, span))
+                    .map(|arg| Self::run_expr(env, arg))
                     .collect::<Result<Vec<_>>>()?;
-                let callee = Self::run_expr(env, &call.callee, span)?;
+                let callee = Self::run_expr(env, &call.callee)?;
 
                 match callee {
                     Object::Function(function) => {
@@ -145,8 +143,8 @@ impl Interpreter {
                             for (param, arg) in function.params().iter().zip(args) {
                                 env.define(param, arg, span)?;
                             }
-                            for (stmt, span) in function.stmts().iter() {
-                                match Self::run_stmt(env, stmt, span) {
+                            for stmt in function.stmts().iter() {
+                                match Self::run_stmt(env, stmt) {
                                     Err(RuntimeError::SyntaxError(
                                         SyntaxError::ReturnOutsideFunction { object, .. },
                                     )) => return Ok(object),
@@ -186,8 +184,8 @@ impl Interpreter {
                 }
             }
             Expr::Infix(infix) => {
-                let lt = Self::run_expr(env, &infix.lt, span)?;
-                let mut rt = || Self::run_expr(env, &infix.rt, span);
+                let lt = Self::run_expr(env, &infix.lt)?;
+                let mut rt = || Self::run_expr(env, &infix.rt);
                 match infix.op {
                     OpInfix::LogicAnd => Ok(Object::Bool(lt.bool() && rt()?.bool())),
                     OpInfix::LogicOr => Ok(Object::Bool(lt.bool() || rt()?.bool())),
@@ -242,7 +240,7 @@ impl Interpreter {
                 ExprLiteral::String(string) => Object::String(string.clone()),
             }),
             Expr::Prefix(prefix) => {
-                let rt = Self::run_expr(env, &prefix.rt, span)?;
+                let rt = Self::run_expr(env, &prefix.rt)?;
                 match prefix.op {
                     OpPrefix::Negate => match &rt {
                         Object::Number(number) => Ok(Object::Number(-number)),

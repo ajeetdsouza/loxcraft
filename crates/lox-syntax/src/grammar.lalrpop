@@ -40,11 +40,11 @@ Stmt: ast::StmtS = {
 StmtOpenS: ast::StmtS = <l:@L> <stmt:StmtOpen> <r:@R> => (stmt, l..r);
 
 StmtOpen: ast::Stmt = {
-    "if" "(" <cond:Expr> ")" <then:Stmt> =>
+    "if" "(" <cond:ExprS> ")" <then:Stmt> =>
         ast::Stmt::If(Box::new(ast::StmtIf { <>, else_: None })),
-    "if" "(" <cond:Expr> ")" <then:StmtClosedS> "else" <else_:StmtOpenS> =>
+    "if" "(" <cond:ExprS> ")" <then:StmtClosedS> "else" <else_:StmtOpenS> =>
         ast::Stmt::If(Box::new(ast::StmtIf { cond, then, else_: Some(else_) })),
-    "while" "(" <cond:Expr> ")" <body:StmtOpenS> =>
+    "while" "(" <cond:ExprS> ")" <body:StmtOpenS> =>
         ast::Stmt::While(Box::new(ast::StmtWhile { <> })),
     "for" "(" <init:ForInit> <cond:ForCond> <incr:ForIncr> ")" <body:StmtOpenS> =>
         ast::Stmt::For(Box::new(ast::StmtFor { <> })),
@@ -54,9 +54,9 @@ StmtClosedS: ast::StmtS = <l:@L> <stmt:StmtClosed> <r:@R> => (stmt, l..r);
 
 StmtClosed: ast::Stmt = {
     StmtSimple,
-    "if" "(" <cond:Expr> ")" <then:StmtClosedS> "else" <else_:StmtClosedS> =>
+    "if" "(" <cond:ExprS> ")" <then:StmtClosedS> "else" <else_:StmtClosedS> =>
         ast::Stmt::If(Box::new(ast::StmtIf { cond, then, else_: Some(else_) })),
-    "while" "(" <cond:Expr> ")" <body:StmtClosedS> =>
+    "while" "(" <cond:ExprS> ")" <body:StmtClosedS> =>
         ast::Stmt::While(Box::new(ast::StmtWhile { <> })),
     "for" "(" <init:ForInit> <cond:ForCond> <incr:ForIncr> ")" <body:StmtClosedS> =>
         ast::Stmt::For(Box::new(ast::StmtFor { <> })),
@@ -68,13 +68,13 @@ ForInit: Option<ast::StmtS> = {
     ";" => None,
 }
 
-ForCond: Option<ast::Expr> = {
-    <Expr> ";" => Some(<>),
+ForCond: Option<ast::ExprS> = {
+    <ExprS> ";" => Some(<>),
     ";" => None,
 }
 
-ForIncr: Option<ast::Expr> = {
-    <Expr> => Some(<>),
+ForIncr: Option<ast::ExprS> = {
+    <ExprS> => Some(<>),
     () => None
 };
 
@@ -92,25 +92,27 @@ StmtBlockInternal: ast::StmtBlock = "{" <stmts:Decl*> "}" =>
     ast::StmtBlock { <> };
 
 StmtExpr: ast::Stmt =
-    <value:Expr> ";" => ast::Stmt::Expr(ast::StmtExpr { <> });
+    <value:ExprS> ";" => ast::Stmt::Expr(ast::StmtExpr { <> });
 
 StmtPrint: ast::Stmt =
-    "print" <value:Expr> ";" => ast::Stmt::Print(ast::StmtPrint { <> });
+    "print" <value:ExprS> ";" => ast::Stmt::Print(ast::StmtPrint { <> });
 
 StmtReturn: ast::Stmt =
-    "return" <value:Expr?> ";" => ast::Stmt::Return(ast::StmtReturn { <> });
+    "return" <value:ExprS?> ";" => ast::Stmt::Return(ast::StmtReturn { <> });
 
 StmtVar: ast::Stmt = {
-    "var" <name:identifier> "=" <value:Expr> ";" =>
+    "var" <name:identifier> "=" <value:ExprS> ";" =>
         ast::Stmt::Var(ast::StmtVar { name, value: Some(value) }),
     "var" <name:identifier> ";" =>
         ast::Stmt::Var(ast::StmtVar { name, value: None }),
 };
 
+ExprS: ast::ExprS = <l:@L> <expr:Expr> <r:@R> => (expr, l..r);
+
 Expr = ExprAssign;
 
 ExprAssign = {
-    <name:identifier> "=" <value:Expr> =>
+    <name:identifier> "=" <value:ExprS> =>
         ast::Expr::Assign(Box::new(ast::ExprAssign { <> })),
     ExprLogicOr,
 }
@@ -148,7 +150,7 @@ OpFactor: ast::OpInfix = {
 }
 
 ExprPrefix: ast::Expr = {
-    <op:OpPrefix> <rt:ExprPrefix> =>
+    <op:OpPrefix> <rt:Spanned<ExprPrefix>> =>
         ast::Expr::Prefix(Box::new(ast::ExprPrefix { <> })),
     ExprCall,
 }
@@ -158,14 +160,14 @@ OpPrefix: ast::OpPrefix = {
 }
 
 ExprCall: ast::Expr = {
-    <callee:ExprCall> "(" <args:Args> ")" => {
+    <callee:Spanned<ExprCall>> "(" <args:Args> ")" => {
         ast::Expr::Call(Box::new(ast::ExprCall { callee, args }))
     },
     ExprPrimary,
 };
 
-Args: Vec<ast::Expr> = {
-    <first:Expr> <rest:("," <Expr>)*> => {
+Args: Vec<ast::ExprS> = {
+    <first:ExprS> <rest:("," <ExprS>)*> => {
         let mut args = Vec::with_capacity(1 + rest.len());
         args.push(first);
         args.extend(rest);
@@ -192,10 +194,12 @@ ExprVariable: ast::ExprVariable =
     <name:identifier> => ast::ExprVariable { <> };
 
 ExprInfix<Lt, Op, Rt>: ast::Expr = {
-    <lt:Lt> <op:Op> <rt:Rt> =>
+    <lt:Spanned<Lt>> <op:Op> <rt:Spanned<Rt>> =>
         ast::Expr::Infix(Box::new(ast::ExprInfix { <> })),
     Rt,
 }
+
+Spanned<T>: ast::Spanned<T> = <l:@L> <t:T> <r:@R> => (t, l..r);
 
 extern {
     type Location = usize;
