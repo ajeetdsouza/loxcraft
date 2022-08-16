@@ -1,0 +1,19 @@
+class Breakfast < Foo {
+//^^^ keyword
+//    ^^^^^^^^^   ^^^ class
+//              ^ keyword
+//                    ^ punctuation
+  serve(who) {
+//^^^^^ function
+//     ^   ^ ^ punctuation
+//      ^^^ variable
+    print "Enjoy your breakfast, " + who + ".";
+//  ^^^^^ keyword
+//        ^^^^^^^^^^^^^^^^^^^^^^^^         ^^^ string
+//                                 ^     ^ operator
+//                                   ^^^ variable
+//                                            ^ punctuation
+  }
+//^ punctuation
+}
+//<- punctuation

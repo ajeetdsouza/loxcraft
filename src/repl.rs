@@ -1,9 +1,8 @@
 use anyhow::{Context, Result};
-use crossterm::event::{KeyCode, KeyModifiers};
 use nu_ansi_term::{Color, Style};
 use reedline::{
-    EditCommand, Emacs, FileBackedHistory, PromptEditMode, PromptHistorySearch, Reedline,
-    ReedlineEvent, StyledText, ValidationResult,
+    EditCommand, Emacs, FileBackedHistory, KeyCode, KeyModifiers, PromptEditMode,
+    PromptHistorySearch, Reedline, ReedlineEvent, StyledText, ValidationResult,
 };
 use tree_sitter_highlight::{self, HighlightConfiguration, HighlightEvent};
 use tree_sitter_lox::{self, HIGHLIGHTS_QUERY};
@@ -42,25 +41,36 @@ struct PaletteItem<'a> {
     fg: Color,
 }
 
+// Color scheme inspired by base16-google-dark.
+//
+// The base16 style guide tells you which base16 color code to use for each
+// language construct:
+// https://github.com/chriskempson/base16/blob/39fb23df970d4d6190d000271dec260250986012/styling.md
+//
+// The base16-vim theme contains the 8-bit ANSI codes associated with each
+// base16 color code (assume we are not working in a 256-color terminal):
+// https://github.com/chriskempson/base16-vim/blob/c156b909af619cdd097d8d1e2cd1dce1f45dfba1/colors/base16-google-dark.vim#L52
+//
+// This page gives you an idea of what color is associated with a particular
+// 8-bit ANSI code:
+// https://en.wikipedia.org/wiki/ANSI_escape_code#8-bit
+//
+// Since this color scheme makes use of both Red and LightRed, we replace
+// LightRed with LightCyan to better distinguish between the two.
+//
+// Also, we use the high-intensity variant of each color, because the standard
+// colors can be harder to read on some terminals.
+//
 const PALETTE: &[PaletteItem] = &[
-    PaletteItem { name: "", fg: Color::White },
+    PaletteItem { name: "", fg: Color::LightGray },
+    PaletteItem { name: "class", fg: Color::LightYellow },
     PaletteItem { name: "comment", fg: Color::DarkGray },
-    PaletteItem { name: "conditional", fg: Color::LightPurple },
     PaletteItem { name: "constant", fg: Color::LightCyan },
-    PaletteItem { name: "field", fg: Color::LightBlue },
     PaletteItem { name: "function", fg: Color::LightBlue },
-    PaletteItem { name: "keyword.function", fg: Color::LightPurple },
-    PaletteItem { name: "keyword.return", fg: Color::LightPurple },
     PaletteItem { name: "keyword", fg: Color::LightPurple },
-    PaletteItem { name: "method", fg: Color::LightBlue },
-    PaletteItem { name: "number", fg: Color::LightCyan },
-    PaletteItem { name: "operator", fg: Color::White },
-    PaletteItem { name: "parameter", fg: Color::LightRed },
-    PaletteItem { name: "punctuation.bracket", fg: Color::White },
-    PaletteItem { name: "punctuation.delimiter", fg: Color::White },
-    PaletteItem { name: "repeat", fg: Color::LightPurple },
+    PaletteItem { name: "operator", fg: Color::LightGray },
+    PaletteItem { name: "punctuation", fg: Color::LightGray },
     PaletteItem { name: "string", fg: Color::LightGreen },
-    PaletteItem { name: "type", fg: Color::LightYellow },
     PaletteItem { name: "variable", fg: Color::LightRed },
 ];
 

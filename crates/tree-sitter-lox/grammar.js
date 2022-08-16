@@ -33,7 +33,7 @@ module.exports = grammar({
       seq(
         "class",
         field("name", $.identifier),
-        optional(seq("<", field("base", $.identifier))),
+        optional(seq(field("extends", $.extends), field("base", $.identifier))),
         "{",
         field("method", repeat($.function)),
         "}"
@@ -152,6 +152,7 @@ module.exports = grammar({
         field("params", $.params),
         field("body", $.stmt_block)
       ),
+    extends: ($) => "<",
     args: ($) => seq("(", optional(commaSep($._expr)), ")"),
     params: ($) => seq("(", optional(commaSep($.identifier)), ")"),
     comment: ($) => token(seq("//", /.*/)),

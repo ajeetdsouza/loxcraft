@@ -76,6 +76,16 @@
           }
         ]
       },
+      "extends": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "extends",
+            "named": true
+          }
+        ]
+      },
       "method": {
         "multiple": true,
         "required": false,
@@ -483,6 +493,11 @@
         }
       ]
     }
+  },
+  {
+    "type": "extends",
+    "named": true,
+    "fields": {}
   },
   {
     "type": "for_paren",
