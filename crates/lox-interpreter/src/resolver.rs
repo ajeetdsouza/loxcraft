@@ -34,10 +34,13 @@ impl Resolver {
                 if let Some(init) = &for_.init {
                     self.resolve_stmt(init)?;
                 }
-                self.resolve_stmt(&for_.body)?;
+                if let Some(cond) = &for_.cond {
+                    self.resolve_expr(cond);
+                }
                 if let Some(incr) = &for_.incr {
                     self.resolve_expr(incr);
                 }
+                self.resolve_stmt(&for_.body)?;
                 self.end_scope();
             }
             Stmt::Fun(fun) => {
@@ -104,20 +107,18 @@ impl Resolver {
         }
     }
 
-    fn define(&mut self, name: &str, span: &Span) -> Result<()> {
+    fn define(&mut self, name: &str, _span: &Span) -> Result<()> {
+        if self.scopes.len() == 0 {
+            return Ok(());
+        }
         if let Some(scope) = self.scopes.last_mut() {
             if scope.contains(name) {
-                Err(Error::NameError(NameError::AlreadyDefined {
-                    name: name.to_string(),
-                    span: span.clone(),
-                }))
+                return Err(Error::NameError(NameError::AlreadyDefined { name: name.to_string() }));
             } else {
                 scope.insert(name.to_string());
-                Ok(())
             }
-        } else {
-            Ok(())
         }
+        Ok(())
     }
 
     fn access(&mut self, name: &str, span: &Span) {

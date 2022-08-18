@@ -1,5 +1,5 @@
 use crate::env::Env;
-use crate::error::{Error, IoError, NameError, Result, SyntaxError, TypeError};
+use crate::error::{Error, IoError, Result, SyntaxError, TypeError};
 use crate::object::{Callable, Function, Native, Object};
 use crate::resolver::Resolver;
 
@@ -21,32 +21,30 @@ pub struct Interpreter<Stdout> {
 impl<Stdout: Write> Interpreter<Stdout> {
     pub fn new(stdout: Stdout) -> Self {
         let mut globals = Env::default();
-        globals.set("clock", Object::Native(Native::Clock));
+        globals.insert_unchecked("clock", Object::Native(Native::Clock));
         Self { globals, locals: FxHashMap::default(), stdout }
     }
 
     pub fn run(&mut self, program: &Program) -> Result<()> {
         self.locals = Resolver::default().resolve(program)?;
-        let globals = &mut self.globals.clone();
-        for stmt in &program.stmts {
-            self.run_stmt(globals, stmt)?;
+        let env = &mut self.globals.clone();
+        for stmt_s in &program.stmts {
+            self.run_stmt(env, stmt_s)?;
         }
         Ok(())
     }
 
     fn run_stmt(&mut self, env: &mut Env, stmt_s: &StmtS) -> Result<()> {
-        let (stmt, span) = stmt_s;
+        let (stmt, _span) = stmt_s;
         match stmt {
             Stmt::Block(block) => {
                 let env = &mut Env::with_parent(env);
-                for stmt in &block.stmts {
-                    self.run_stmt(env, stmt)?;
+                for stmt_s in &block.stmts {
+                    self.run_stmt(env, stmt_s)?;
                 }
-                Ok(())
             }
             Stmt::Expr(expr) => {
                 self.run_expr(env, &expr.value)?;
-                Ok(())
             }
             Stmt::For(for_) => {
                 let env = &mut Env::with_parent(env);
@@ -63,12 +61,10 @@ impl<Stdout: Write> Interpreter<Stdout> {
                         self.run_expr(env, incr)?;
                     }
                 }
-                Ok(())
             }
             Stmt::Fun(fun) => {
                 let object = Object::Function(Function { decl: *fun.clone(), env: env.clone() });
-                env.set(&fun.name, object);
-                Ok(())
+                self.insert_var(env, &fun.name, object);
             }
             Stmt::If(if_) => {
                 let cond = self.run_expr(env, &if_.cond)?;
@@ -77,44 +73,35 @@ impl<Stdout: Write> Interpreter<Stdout> {
                 } else if let Some(else_) = &if_.else_ {
                     self.run_stmt(env, else_)?;
                 }
-                Ok(())
             }
             Stmt::Print(print) => {
                 let value = self.run_expr(env, &print.value)?;
                 writeln!(self.stdout, "{}", value).map_err(|_| {
-                    Error::IoError(IoError::WriteError {
-                        file: "stdout".to_string(),
-                        span: span.clone(),
-                    })
+                    Error::IoError(IoError::WriteError { file: "stdout".to_string() })
                 })?;
-                Ok(())
             }
             Stmt::Return(return_) => {
                 let object = match &return_.value {
                     Some(value) => self.run_expr(env, value)?,
                     None => Object::Nil,
                 };
-                Err(Error::SyntaxError(SyntaxError::ReturnOutsideFunction {
-                    object,
-                    span: span.clone(),
-                }))
+                return Err(Error::SyntaxError(SyntaxError::ReturnOutsideFunction { object }));
             }
             Stmt::Var(var) => {
                 let value = match &var.value {
                     Some(value) => self.run_expr(env, value)?,
                     None => Object::Nil,
                 };
-                env.set(&var.name, value);
-                Ok(())
+                self.insert_var(env, &var.name, value);
             }
             Stmt::While(while_) => {
                 while self.run_expr(env, &while_.cond)?.bool() {
                     self.run_stmt(env, &while_.body)?;
                 }
-                Ok(())
             }
             Stmt::Error => unreachable!("interpreter started despite parsing errors"),
         }
+        Ok(())
     }
 
     fn run_expr(&mut self, env: &mut Env, expr_s: &ExprS) -> Result<Object> {
@@ -122,7 +109,7 @@ impl<Stdout: Write> Interpreter<Stdout> {
         match expr {
             Expr::Assign(assign) => {
                 let value = self.run_expr(env, &assign.value)?;
-                env.set(&assign.name, value.clone());
+                self.set_var(env, &assign.name, value.clone(), span)?;
                 Ok(value)
             }
             Expr::Call(call) => {
@@ -142,15 +129,14 @@ impl<Stdout: Write> Interpreter<Stdout> {
                                 name: function.name().to_string(),
                                 exp_args,
                                 got_args,
-                                span: span.clone(),
                             }))
                         } else {
                             let env = &mut Env::with_parent(&function.env);
                             for (param, arg) in function.params().iter().zip(args) {
-                                env.set(param, arg);
+                                self.insert_var(env, param, arg);
                             }
-                            for stmt in function.stmts().iter() {
-                                match self.run_stmt(env, stmt) {
+                            for stmt_s in function.stmts().iter() {
+                                match self.run_stmt(env, stmt_s) {
                                     Err(Error::SyntaxError(
                                         SyntaxError::ReturnOutsideFunction { object, .. },
                                     )) => return Ok(object),
@@ -168,7 +154,6 @@ impl<Stdout: Write> Interpreter<Stdout> {
                                 name: native.name().to_string(),
                                 exp_args,
                                 got_args,
-                                span: span.clone(),
                             }))
                         } else {
                             match native {
@@ -185,7 +170,6 @@ impl<Stdout: Write> Interpreter<Stdout> {
                     }
                     _ => Err(Error::TypeError(TypeError::NotCallable {
                         type_: callee.type_().to_string(),
-                        span: span.clone(),
                     })),
                 }
             }
@@ -232,7 +216,6 @@ impl<Stdout: Write> Interpreter<Stdout> {
                                     op: op.to_string(),
                                     lt_type: a.type_().to_string(),
                                     rt_type: b.type_().to_string(),
-                                    span: span.clone(),
                                 }))
                             }
                         }
@@ -253,23 +236,34 @@ impl<Stdout: Write> Interpreter<Stdout> {
                         val => Err(Error::TypeError(TypeError::UnsupportedOperandPrefix {
                             op: prefix.op.to_string(),
                             rt_type: val.type_().to_string(),
-                            span: span.clone(),
                         })),
                     },
                     OpPrefix::Not => Ok(Object::Bool(!rt.bool())),
                 }
             }
-            Expr::Variable(var) => match self.locals.get(span) {
-                Some(depth) => Ok(env.get_at(&var.name, *depth).unwrap_or_else(|| {
-                    unreachable!("variable was resolved but could not be found: {:?}", var.name)
-                })),
-                None => self.globals.get(&var.name).ok_or_else(|| {
-                    Error::NameError(NameError::NotDefined {
-                        name: var.name.to_string(),
-                        span: span.clone(),
-                    })
-                }),
-            },
+            Expr::Variable(var) => self.get_var(env, &var.name, span),
         }
+    }
+
+    fn get_var(&self, env: &Env, name: &str, span: &Span) -> Result<Object> {
+        match self.locals.get(span) {
+            Some(depth) => Ok(env.get_at(name, *depth).unwrap_or_else(|_| {
+                unreachable!("variable was resolved but could not be found: {:?}", name)
+            })),
+            None => self.globals.get(name),
+        }
+    }
+
+    fn set_var(&mut self, env: &mut Env, name: &str, value: Object, span: &Span) -> Result<()> {
+        match self.locals.get(span) {
+            Some(depth) => Ok(env.set_at(name, value, *depth).unwrap_or_else(|_| {
+                unreachable!("variable was resolved but could not be found: {:?}", name)
+            })),
+            None => self.globals.set(name, value),
+        }
+    }
+
+    fn insert_var(&self, env: &mut Env, name: &str, value: Object) {
+        env.insert_unchecked(name, value);
     }
 }

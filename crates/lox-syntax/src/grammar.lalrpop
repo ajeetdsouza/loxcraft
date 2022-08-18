@@ -2,68 +2,64 @@ use crate::{ast, lexer};
 
 use lalrpop_util::ParseError;
 
-grammar<'err>(errors: &'err mut Vec<ParseError<usize, lexer::Token, lexer::Error>>);
+grammar<'err>(
+    errors: &'err mut Vec<ParseError<usize, lexer::Token, lexer::Error>>
+);
 
-pub Program: ast::Program = <stmts:Decl*> => ast::Program { <> };
+pub Program: ast::Program = <stmts:DeclS*> => ast::Program { <> };
+
+DeclS = Spanned<Decl>;
 
 Decl = {
-    DeclFunS,
+    DeclFun,
+    DeclVar,
     Stmt,
 }
-
-DeclFunS: ast::StmtS = <l:@L> <fun:DeclFun> <r:@R> => (fun, l..r);
 
 DeclFun: ast::Stmt =
     "fun" <name:identifier> "(" <params:Params> ")" <body:StmtBlockInternal> =>
         ast::Stmt::Fun(Box::new(ast::StmtFun { <> }));
 
-Params: Vec<String> = {
-    <first:identifier> <rest:("," <identifier>)*> => {
-        let mut params = Vec::with_capacity(1 + rest.len());
-        params.push(first);
-        params.extend(rest);
-        params
-    },
-    () => Vec::new(),
+DeclVar: ast::Stmt = {
+    "var" <name:identifier> "=" <value:ExprS> ";" =>
+        ast::Stmt::Var(ast::StmtVar { name, value: Some(value) }),
+    "var" <name:identifier> ";" =>
+        ast::Stmt::Var(ast::StmtVar { name, value: None }),
 };
 
 // https://en.wikipedia.org/wiki/Dangling_else#Avoiding_the_conflict_in_LR_parsers
-Stmt: ast::StmtS = {
-    StmtOpenS,
-    StmtClosedS,
-    <l:@L> <e:!> <r:@R> => {
+Stmt: ast::Stmt = {
+    StmtOpen,
+    StmtClosed,
+    <e:!> => {
         errors.push(e.error);
-        (ast::Stmt::Error, l..r)
+        ast::Stmt::Error
     },
 }
 
-StmtOpenS: ast::StmtS = <l:@L> <stmt:StmtOpen> <r:@R> => (stmt, l..r);
-
 StmtOpen: ast::Stmt = {
-    "if" "(" <cond:ExprS> ")" <then:Stmt> =>
+    "if" "(" <cond:ExprS> ")" <then:Spanned<Stmt>> =>
         ast::Stmt::If(Box::new(ast::StmtIf { <>, else_: None })),
-    "if" "(" <cond:ExprS> ")" <then:StmtClosedS> "else" <else_:StmtOpenS> =>
+    "if" "(" <cond:ExprS> ")" <then:Spanned<StmtClosed>> "else" <else_:Spanned<StmtOpen>> =>
         ast::Stmt::If(Box::new(ast::StmtIf { cond, then, else_: Some(else_) })),
-    "while" "(" <cond:ExprS> ")" <body:StmtOpenS> =>
+    "while" "(" <cond:ExprS> ")" <body:Spanned<StmtOpen>> =>
         ast::Stmt::While(Box::new(ast::StmtWhile { <> })),
-    "for" "(" <init:ForInit> <cond:ForCond> <incr:ForIncr> ")" <body:StmtOpenS> =>
+    "for" "(" <init:ForInit> <cond:ForCond> <incr:ForIncr> ")" <body:Spanned<StmtOpen>> =>
         ast::Stmt::For(Box::new(ast::StmtFor { <> })),
 }
 
-StmtClosedS: ast::StmtS = <l:@L> <stmt:StmtClosed> <r:@R> => (stmt, l..r);
-
 StmtClosed: ast::Stmt = {
-    StmtSimple,
-    "if" "(" <cond:ExprS> ")" <then:StmtClosedS> "else" <else_:StmtClosedS> =>
+    "if" "(" <cond:ExprS> ")" <then:Spanned<StmtClosed>> "else" <else_:Spanned<StmtClosed>> =>
         ast::Stmt::If(Box::new(ast::StmtIf { cond, then, else_: Some(else_) })),
-    "while" "(" <cond:ExprS> ")" <body:StmtClosedS> =>
+    "while" "(" <cond:ExprS> ")" <body:Spanned<StmtClosed>> =>
         ast::Stmt::While(Box::new(ast::StmtWhile { <> })),
-    "for" "(" <init:ForInit> <cond:ForCond> <incr:ForIncr> ")" <body:StmtClosedS> =>
+    "for" "(" <init:ForInit> <cond:ForCond> <incr:ForIncr> ")" <body:Spanned<StmtClosed>> =>
         ast::Stmt::For(Box::new(ast::StmtFor { <> })),
+    StmtSimple,
 }
 
 ForInit: Option<ast::StmtS> = {
-    <l:@L> <stmt:StmtVar> <r:@R> => Some((stmt, l..r)),
+    <l:@L> <stmt:DeclVar> <r:@R> => Some((stmt, l..r)),
     <l:@L> <stmt:StmtExpr> <r:@R> => Some((stmt, l..r)),
     ";" => None,
 }
@@ -83,12 +79,11 @@ StmtSimple = {
     StmtExpr,
     StmtPrint,
     StmtReturn,
-    StmtVar,
 }
 
 StmtBlock: ast::Stmt = StmtBlockInternal => ast::Stmt::Block(<>);
 
-StmtBlockInternal: ast::StmtBlock = "{" <stmts:Decl*> "}" =>
+StmtBlockInternal: ast::StmtBlock = "{" <stmts:DeclS*> "}" =>
     ast::StmtBlock { <> };
 
 StmtExpr: ast::Stmt =
@@ -100,14 +95,7 @@ StmtPrint: ast::Stmt =
 StmtReturn: ast::Stmt =
     "return" <value:ExprS?> ";" => ast::Stmt::Return(ast::StmtReturn { <> });
 
-StmtVar: ast::Stmt = {
-    "var" <name:identifier> "=" <value:ExprS> ";" =>
-        ast::Stmt::Var(ast::StmtVar { name, value: Some(value) }),
-    "var" <name:identifier> ";" =>
-        ast::Stmt::Var(ast::StmtVar { name, value: None }),
-};
-
-ExprS: ast::ExprS = <l:@L> <expr:Expr> <r:@R> => (expr, l..r);
+ExprS = Spanned<Expr>;
 
 Expr = ExprAssign;
 
@@ -164,8 +152,34 @@ ExprCall: ast::Expr = {
         ast::Expr::Call(Box::new(ast::ExprCall { callee, args }))
     },
     ExprPrimary,
-};
+}
 
+ExprPrimary: ast::Expr = {
+    // Literals
+    "nil" => ast::Expr::Literal(ast::ExprLiteral::Nil),
+    "false" => ast::Expr::Literal(ast::ExprLiteral::Bool(false)),
+    "true" => ast::Expr::Literal(ast::ExprLiteral::Bool(true)),
+    string => ast::Expr::Literal(ast::ExprLiteral::String(<>)),
+    number => ast::Expr::Literal(ast::ExprLiteral::Number(<>)),
+
+    // Variables
+    <name:identifier> => ast::Expr::Variable(ast::ExprVariable { <> }),
+
+    // Grouping
+    "(" <Expr> ")",
+}
+
+// Utilities
+Spanned<T>: ast::Spanned<T> = <l:@L> <t:T> <r:@R> => (t, l..r);
+Params: Vec<String> = {
+    <first:identifier> <rest:("," <identifier>)*> => {
+        let mut params = Vec::with_capacity(1 + rest.len());
+        params.push(first);
+        params.extend(rest);
+        params
+    },
+    () => Vec::new(),
+};
 Args: Vec<ast::ExprS> = {
     <first:ExprS> <rest:("," <ExprS>)*> => {
         let mut args = Vec::with_capacity(1 + rest.len());
@@ -175,31 +189,12 @@ Args: Vec<ast::ExprS> = {
     },
     () => Vec::new(),
 }
-
-ExprPrimary: ast::Expr = {
-    <ExprLiteral> => ast::Expr::Literal(<>),
-    <ExprVariable> => ast::Expr::Variable(<>),
-    "(" <Expr> ")",
-}
-
-ExprLiteral: ast::ExprLiteral = {
-    "nil" => ast::ExprLiteral::Nil,
-    "false" => ast::ExprLiteral::Bool(false),
-    "true" => ast::ExprLiteral::Bool(true),
-    string => ast::ExprLiteral::String(<>),
-    number => ast::ExprLiteral::Number(<>),
-}
-
-ExprVariable: ast::ExprVariable =
-    <name:identifier> => ast::ExprVariable { <> };
-
 ExprInfix<Lt, Op, Rt>: ast::Expr = {
     <lt:Spanned<Lt>> <op:Op> <rt:Spanned<Rt>> =>
         ast::Expr::Infix(Box::new(ast::ExprInfix { <> })),
     Rt,
 }
 
-Spanned<T>: ast::Spanned<T> = <l:@L> <t:T> <r:@R> => (t, l..r);
 
 extern {
     type Location = usize;

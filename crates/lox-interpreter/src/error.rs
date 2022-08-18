@@ -3,7 +3,6 @@ use crate::object::Object;
 use codespan_reporting::diagnostic::Diagnostic;
 use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;
-use lox_syntax::ast::Span;
 use termcolor::WriteColor;
 use thiserror::Error;
 
@@ -24,33 +23,33 @@ pub enum Error {
 #[derive(Debug, Error)]
 pub enum IoError {
     #[error("unable to write to file: {:?}", file)]
-    WriteError { file: String, span: Span },
+    WriteError { file: String },
 }
 
 #[derive(Debug, Error)]
 pub enum NameError {
     #[error("name {:?} is already defined", name)]
-    AlreadyDefined { name: String, span: Span },
+    AlreadyDefined { name: String },
     #[error("name {:?} is not defined", name)]
-    NotDefined { name: String, span: Span },
+    NotDefined { name: String },
 }
 
 #[derive(Debug, Error)]
 pub enum SyntaxError {
     #[error("\"return\" outside function")]
-    ReturnOutsideFunction { object: Object, span: Span },
+    ReturnOutsideFunction { object: Object },
 }
 
 #[derive(Debug, Error)]
 pub enum TypeError {
     #[error("{name}() takes {exp_args} arguments but {got_args} were given")]
-    ArityMismatch { name: String, exp_args: usize, got_args: usize, span: Span },
+    ArityMismatch { name: String, exp_args: usize, got_args: usize },
     #[error("{:?} object is not callable", type_)]
-    NotCallable { type_: String, span: Span },
+    NotCallable { type_: String },
     #[error("unsupported operand type(s) for {}: {:?}", op, rt_type)]
-    UnsupportedOperandPrefix { op: String, rt_type: String, span: Span },
+    UnsupportedOperandPrefix { op: String, rt_type: String },
     #[error("unsupported operand type(s) for {}: {:?} and {:?}", op, lt_type, rt_type)]
-    UnsupportedOperandInfix { op: String, lt_type: String, rt_type: String, span: Span },
+    UnsupportedOperandInfix { op: String, lt_type: String, rt_type: String },
 }
 
 pub fn report_err(writer: &mut dyn WriteColor, source: &str, mut errors: Vec<Diagnostic<()>>) {
