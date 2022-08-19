@@ -31,7 +31,10 @@ DeclClass: ast::Stmt =
 DeclFun: ast::Stmt = "fun" <function:Function> => ast::Stmt::Fun(Box::new(<>));
 
 DeclVar: ast::Stmt = "var" <name:identifier> <value:("=" <ExprS>)?> ";" =>
-    ast::Stmt::Var(ast::StmtVar { <> });
+    ast::Stmt::Var(ast::StmtVar {
+        var: ast::Var { name, depth: None },
+        value,
+    });
 
 // Statements
 // https://en.wikipedia.org/wiki/Dangling_else#Avoiding_the_conflict_in_LR_parsers
@@ -103,7 +106,10 @@ Expr = ExprAssign;
 
 ExprAssign = {
     <name:identifier> "=" <value:ExprS> =>
-        ast::Expr::Assign(Box::new(ast::ExprAssign { <> })),
+        ast::Expr::Assign(Box::new(ast::ExprAssign {
+            var: ast::Var { name, depth: None },
+            value,
+        })),
     ExprLogicOr,
 }
 
@@ -165,7 +171,8 @@ ExprPrimary: ast::Expr = {
     number => ast::Expr::Literal(ast::ExprLiteral::Number(<>)),
 
     // Variables
-    <name:identifier> => ast::Expr::Variable(ast::ExprVariable { <> }),
+    <name:identifier> =>
+        ast::Expr::Var(ast::ExprVar { var: ast::Var { name, depth: None } }),
 
     // Grouping
     "(" <Expr> ")",

@@ -3,7 +3,9 @@ use crate::error::{Error, IoError, Result, SyntaxError, TypeError};
 use crate::object::{Callable, Class, Function, Native, Object};
 use crate::resolver::Resolver;
 
-use lox_syntax::ast::{Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Program, Span, Stmt, StmtS};
+use lox_syntax::ast::{
+    Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Program, Span, Stmt, StmtS, Var,
+};
 use rustc_hash::FxHashMap;
 
 use std::io::Write;
@@ -14,7 +16,6 @@ pub type Locals = FxHashMap<Span, usize>;
 #[derive(Debug)]
 pub struct Interpreter<Stdout> {
     globals: Env,
-    locals: Locals,
     stdout: Stdout,
 }
 
@@ -22,12 +23,11 @@ impl<Stdout: Write> Interpreter<Stdout> {
     pub fn new(stdout: Stdout) -> Self {
         let mut globals = Env::default();
         globals.insert_unchecked("clock", Object::Native(Native::Clock));
-        Self { globals, locals: FxHashMap::default(), stdout }
+        Self { globals, stdout }
     }
 
     pub fn run(&mut self, program: &Program) -> Result<()> {
         // TODO: Ranges can be duplicated. Find another way to index.
-        self.locals.extend(Resolver::default().resolve(program)?);
         let env = &mut self.globals.clone();
         for stmt_s in &program.stmts {
             self.run_stmt(env, stmt_s)?;
@@ -97,7 +97,7 @@ impl<Stdout: Write> Interpreter<Stdout> {
                     Some(value) => self.run_expr(env, value)?,
                     None => Object::Nil,
                 };
-                self.insert_var(env, &var.name, value);
+                self.insert_var(env, &var.var.name, value);
             }
             Stmt::While(while_) => {
                 while self.run_expr(env, &while_.cond)?.bool() {
@@ -110,11 +110,11 @@ impl<Stdout: Write> Interpreter<Stdout> {
     }
 
     fn run_expr(&mut self, env: &mut Env, expr_s: &ExprS) -> Result<Object> {
-        let (expr, span) = expr_s;
+        let (expr, _) = expr_s;
         match expr {
             Expr::Assign(assign) => {
                 let value = self.run_expr(env, &assign.value)?;
-                self.set_var(env, &assign.name, value.clone(), span)?;
+                self.set_var(env, &assign.var, value.clone())?;
                 Ok(value)
             }
             Expr::Call(call) => {
@@ -246,25 +246,25 @@ impl<Stdout: Write> Interpreter<Stdout> {
                     OpPrefix::Not => Ok(Object::Bool(!rt.bool())),
                 }
             }
-            Expr::Variable(var) => self.get_var(env, &var.name, span),
+            Expr::Var(var) => self.get_var(env, &var.var),
         }
     }
 
-    fn get_var(&self, env: &Env, name: &str, span: &Span) -> Result<Object> {
-        match self.locals.get(span) {
-            Some(depth) => Ok(env.get_at(name, *depth).unwrap_or_else(|_| {
-                unreachable!("variable was resolved but could not be found: {:?}", name)
+    fn get_var(&self, env: &Env, var: &Var) -> Result<Object> {
+        match var.depth {
+            Some(depth) => Ok(env.get_at(&var.name, depth).unwrap_or_else(|_| {
+                unreachable!("variable was resolved but could not be found: {:?}", &var.name)
             })),
-            None => self.globals.get(name),
+            None => self.globals.get(&var.name),
         }
     }
 
-    fn set_var(&mut self, env: &mut Env, name: &str, value: Object, span: &Span) -> Result<()> {
-        match self.locals.get(span) {
-            Some(depth) => Ok(env.set_at(name, value, *depth).unwrap_or_else(|_| {
-                unreachable!("variable was resolved but could not be found: {:?}", name)
+    fn set_var(&mut self, env: &mut Env, var: &Var, value: Object) -> Result<()> {
+        match var.depth {
+            Some(depth) => Ok(env.set_at(&var.name, value, depth).unwrap_or_else(|_| {
+                unreachable!("variable was resolved but could not be found: {:?}", &var.name)
             })),
-            None => self.globals.set(name, value),
+            None => self.globals.set(&var.name, value),
         }
     }
 

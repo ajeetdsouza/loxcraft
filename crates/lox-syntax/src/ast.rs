@@ -79,7 +79,7 @@ pub struct StmtReturn {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct StmtVar {
-    pub name: String,
+    pub var: Var,
     pub value: Option<ExprS>,
 }
 
@@ -96,12 +96,12 @@ pub enum Expr {
     Literal(ExprLiteral),
     Infix(Box<ExprInfix>),
     Prefix(Box<ExprPrefix>),
-    Variable(ExprVariable),
+    Var(ExprVar),
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExprAssign {
-    pub name: String,
+    pub var: Var,
     pub value: ExprS,
 }
 
@@ -187,6 +187,12 @@ impl Display for OpPrefix {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ExprVariable {
+pub struct ExprVar {
+    pub var: Var,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Var {
     pub name: String,
+    pub depth: Option<usize>,
 }

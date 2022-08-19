@@ -6,3 +6,4 @@ mod resolver;
 
 pub use error::report_err;
 pub use interpreter::Interpreter;
+pub use resolver::Resolver;

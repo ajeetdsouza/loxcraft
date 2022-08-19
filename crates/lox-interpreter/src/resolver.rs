@@ -1,114 +1,112 @@
 use crate::error::{Error, NameError, Result};
-use crate::interpreter::Locals;
 
-use lox_syntax::ast::{Expr, ExprS, Program, Span, Stmt, StmtS};
+use lox_syntax::ast::{Expr, ExprS, Program, Span, Stmt, StmtS, Var};
 use rustc_hash::FxHashSet;
 
 #[derive(Debug, Default)]
 pub struct Resolver {
-    locals: Locals,
     scopes: Vec<FxHashSet<String>>,
 }
 
 impl Resolver {
-    pub fn resolve(mut self, program: &Program) -> Result<Locals> {
-        for stmt_s in &program.stmts {
+    pub fn resolve(mut self, program: &mut Program) -> Result<()> {
+        for stmt_s in program.stmts.iter_mut() {
             self.resolve_stmt(stmt_s)?;
         }
-        Ok(self.locals)
+        Ok(())
     }
 
-    fn resolve_stmt(&mut self, stmt_s: &StmtS) -> Result<()> {
+    fn resolve_stmt(&mut self, stmt_s: &mut StmtS) -> Result<()> {
         let (stmt, span) = stmt_s;
         match stmt {
             Stmt::Block(block) => {
                 self.begin_scope();
-                for stmt_s in &block.stmts {
+                for stmt_s in block.stmts.iter_mut() {
                     self.resolve_stmt(stmt_s)?;
                 }
                 self.end_scope();
             }
-            Stmt::Class(class) => self.define(&class.name, span)?,
-            Stmt::Expr(expr) => self.resolve_expr(&expr.value),
+            Stmt::Class(class) => self.define(&class.name)?,
+            Stmt::Expr(expr) => self.resolve_expr(&mut expr.value),
             Stmt::For(for_) => {
                 self.begin_scope();
-                if let Some(init) = &for_.init {
+                if let Some(init) = &mut for_.init {
                     self.resolve_stmt(init)?;
                 }
-                if let Some(cond) = &for_.cond {
+                if let Some(cond) = &mut for_.cond {
                     self.resolve_expr(cond);
                 }
-                if let Some(incr) = &for_.incr {
+                if let Some(incr) = &mut for_.incr {
                     self.resolve_expr(incr);
                 }
-                self.resolve_stmt(&for_.body)?;
+                self.resolve_stmt(&mut for_.body)?;
                 self.end_scope();
             }
             Stmt::Fun(fun) => {
-                self.define(&fun.name, span)?;
+                self.define(&fun.name)?;
                 self.begin_scope();
                 for param in &fun.params {
-                    self.define(param, span)?;
+                    self.define(param)?;
                 }
-                for stmt_s in &fun.body.stmts {
+                for stmt_s in fun.body.stmts.iter_mut() {
                     self.resolve_stmt(stmt_s)?;
                 }
                 self.end_scope();
             }
             Stmt::If(if_) => {
-                self.resolve_expr(&if_.cond);
-                self.resolve_stmt(&if_.then)?;
-                if let Some(else_) = &if_.else_ {
+                self.resolve_expr(&mut if_.cond);
+                self.resolve_stmt(&mut if_.then)?;
+                if let Some(else_) = &mut if_.else_ {
                     self.resolve_stmt(else_)?;
                 }
             }
-            Stmt::Print(print) => self.resolve_expr(&print.value),
+            Stmt::Print(print) => self.resolve_expr(&mut print.value),
             Stmt::Return(return_) => {
-                if let Some(value) = &return_.value {
+                if let Some(value) = &mut return_.value {
                     self.resolve_expr(value);
                 }
             }
             Stmt::Var(var) => {
-                if let Some(value) = &var.value {
+                if let Some(value) = &mut var.value {
                     self.resolve_expr(value);
                 }
-                self.define(&var.name, span)?;
+                self.define(&var.var.name)?;
             }
             Stmt::While(while_) => {
-                self.resolve_expr(&while_.cond);
-                self.resolve_stmt(&while_.body)?;
+                self.resolve_expr(&mut while_.cond);
+                self.resolve_stmt(&mut while_.body)?;
             }
             Stmt::Error => unreachable!("interpreter started despite parsing errors"),
         }
         Ok(())
     }
 
-    fn resolve_expr(&mut self, expr_s: &ExprS) {
-        let (expr, span) = expr_s;
+    fn resolve_expr(&mut self, expr_s: &mut ExprS) {
+        let (expr, _) = expr_s;
         match expr {
             Expr::Assign(assign) => {
-                self.resolve_expr(&assign.value);
-                self.access(&assign.name, span);
+                self.resolve_expr(&mut assign.value);
+                self.access(&mut assign.var);
             }
             Expr::Call(call) => {
-                for arg in &call.args {
+                for arg in call.args.iter_mut() {
                     self.resolve_expr(arg);
                 }
-                self.resolve_expr(&call.callee);
+                self.resolve_expr(&mut call.callee);
             }
             Expr::Literal(_) => {}
             Expr::Infix(infix) => {
-                self.resolve_expr(&infix.lt);
-                self.resolve_expr(&infix.rt);
+                self.resolve_expr(&mut infix.lt);
+                self.resolve_expr(&mut infix.rt);
             }
             Expr::Prefix(prefix) => {
-                self.resolve_expr(&prefix.rt);
+                self.resolve_expr(&mut prefix.rt);
             }
-            Expr::Variable(var) => self.access(&var.name, span),
+            Expr::Var(var) => self.access(&mut var.var),
         }
     }
 
-    fn define(&mut self, name: &str, _span: &Span) -> Result<()> {
+    fn define(&mut self, name: &str) -> Result<()> {
         if self.scopes.len() == 0 {
             return Ok(());
         }
@@ -122,10 +120,10 @@ impl Resolver {
         Ok(())
     }
 
-    fn access(&mut self, name: &str, span: &Span) {
+    fn access(&mut self, var: &mut Var) {
         for (depth, scope) in self.scopes.iter_mut().rev().enumerate() {
-            if scope.contains(name) {
-                self.locals.insert(span.clone(), depth);
+            if scope.contains(&var.name) {
+                var.depth = Some(depth);
                 break;
             }
         }

@@ -1,7 +1,7 @@
 use crate::repl::{self, Prompt};
 
 use clap::Parser as Clap;
-use lox_interpreter::Interpreter;
+use lox_interpreter::{Interpreter, Resolver};
 use reedline::Signal;
 
 use std::fs;
@@ -39,12 +39,15 @@ pub fn repl() {
         match editor.read_line(&Prompt) {
             Ok(Signal::Success(line)) => {
                 let mut errors = Vec::new();
-                let program = lox_syntax::parse(&line, &mut errors);
+                let mut program = lox_syntax::parse(&line, &mut errors);
                 if !errors.is_empty() {
                     let mut buffer = termcolor::Buffer::ansi();
                     lox_interpreter::report_err(&mut buffer, &line, errors);
                     io::stderr().write_all(buffer.as_slice()).unwrap();
                     continue;
+                }
+                if let Err(e) = Resolver::default().resolve(&mut program) {
+                    println!("{e}")
                 }
                 if let Err(e) = interpreter.run(&program) {
                     println!("{e}")
