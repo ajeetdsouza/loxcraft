@@ -1,3 +1,9 @@
+// This grammar has been adapted from
+// https://craftinginterpreters.com/appendix-i.html#syntax-grammar.
+//
+// TODO: This grammar does not handle field access (foo.bar).
+// This is missing from ExprAssign and ExprCall (possibly others).
+
 use crate::{ast, lexer};
 
 use lalrpop_util::ParseError;
@@ -8,25 +14,26 @@ grammar<'err>(
 
 pub Program: ast::Program = <stmts:DeclS*> => ast::Program { <> };
 
+// Declarations
 DeclS = Spanned<Decl>;
 
 Decl = {
+    DeclClass,
     DeclFun,
     DeclVar,
     Stmt,
 }
 
-DeclFun: ast::Stmt =
-    "fun" <name:identifier> "(" <params:Params> ")" <body:StmtBlockInternal> =>
-        ast::Stmt::Fun(Box::new(ast::StmtFun { <> }));
+DeclClass: ast::Stmt =
+    "class" <name:identifier> <base:("<" <identifier>)?> "{" <methods:Function*> "}" =>
+        ast::Stmt::Class(ast::StmtClass { <> });
 
-DeclVar: ast::Stmt = {
-    "var" <name:identifier> "=" <value:ExprS> ";" =>
-        ast::Stmt::Var(ast::StmtVar { name, value: Some(value) }),
-    "var" <name:identifier> ";" =>
-        ast::Stmt::Var(ast::StmtVar { name, value: None }),
-};
+DeclFun: ast::Stmt = "fun" <function:Function> => ast::Stmt::Fun(Box::new(<>));
 
+DeclVar: ast::Stmt = "var" <name:identifier> <value:("=" <ExprS>)?> ";" =>
+    ast::Stmt::Var(ast::StmtVar { <> });
+
+// Statements
 // https://en.wikipedia.org/wiki/Dangling_else#Avoiding_the_conflict_in_LR_parsers
 Stmt: ast::Stmt = {
     StmtOpen,
@@ -59,20 +66,14 @@ StmtClosed: ast::Stmt = {
 }
 
 ForInit: Option<ast::StmtS> = {
-    <l:@L> <stmt:DeclVar> <r:@R> => Some((stmt, l..r)),
-    <l:@L> <stmt:StmtExpr> <r:@R> => Some((stmt, l..r)),
+    <Spanned<DeclVar>> => Some(<>),
+    <Spanned<StmtExpr>> => Some(<>),
     ";" => None,
 }
 
-ForCond: Option<ast::ExprS> = {
-    <ExprS> ";" => Some(<>),
-    ";" => None,
-}
+ForCond = <ExprS?> ";";
 
-ForIncr: Option<ast::ExprS> = {
-    <ExprS> => Some(<>),
-    () => None
-};
+ForIncr = <ExprS?>;
 
 StmtSimple = {
     StmtBlock,
@@ -86,15 +87,16 @@ StmtBlock: ast::Stmt = StmtBlockInternal => ast::Stmt::Block(<>);
 StmtBlockInternal: ast::StmtBlock = "{" <stmts:DeclS*> "}" =>
     ast::StmtBlock { <> };
 
-StmtExpr: ast::Stmt =
-    <value:ExprS> ";" => ast::Stmt::Expr(ast::StmtExpr { <> });
+StmtExpr: ast::Stmt = <value:ExprS> ";" =>
+    ast::Stmt::Expr(ast::StmtExpr { <> });
 
-StmtPrint: ast::Stmt =
-    "print" <value:ExprS> ";" => ast::Stmt::Print(ast::StmtPrint { <> });
+StmtPrint: ast::Stmt = "print" <value:ExprS> ";" =>
+    ast::Stmt::Print(ast::StmtPrint { <> });
 
-StmtReturn: ast::Stmt =
-    "return" <value:ExprS?> ";" => ast::Stmt::Return(ast::StmtReturn { <> });
+StmtReturn: ast::Stmt = "return" <value:ExprS?> ";" =>
+    ast::Stmt::Return(ast::StmtReturn { <> });
 
+// Expressions
 ExprS = Spanned<Expr>;
 
 Expr = ExprAssign;
@@ -171,6 +173,11 @@ ExprPrimary: ast::Expr = {
 
 // Utilities
 Spanned<T>: ast::Spanned<T> = <l:@L> <t:T> <r:@R> => (t, l..r);
+
+Function: ast::StmtFun =
+    <name:identifier> "(" <params:Params> ")" <body:StmtBlockInternal> =>
+        ast::StmtFun { <> };
+
 Params: Vec<String> = {
     <first:identifier> <rest:("," <identifier>)*> => {
         let mut params = Vec::with_capacity(1 + rest.len());
@@ -180,6 +187,7 @@ Params: Vec<String> = {
     },
     () => Vec::new(),
 };
+
 Args: Vec<ast::ExprS> = {
     <first:ExprS> <rest:("," <ExprS>)*> => {
         let mut args = Vec::with_capacity(1 + rest.len());
@@ -189,12 +197,12 @@ Args: Vec<ast::ExprS> = {
     },
     () => Vec::new(),
 }
+
 ExprInfix<Lt, Op, Rt>: ast::Expr = {
     <lt:Spanned<Lt>> <op:Op> <rt:Spanned<Rt>> =>
         ast::Expr::Infix(Box::new(ast::ExprInfix { <> })),
     Rt,
 }
-
 
 extern {
     type Location = usize;

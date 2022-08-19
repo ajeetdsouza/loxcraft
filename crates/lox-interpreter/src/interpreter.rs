@@ -43,6 +43,7 @@ impl<Stdout: Write> Interpreter<Stdout> {
                     self.run_stmt(env, stmt_s)?;
                 }
             }
+            Stmt::Class(class) => todo!(),
             Stmt::Expr(expr) => {
                 self.run_expr(env, &expr.value)?;
             }

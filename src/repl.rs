@@ -58,8 +58,8 @@ struct PaletteItem<'a> {
 // Since this color scheme makes use of both Red and LightRed, we replace
 // LightRed with LightCyan to better distinguish between the two.
 //
-// Also, we use the high-intensity variant of each color, because the standard
-// colors can be harder to read on some terminals.
+// Then, we replace each color with its high-intensity variant, since the
+// standard colors can be harder to read on some terminals.
 //
 const PALETTE: &[PaletteItem] = &[
     PaletteItem { name: "", fg: Color::LightGray },

@@ -491,7 +491,7 @@
         },
         {
           "type": "SYMBOL",
-          "name": "expr_attribute"
+          "name": "expr_field"
         }
       ]
     },
@@ -520,7 +520,7 @@
         ]
       }
     },
-    "expr_attribute": {
+    "expr_field": {
       "type": "PREC_LEFT",
       "value": 8,
       "content": {
@@ -540,7 +540,7 @@
           },
           {
             "type": "FIELD",
-            "name": "attribute",
+            "name": "field",
             "content": {
               "type": "SYMBOL",
               "name": "identifier"
@@ -971,13 +971,17 @@
         },
         {
           "type": "FIELD",
-          "name": "attribute",
+          "name": "field",
           "content": {
             "type": "SYMBOL",
             "name": "identifier"
           }
         }
       ]
+    },
+    "extends": {
+      "type": "STRING",
+      "value": "<"
     },
     "function": {
       "type": "SEQ",
@@ -1007,10 +1011,6 @@
           }
         }
       ]
-    },
-    "extends": {
-      "type": "STRING",
-      "value": "<"
     },
     "args": {
       "type": "SEQ",

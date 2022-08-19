@@ -15,6 +15,7 @@ pub struct Program {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Stmt {
     Block(StmtBlock),
+    Class(StmtClass),
     Expr(StmtExpr),
     For(Box<StmtFor>),
     Fun(Box<StmtFun>),
@@ -29,6 +30,13 @@ pub enum Stmt {
 #[derive(Clone, Debug, PartialEq)]
 pub struct StmtBlock {
     pub stmts: Vec<StmtS>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct StmtClass {
+    pub name: String,
+    pub base: Option<String>,
+    pub methods: Vec<StmtFun>,
 }
 
 /// An expression statement evaluates an expression and discards the result.

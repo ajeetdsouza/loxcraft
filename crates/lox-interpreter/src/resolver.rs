@@ -28,6 +28,7 @@ impl Resolver {
                 }
                 self.end_scope();
             }
+            Stmt::Class(class) => todo!(),
             Stmt::Expr(expr) => self.resolve_expr(&expr.value),
             Stmt::For(for_) => {
                 self.begin_scope();

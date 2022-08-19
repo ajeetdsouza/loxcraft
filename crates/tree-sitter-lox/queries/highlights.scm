@@ -79,24 +79,24 @@
 
 ; Method call
 (expr_call
-  callee: (expr_attribute
-    attribute: (identifier) @function
+  callee: (expr_field
+    field: (identifier) @function
   )
 )
 (expr_call
   callee: (expr_primary
     (super
-      attribute: (identifier) @function
+      field: (identifier) @function
     )
   )
 )
 
 ; Field access
-(expr_attribute
-  attribute: (identifier) @variable
+(expr_field
+  field: (identifier) @variable
 )
 (super
-  attribute: (identifier) @variable
+  field: (identifier) @variable
 )
 
 ; Variable
