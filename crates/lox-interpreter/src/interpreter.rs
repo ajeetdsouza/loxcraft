@@ -1,6 +1,6 @@
 use crate::env::Env;
 use crate::error::{Error, IoError, Result, SyntaxError, TypeError};
-use crate::object::{Callable, Function, Native, Object};
+use crate::object::{Callable, Class, Function, Native, Object};
 use crate::resolver::Resolver;
 
 use lox_syntax::ast::{Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Program, Span, Stmt, StmtS};
@@ -26,7 +26,8 @@ impl<Stdout: Write> Interpreter<Stdout> {
     }
 
     pub fn run(&mut self, program: &Program) -> Result<()> {
-        self.locals = Resolver::default().resolve(program)?;
+        // TODO: Ranges can be duplicated. Find another way to index.
+        self.locals.extend(Resolver::default().resolve(program)?);
         let env = &mut self.globals.clone();
         for stmt_s in &program.stmts {
             self.run_stmt(env, stmt_s)?;
@@ -35,7 +36,7 @@ impl<Stdout: Write> Interpreter<Stdout> {
     }
 
     fn run_stmt(&mut self, env: &mut Env, stmt_s: &StmtS) -> Result<()> {
-        let (stmt, _span) = stmt_s;
+        let (stmt, span) = stmt_s;
         match stmt {
             Stmt::Block(block) => {
                 let env = &mut Env::with_parent(env);
@@ -43,7 +44,10 @@ impl<Stdout: Write> Interpreter<Stdout> {
                     self.run_stmt(env, stmt_s)?;
                 }
             }
-            Stmt::Class(class) => todo!(),
+            Stmt::Class(class) => {
+                let object = Object::Class(Class { decl: class.clone() });
+                self.insert_var(env, &class.name, object);
+            }
             Stmt::Expr(expr) => {
                 self.run_expr(env, &expr.value)?;
             }

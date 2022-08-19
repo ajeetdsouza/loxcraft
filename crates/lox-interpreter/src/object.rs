@@ -1,13 +1,15 @@
 use crate::env::Env;
 
-use lox_syntax::ast::{Spanned, Stmt, StmtFun};
+use lox_syntax::ast::{Spanned, Stmt, StmtClass, StmtFun};
 
-use std::fmt::{self, Display, Formatter};
+use std::fmt::{self, Debug, Display, Formatter};
 
 #[derive(Clone, Debug)]
 pub enum Object {
     Bool(bool),
+    Class(Class),
     Function(Function),
+    Instance(Instance),
     Native(Native),
     Nil,
     Number(f64),
@@ -18,7 +20,9 @@ impl Display for Object {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Object::Bool(bool) => write!(f, "{}", bool),
+            Object::Class(class) => write!(f, "<class {}>", class.name()),
             Object::Function(function) => write!(f, "<function {}>", function.name()),
+            Object::Instance(instance) => write!(f, "<instance {}>", instance.class.name()),
             Object::Native(native) => write!(f, "<native {}>", native.name()),
             Object::Nil => write!(f, "nil"),
             Object::Number(number) => write!(f, "{}", number),
@@ -27,6 +31,7 @@ impl Display for Object {
     }
 }
 
+// TODO: verify how this works once everything is a pointer.
 impl PartialEq for Object {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -45,10 +50,12 @@ impl Object {
         !matches!(self, Object::Nil | Object::Bool(false))
     }
 
-    pub fn type_(&self) -> &'static str {
+    pub fn type_(&self) -> &str {
         match self {
             Object::Bool(_) => "bool",
+            Object::Class(_) => "class",
             Object::Function(_) | Object::Native(_) => "function",
+            Object::Instance(instance) => instance.class.name(),
             Object::Nil => "nil",
             Object::Number(_) => "number",
             Object::String(_) => "string",
@@ -61,10 +68,37 @@ pub trait Callable {
     fn name(&self) -> &str;
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
+pub struct Class {
+    pub decl: StmtClass,
+}
+
+impl Debug for Class {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "<class {}>", self.name())
+    }
+}
+
+impl Callable for Class {
+    fn arity(&self) -> usize {
+        0
+    }
+
+    fn name(&self) -> &str {
+        &self.decl.name
+    }
+}
+
+#[derive(Clone)]
 pub struct Function {
     pub decl: StmtFun,
     pub env: Env,
+}
+
+impl Debug for Function {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "<function {}>", self.name())
+    }
 }
 
 impl Callable for Function {
@@ -85,6 +119,11 @@ impl Function {
     pub fn stmts(&self) -> &[Spanned<Stmt>] {
         &self.decl.body.stmts
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct Instance {
+    pub class: Class,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
