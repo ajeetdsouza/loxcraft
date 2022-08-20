@@ -1,6 +1,7 @@
 use crate::env::Env;
 
 use lox_syntax::ast::{Spanned, Stmt, StmtClass, StmtFun};
+use rustc_hash::FxHashMap;
 
 use std::fmt::{self, Debug, Display, Formatter};
 
@@ -22,7 +23,7 @@ impl Display for Object {
             Object::Bool(bool) => write!(f, "{}", bool),
             Object::Class(class) => write!(f, "<class {}>", class.name()),
             Object::Function(function) => write!(f, "<function {}>", function.name()),
-            Object::Instance(instance) => write!(f, "<instance {}>", instance.class.name()),
+            Object::Instance(instance) => write!(f, "<object {}>", instance.class.name()),
             Object::Native(native) => write!(f, "<native {}>", native.name()),
             Object::Nil => write!(f, "nil"),
             Object::Number(number) => write!(f, "{}", number),
@@ -124,6 +125,13 @@ impl Function {
 #[derive(Clone, Debug)]
 pub struct Instance {
     pub class: Class,
+    pub fields: FxHashMap<String, Object>,
+}
+
+impl Instance {
+    pub fn get(&self, name: &str) -> Option<Object> {
+        self.fields.get(name).cloned()
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -1,6 +1,6 @@
 use crate::error::{Error, NameError, Result};
 
-use lox_syntax::ast::{Expr, ExprS, Program, Span, Stmt, StmtS, Var};
+use lox_syntax::ast::{Expr, ExprS, Program, Stmt, StmtS, Var};
 use rustc_hash::FxHashSet;
 
 #[derive(Debug, Default)]
@@ -17,7 +17,7 @@ impl Resolver {
     }
 
     fn resolve_stmt(&mut self, stmt_s: &mut StmtS) -> Result<()> {
-        let (stmt, span) = stmt_s;
+        let (stmt, _) = stmt_s;
         match stmt {
             Stmt::Block(block) => {
                 self.begin_scope();
@@ -93,6 +93,9 @@ impl Resolver {
                     self.resolve_expr(arg);
                 }
                 self.resolve_expr(&mut call.callee);
+            }
+            Expr::Get(get) => {
+                self.resolve_expr(&mut get.object);
             }
             Expr::Literal(_) => {}
             Expr::Infix(infix) => {

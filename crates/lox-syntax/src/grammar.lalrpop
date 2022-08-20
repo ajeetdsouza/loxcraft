@@ -159,6 +159,9 @@ ExprCall: ast::Expr = {
     <callee:Spanned<ExprCall>> "(" <args:Args> ")" => {
         ast::Expr::Call(Box::new(ast::ExprCall { callee, args }))
     },
+    <object:Spanned<ExprCall>> "." <name:identifier> => {
+        ast::Expr::Get(Box::new(ast::ExprGet { <> }))
+    },
     ExprPrimary,
 }
 

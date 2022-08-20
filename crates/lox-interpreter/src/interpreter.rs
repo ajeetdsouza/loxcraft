@@ -1,17 +1,11 @@
 use crate::env::Env;
-use crate::error::{Error, IoError, Result, SyntaxError, TypeError};
-use crate::object::{Callable, Class, Function, Native, Object};
-use crate::resolver::Resolver;
+use crate::error::{AttributeError, Error, IoError, Result, SyntaxError, TypeError};
+use crate::object::{Callable, Class, Function, Instance, Native, Object};
 
-use lox_syntax::ast::{
-    Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Program, Span, Stmt, StmtS, Var,
-};
+use lox_syntax::ast::{Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Program, Stmt, StmtS, Var};
 use rustc_hash::FxHashMap;
-
 use std::io::Write;
 use std::time::{SystemTime, UNIX_EPOCH};
-
-pub type Locals = FxHashMap<Span, usize>;
 
 #[derive(Debug)]
 pub struct Interpreter<Stdout> {
@@ -36,7 +30,7 @@ impl<Stdout: Write> Interpreter<Stdout> {
     }
 
     fn run_stmt(&mut self, env: &mut Env, stmt_s: &StmtS) -> Result<()> {
-        let (stmt, span) = stmt_s;
+        let (stmt, _) = stmt_s;
         match stmt {
             Stmt::Block(block) => {
                 let env = &mut Env::with_parent(env);
@@ -124,8 +118,25 @@ impl<Stdout: Write> Interpreter<Stdout> {
                     .map(|arg| self.run_expr(env, arg))
                     .collect::<Result<Vec<_>>>()?;
                 let callee = self.run_expr(env, &call.callee)?;
-
+                // TODO: move this to a Callable trait.
                 match callee {
+                    Object::Class(class) => {
+                        let exp_args = class.arity();
+                        let got_args = args.len();
+                        if exp_args != got_args {
+                            Err(Error::TypeError(TypeError::ArityMismatch {
+                                name: class.name().to_string(),
+                                exp_args,
+                                got_args,
+                            }))
+                        } else {
+                            let instance = Object::Instance(Instance {
+                                class: class.clone(),
+                                fields: FxHashMap::default(),
+                            });
+                            Ok(instance)
+                        }
+                    }
                     Object::Function(function) => {
                         let exp_args = function.arity();
                         let got_args = args.len();
@@ -177,6 +188,19 @@ impl<Stdout: Write> Interpreter<Stdout> {
                         type_: callee.type_().to_string(),
                     })),
                 }
+            }
+            Expr::Get(get) => {
+                let object = self.run_expr(env, &get.object)?;
+                let value = match &object {
+                    Object::Instance(instance) => instance.get(&get.name),
+                    _ => None,
+                };
+                value.ok_or_else(|| {
+                    Error::AttributeError(AttributeError::NoSuchAttribute {
+                        object: object.type_().to_string(),
+                        name: get.name.to_string(),
+                    })
+                })
             }
             Expr::Infix(infix) => {
                 let lt = self.run_expr(env, &infix.lt)?;

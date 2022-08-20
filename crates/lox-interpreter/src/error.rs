@@ -10,6 +10,8 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("AttributeError: {0}")]
+    AttributeError(AttributeError),
     #[error("IOError: {0}")]
     IoError(IoError),
     #[error("NameError: {0}")]
@@ -18,6 +20,12 @@ pub enum Error {
     SyntaxError(SyntaxError),
     #[error("TypeError: {0}")]
     TypeError(TypeError),
+}
+
+#[derive(Debug, Error)]
+pub enum AttributeError {
+    #[error("{:?} object has no attribute {:?}", object, name)]
+    NoSuchAttribute { object: String, name: String },
 }
 
 #[derive(Debug, Error)]

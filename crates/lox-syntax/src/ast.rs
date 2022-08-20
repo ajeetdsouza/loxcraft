@@ -93,6 +93,7 @@ pub struct StmtWhile {
 pub enum Expr {
     Assign(Box<ExprAssign>),
     Call(Box<ExprCall>),
+    Get(Box<ExprGet>),
     Literal(ExprLiteral),
     Infix(Box<ExprInfix>),
     Prefix(Box<ExprPrefix>),
@@ -109,6 +110,12 @@ pub struct ExprAssign {
 pub struct ExprCall {
     pub callee: ExprS,
     pub args: Vec<ExprS>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ExprGet {
+    pub object: ExprS,
+    pub name: String,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -186,6 +193,13 @@ impl Display for OpPrefix {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct ExprSet {
+    pub object: ExprS,
+    pub name: String,
+    pub value: ExprS,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ExprVar {
     pub var: Var,
@@ -194,5 +208,7 @@ pub struct ExprVar {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Var {
     pub name: String,
+    /// This field is initialized as [`None`] by the parser, and is later filled
+    /// by the resolver.
     pub depth: Option<usize>,
 }
