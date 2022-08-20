@@ -1,6 +1,6 @@
 use crate::error::{Error, NameError, Result};
 
-use lox_syntax::ast::{Expr, ExprS, Program, Stmt, StmtS, Var};
+use lox_syntax::ast::{Expr, ExprS, Program, Stmt, StmtFun, StmtS, Var};
 use rustc_hash::FxHashSet;
 
 #[derive(Debug, Default)]
@@ -26,7 +26,15 @@ impl Resolver {
                 }
                 self.end_scope();
             }
-            Stmt::Class(class) => self.define(&class.name)?,
+            Stmt::Class(class) => {
+                self.define(&class.name)?;
+                self.begin_scope();
+                self.define("this")?;
+                for method in class.methods.iter_mut() {
+                    self.resolve_fun(method)?;
+                }
+                self.end_scope();
+            }
             Stmt::Expr(expr) => self.resolve_expr(&mut expr.value),
             Stmt::For(for_) => {
                 self.begin_scope();
@@ -62,8 +70,8 @@ impl Resolver {
             }
             Stmt::Print(print) => self.resolve_expr(&mut print.value),
             Stmt::Return(return_) => {
-                if let Some(value) = &mut return_.value {
-                    self.resolve_expr(value);
+                if let Some(value_s) = &mut return_.value {
+                    self.resolve_expr(value_s);
                 }
             }
             Stmt::Var(var) => {
@@ -105,8 +113,25 @@ impl Resolver {
             Expr::Prefix(prefix) => {
                 self.resolve_expr(&mut prefix.rt);
             }
+            Expr::Set(set) => {
+                self.resolve_expr(&mut set.value);
+                self.resolve_expr(&mut set.object);
+            }
             Expr::Var(var) => self.access(&mut var.var),
         }
+    }
+
+    fn resolve_fun(&mut self, fun: &mut StmtFun) -> Result<()> {
+        self.define(&fun.name)?;
+        self.begin_scope();
+        for param in &fun.params {
+            self.define(param)?;
+        }
+        for stmt_s in fun.body.stmts.iter_mut() {
+            self.resolve_stmt(stmt_s)?;
+        }
+        self.end_scope();
+        Ok(())
     }
 
     fn define(&mut self, name: &str) -> Result<()> {

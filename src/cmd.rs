@@ -31,7 +31,7 @@ impl Cmd {
 }
 
 pub fn repl() {
-    let stdout = io::stdout();
+    let stdout = Box::new(io::stdout());
     let mut interpreter = Interpreter::new(stdout);
     let mut editor = repl::editor().unwrap();
 

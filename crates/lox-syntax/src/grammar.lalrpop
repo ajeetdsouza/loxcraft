@@ -110,6 +110,8 @@ ExprAssign = {
             var: ast::Var { name, depth: None },
             value,
         })),
+    <object:Spanned<ExprCall>> "." <name:identifier> "=" <value:ExprS> =>
+        ast::Expr::Set(Box::new(ast::ExprSet { <> })),
     ExprLogicOr,
 }
 
@@ -176,6 +178,10 @@ ExprPrimary: ast::Expr = {
     // Variables
     <name:identifier> =>
         ast::Expr::Var(ast::ExprVar { var: ast::Var { name, depth: None } }),
+    "this" => ast::Expr::Var(ast::ExprVar { var: ast::Var {
+        name: "this".to_string(),
+        depth: None,
+    }}),
 
     // Grouping
     "(" <Expr> ")",

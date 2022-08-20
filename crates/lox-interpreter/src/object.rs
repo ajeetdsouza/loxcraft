@@ -1,16 +1,21 @@
 use crate::env::Env;
+use crate::error::{AttributeError, Error, Result, SyntaxError, TypeError};
+use crate::Interpreter;
 
 use lox_syntax::ast::{Spanned, Stmt, StmtClass, StmtFun};
 use rustc_hash::FxHashMap;
 
+use std::cell::RefCell;
 use std::fmt::{self, Debug, Display, Formatter};
+use std::rc::Rc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Debug)]
 pub enum Object {
     Bool(bool),
     Class(Class),
     Function(Function),
-    Instance(Instance),
+    Instance(Rc<RefCell<Instance>>),
     Native(Native),
     Nil,
     Number(f64),
@@ -23,7 +28,7 @@ impl Display for Object {
             Object::Bool(bool) => write!(f, "{}", bool),
             Object::Class(class) => write!(f, "<class {}>", class.name()),
             Object::Function(function) => write!(f, "<function {}>", function.name()),
-            Object::Instance(instance) => write!(f, "<object {}>", instance.class.name()),
+            Object::Instance(instance) => write!(f, "<object {}>", instance.borrow().class.name()),
             Object::Native(native) => write!(f, "<native {}>", native.name()),
             Object::Nil => write!(f, "nil"),
             Object::Number(number) => write!(f, "{}", number),
@@ -51,27 +56,104 @@ impl Object {
         !matches!(self, Object::Nil | Object::Bool(false))
     }
 
-    pub fn type_(&self) -> &str {
+    pub fn type_(&self) -> String {
         match self {
-            Object::Bool(_) => "bool",
-            Object::Class(_) => "class",
-            Object::Function(_) | Object::Native(_) => "function",
-            Object::Instance(instance) => instance.class.name(),
-            Object::Nil => "nil",
-            Object::Number(_) => "number",
-            Object::String(_) => "string",
+            Object::Bool(_) => "bool".to_string(),
+            Object::Class(_) => "class".to_string(),
+            Object::Function(_) | Object::Native(_) => "function".to_string(),
+            Object::Instance(instance) => instance.borrow().class.name().to_string(),
+            Object::Nil => "nil".to_string(),
+            Object::Number(_) => "number".to_string(),
+            Object::String(_) => "string".to_string(),
         }
+    }
+
+    pub fn get(&self, name: &str) -> Result<Object> {
+        let instance = match &self {
+            Object::Instance(instance) => instance.borrow(),
+            _ => {
+                return Err(Error::AttributeError(AttributeError::NoSuchAttribute {
+                    object: self.type_().to_string(),
+                    name: name.to_string(),
+                }))
+            }
+        };
+
+        if let Some(object) = instance.fields.get(name) {
+            return Ok(object.clone());
+        }
+
+        let method = instance.class.methods.get(name).ok_or_else(|| {
+            Error::AttributeError(AttributeError::NoSuchAttribute {
+                object: self.type_().to_string(),
+                name: name.to_string(),
+            })
+        })?;
+        let object = Object::Function(method.bind(self.clone()));
+        Ok(object)
+    }
+
+    pub fn set(&mut self, name: &str, value: &Object) -> Result<()> {
+        match &self {
+            Object::Instance(instance) => {
+                instance.borrow_mut().fields.insert(name.to_string(), value.clone());
+                Ok(())
+            }
+            _ => Err(Error::AttributeError(AttributeError::NoSuchAttribute {
+                object: self.type_().to_string(),
+                name: name.to_string(),
+            })),
+        }
+    }
+
+    pub fn call(
+        &self,
+        interpreter: &mut Interpreter,
+        env: &mut Env,
+        args: Vec<Object>,
+    ) -> Result<Object> {
+        let callable: Box<dyn Callable> = match &self {
+            Object::Class(class) => Box::new(class.clone()),
+            Object::Function(function) => Box::new(function.clone()),
+            Object::Native(native) => Box::new(native.clone()),
+            object => {
+                return Err(Error::TypeError(TypeError::NotCallable {
+                    type_: object.type_().to_string(),
+                }))
+            }
+        };
+
+        let exp_args = callable.arity();
+        let got_args = args.len();
+        if exp_args != got_args {
+            return Err(Error::TypeError(TypeError::ArityMismatch {
+                name: callable.name().to_string(),
+                exp_args,
+                got_args,
+            }));
+        }
+
+        callable.call_unchecked(interpreter, env, args)
     }
 }
 
 pub trait Callable {
     fn arity(&self) -> usize;
+
     fn name(&self) -> &str;
+
+    fn call_unchecked(
+        &self,
+        interpreter: &mut Interpreter,
+        env: &mut Env,
+        args: Vec<Object>,
+    ) -> Result<Object>;
 }
 
 #[derive(Clone)]
 pub struct Class {
     pub decl: StmtClass,
+    pub methods: FxHashMap<String, Function>,
 }
 
 impl Debug for Class {
@@ -82,11 +164,41 @@ impl Debug for Class {
 
 impl Callable for Class {
     fn arity(&self) -> usize {
-        0
+        match self.methods.get("init") {
+            Some(function) => function.arity(),
+            None => 0,
+        }
     }
 
     fn name(&self) -> &str {
         &self.decl.name
+    }
+
+    fn call_unchecked(
+        &self,
+        interpreter: &mut Interpreter,
+        env: &mut Env,
+        args: Vec<Object>,
+    ) -> Result<Object> {
+        let instance = Object::Instance(Rc::new(RefCell::new(Instance {
+            class: self.clone(),
+            fields: FxHashMap::default(),
+        })));
+        if let Ok(init) = instance.get("init") {
+            match init {
+                Object::Function(function) => {
+                    let constructor = Object::Function(function.bind(instance.clone()));
+                    constructor.call(interpreter, env, args)?;
+                }
+                _ => unreachable!(
+                    "expected {:?} of type {:?}, found {:?} instead",
+                    "init",
+                    "function",
+                    init.type_()
+                ),
+            }
+        }
+        Ok(instance)
     }
 }
 
@@ -110,6 +222,47 @@ impl Callable for Function {
     fn name(&self) -> &str {
         &self.decl.name
     }
+
+    fn call_unchecked(
+        &self,
+        interpreter: &mut Interpreter,
+        _env: &mut Env,
+        args: Vec<Object>,
+    ) -> Result<Object> {
+        let env = &mut Env::with_parent(&self.env);
+        for (param, arg) in self.params().iter().zip(args) {
+            interpreter.insert_var(env, param, arg);
+        }
+        for stmt_s in self.stmts().iter() {
+            match interpreter.run_stmt(env, stmt_s) {
+                Err(Error::SyntaxError(SyntaxError::ReturnOutsideFunction { object, .. })) => {
+                    return if self.is_init() {
+                        match object {
+                            Object::Nil => Ok(self.env.get("this").unwrap_or_else(|_| {
+                                unreachable!(
+                                    "{:?} not present inside {:?} function",
+                                    "this", "init"
+                                )
+                            })),
+                            _ => Err(Error::TypeError(TypeError::InitInvalidReturnType {
+                                type_: object.type_().to_string(),
+                            })),
+                        }
+                    } else {
+                        Ok(object)
+                    };
+                }
+                result => result?,
+            }
+        }
+        Ok(if self.is_init() {
+            self.env.get("this").unwrap_or_else(|_| {
+                unreachable!("{:?} not present inside {:?} function", "this", "init")
+            })
+        } else {
+            Object::Nil
+        })
+    }
 }
 
 impl Function {
@@ -120,18 +273,23 @@ impl Function {
     pub fn stmts(&self) -> &[Spanned<Stmt>] {
         &self.decl.body.stmts
     }
+
+    pub fn bind(&self, this: Object) -> Function {
+        let mut env = Env::with_parent(&self.env);
+        env.insert_unchecked("this", this);
+        Function { decl: self.decl.clone(), env }
+    }
+
+    /// Checks if the function is a constructor.
+    pub fn is_init(&self) -> bool {
+        self.env.contains("this") && self.name() == "init"
+    }
 }
 
 #[derive(Clone, Debug)]
 pub struct Instance {
     pub class: Class,
     pub fields: FxHashMap<String, Object>,
-}
-
-impl Instance {
-    pub fn get(&self, name: &str) -> Option<Object> {
-        self.fields.get(name).cloned()
-    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -149,6 +307,22 @@ impl Callable for Native {
     fn name(&self) -> &str {
         match self {
             Native::Clock => "clock",
+        }
+    }
+
+    fn call_unchecked(
+        &self,
+        _interpreter: &mut Interpreter,
+        _env: &mut Env,
+        _args: Vec<Object>,
+    ) -> Result<Object> {
+        match self {
+            Native::Clock => {
+                let now =
+                    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis()
+                        as f64;
+                Ok(Object::Number(now / 1000.0))
+            }
         }
     }
 }

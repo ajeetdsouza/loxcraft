@@ -15,6 +15,10 @@ impl Env {
         Self(Rc::new(RefCell::new(node)))
     }
 
+    pub fn contains(&self, name: &str) -> bool {
+        self.0.borrow().contains(name)
+    }
+
     pub fn get(&self, name: &str) -> Result<Object> {
         self.0.borrow().get(name)
     }
@@ -45,6 +49,10 @@ struct EnvNode {
 impl EnvNode {
     fn with_parent(parent: Rc<RefCell<EnvNode>>) -> Self {
         Self { map: FxHashMap::default(), parent: Some(parent) }
+    }
+
+    fn contains(&self, name: &str) -> bool {
+        self.map.contains_key(name)
     }
 
     fn get(&self, name: &str) -> Result<Object> {

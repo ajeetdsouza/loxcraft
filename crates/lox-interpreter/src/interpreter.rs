@@ -1,23 +1,21 @@
 use crate::env::Env;
-use crate::error::{AttributeError, Error, IoError, Result, SyntaxError, TypeError};
-use crate::object::{Callable, Class, Function, Instance, Native, Object};
+use crate::error::{Error, IoError, Result, SyntaxError, TypeError};
+use crate::object::{Class, Function, Native, Object};
 
 use lox_syntax::ast::{Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Program, Stmt, StmtS, Var};
-use rustc_hash::FxHashMap;
-use std::io::Write;
-use std::time::{SystemTime, UNIX_EPOCH};
 
-#[derive(Debug)]
-pub struct Interpreter<Stdout> {
+use std::io::Write;
+
+pub struct Interpreter {
     globals: Env,
-    stdout: Stdout,
+    stdout: Box<dyn Write>,
 }
 
-impl<Stdout: Write> Interpreter<Stdout> {
-    pub fn new(stdout: Stdout) -> Self {
+impl Interpreter {
+    pub fn new(stdout: Box<dyn Write>) -> Self {
         let mut globals = Env::default();
         globals.insert_unchecked("clock", Object::Native(Native::Clock));
-        Self { globals, stdout }
+        Self { globals, stdout: Box::new(stdout) }
     }
 
     pub fn run(&mut self, program: &Program) -> Result<()> {
@@ -29,7 +27,7 @@ impl<Stdout: Write> Interpreter<Stdout> {
         Ok(())
     }
 
-    fn run_stmt(&mut self, env: &mut Env, stmt_s: &StmtS) -> Result<()> {
+    pub fn run_stmt(&mut self, env: &mut Env, stmt_s: &StmtS) -> Result<()> {
         let (stmt, _) = stmt_s;
         match stmt {
             Stmt::Block(block) => {
@@ -39,7 +37,14 @@ impl<Stdout: Write> Interpreter<Stdout> {
                 }
             }
             Stmt::Class(class) => {
-                let object = Object::Class(Class { decl: class.clone() });
+                let methods = class
+                    .methods
+                    .iter()
+                    .map(|decl| {
+                        (decl.name.to_string(), Function { decl: decl.clone(), env: env.clone() })
+                    })
+                    .collect();
+                let object = Object::Class(Class { decl: class.clone(), methods });
                 self.insert_var(env, &class.name, object);
             }
             Stmt::Expr(expr) => {
@@ -118,89 +123,11 @@ impl<Stdout: Write> Interpreter<Stdout> {
                     .map(|arg| self.run_expr(env, arg))
                     .collect::<Result<Vec<_>>>()?;
                 let callee = self.run_expr(env, &call.callee)?;
-                // TODO: move this to a Callable trait.
-                match callee {
-                    Object::Class(class) => {
-                        let exp_args = class.arity();
-                        let got_args = args.len();
-                        if exp_args != got_args {
-                            Err(Error::TypeError(TypeError::ArityMismatch {
-                                name: class.name().to_string(),
-                                exp_args,
-                                got_args,
-                            }))
-                        } else {
-                            let instance = Object::Instance(Instance {
-                                class: class.clone(),
-                                fields: FxHashMap::default(),
-                            });
-                            Ok(instance)
-                        }
-                    }
-                    Object::Function(function) => {
-                        let exp_args = function.arity();
-                        let got_args = args.len();
-                        if exp_args != got_args {
-                            Err(Error::TypeError(TypeError::ArityMismatch {
-                                name: function.name().to_string(),
-                                exp_args,
-                                got_args,
-                            }))
-                        } else {
-                            let env = &mut Env::with_parent(&function.env);
-                            for (param, arg) in function.params().iter().zip(args) {
-                                self.insert_var(env, param, arg);
-                            }
-                            for stmt_s in function.stmts().iter() {
-                                match self.run_stmt(env, stmt_s) {
-                                    Err(Error::SyntaxError(
-                                        SyntaxError::ReturnOutsideFunction { object, .. },
-                                    )) => return Ok(object),
-                                    result => result?,
-                                }
-                            }
-                            Ok(Object::Nil)
-                        }
-                    }
-                    Object::Native(native) => {
-                        let exp_args = native.arity();
-                        let got_args = args.len();
-                        if exp_args != got_args {
-                            Err(Error::TypeError(TypeError::ArityMismatch {
-                                name: native.name().to_string(),
-                                exp_args,
-                                got_args,
-                            }))
-                        } else {
-                            match native {
-                                Native::Clock => {
-                                    let now = SystemTime::now()
-                                        .duration_since(UNIX_EPOCH)
-                                        .unwrap_or_default()
-                                        .as_millis()
-                                        as f64;
-                                    Ok(Object::Number(now / 1000.0))
-                                }
-                            }
-                        }
-                    }
-                    _ => Err(Error::TypeError(TypeError::NotCallable {
-                        type_: callee.type_().to_string(),
-                    })),
-                }
+                callee.call(self, env, args)
             }
             Expr::Get(get) => {
                 let object = self.run_expr(env, &get.object)?;
-                let value = match &object {
-                    Object::Instance(instance) => instance.get(&get.name),
-                    _ => None,
-                };
-                value.ok_or_else(|| {
-                    Error::AttributeError(AttributeError::NoSuchAttribute {
-                        object: object.type_().to_string(),
-                        name: get.name.to_string(),
-                    })
-                })
+                object.get(&get.name)
             }
             Expr::Infix(infix) => {
                 let lt = self.run_expr(env, &infix.lt)?;
@@ -270,6 +197,12 @@ impl<Stdout: Write> Interpreter<Stdout> {
                     OpPrefix::Not => Ok(Object::Bool(!rt.bool())),
                 }
             }
+            Expr::Set(set) => {
+                let value = self.run_expr(env, &set.value)?;
+                let mut object = self.run_expr(env, &set.object)?;
+                object.set(&set.name, &value)?;
+                Ok(value)
+            }
             Expr::Var(var) => self.get_var(env, &var.var),
         }
     }
@@ -292,7 +225,7 @@ impl<Stdout: Write> Interpreter<Stdout> {
         }
     }
 
-    fn insert_var(&self, env: &mut Env, name: &str, value: Object) {
+    pub fn insert_var(&self, env: &mut Env, name: &str, value: Object) {
         env.insert_unchecked(name, value);
     }
 }

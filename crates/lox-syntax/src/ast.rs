@@ -97,6 +97,7 @@ pub enum Expr {
     Literal(ExprLiteral),
     Infix(Box<ExprInfix>),
     Prefix(Box<ExprPrefix>),
+    Set(Box<ExprSet>),
     Var(ExprVar),
 }
 

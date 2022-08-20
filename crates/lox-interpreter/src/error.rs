@@ -44,7 +44,7 @@ pub enum NameError {
 
 #[derive(Debug, Error)]
 pub enum SyntaxError {
-    #[error("\"return\" outside function")]
+    #[error(r#""return" outside function"#)]
     ReturnOutsideFunction { object: Object },
 }
 
@@ -52,6 +52,8 @@ pub enum SyntaxError {
 pub enum TypeError {
     #[error("{name}() takes {exp_args} arguments but {got_args} were given")]
     ArityMismatch { name: String, exp_args: usize, got_args: usize },
+    #[error(r#"init() should return "nil", not "{type_}""#)]
+    InitInvalidReturnType { type_: String },
     #[error("{:?} object is not callable", type_)]
     NotCallable { type_: String },
     #[error("unsupported operand type(s) for {}: {:?}", op, rt_type)]
