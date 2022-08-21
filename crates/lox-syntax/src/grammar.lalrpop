@@ -25,7 +25,7 @@ Decl = {
 }
 
 DeclClass: ast::Stmt =
-    "class" <name:identifier> <base:("<" <identifier>)?> "{" <methods:Function*> "}" =>
+    "class" <name:identifier> <super_:("<" <Spanned<ExprVar>>)?> "{" <methods:Function*> "}" =>
         ast::Stmt::Class(ast::StmtClass { <> });
 
 DeclFun: ast::Stmt = "fun" <function:Function> => ast::Stmt::Fun(Box::new(<>));
@@ -112,6 +112,8 @@ ExprAssign = {
         })),
     <object:Spanned<ExprCall>> "." <name:identifier> "=" <value:ExprS> =>
         ast::Expr::Set(Box::new(ast::ExprSet { <> })),
+    <object:Spanned<ExprSuper>> "." <name:identifier> "=" <value:ExprS> =>
+        ast::Expr::Set(Box::new(ast::ExprSet { <> })),
     ExprLogicOr,
 }
 
@@ -158,12 +160,12 @@ OpPrefix: ast::OpPrefix = {
 }
 
 ExprCall: ast::Expr = {
-    <callee:Spanned<ExprCall>> "(" <args:Args> ")" => {
-        ast::Expr::Call(Box::new(ast::ExprCall { callee, args }))
-    },
-    <object:Spanned<ExprCall>> "." <name:identifier> => {
-        ast::Expr::Get(Box::new(ast::ExprGet { <> }))
-    },
+    <callee:Spanned<ExprCall>> "(" <args:Args> ")" =>
+        ast::Expr::Call(Box::new(ast::ExprCall { callee, args })),
+    <object:Spanned<ExprCall>> "." <name:identifier> =>
+        ast::Expr::Get(Box::new(ast::ExprGet { <> })),
+    <object:Spanned<ExprSuper>> "." <name:identifier> =>
+        ast::Expr::Get(Box::new(ast::ExprGet { <> })),
     ExprPrimary,
 }
 
@@ -176,16 +178,23 @@ ExprPrimary: ast::Expr = {
     number => ast::Expr::Literal(ast::ExprLiteral::Number(<>)),
 
     // Variables
-    <name:identifier> =>
-        ast::Expr::Var(ast::ExprVar { var: ast::Var { name, depth: None } }),
-    "this" => ast::Expr::Var(ast::ExprVar { var: ast::Var {
-        name: "this".to_string(),
-        depth: None,
-    }}),
+    ExprVar,
+    ExprThis,
 
     // Grouping
     "(" <Expr> ")",
 }
+
+ExprVar: ast::Expr = <name:identifier> =>
+    ast::Expr::Var(ast::ExprVar { var: ast::Var { name, depth: None } });
+ExprSuper: ast::Expr = "super" => ast::Expr::Var(ast::ExprVar { var: ast::Var {
+    name: "super".to_string(),
+    depth: None,
+}});
+ExprThis: ast::Expr = "this" => ast::Expr::Var(ast::ExprVar { var: ast::Var {
+    name: "this".to_string(),
+    depth: None,
+}});
 
 // Utilities
 Spanned<T>: ast::Spanned<T> = <l:@L> <t:T> <r:@R> => (t, l..r);

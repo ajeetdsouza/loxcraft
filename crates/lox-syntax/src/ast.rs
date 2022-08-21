@@ -35,7 +35,7 @@ pub struct StmtBlock {
 #[derive(Clone, Debug, PartialEq)]
 pub struct StmtClass {
     pub name: String,
-    pub base: Option<String>,
+    pub super_: Option<ExprS>,
     pub methods: Vec<StmtFun>,
 }
 

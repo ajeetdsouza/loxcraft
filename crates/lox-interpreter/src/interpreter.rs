@@ -1,5 +1,6 @@
 use crate::env::Env;
 use crate::error::{Error, IoError, Result, SyntaxError, TypeError};
+use crate::interpreter;
 use crate::object::{Class, Function, Native, Object};
 
 use lox_syntax::ast::{Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Program, Stmt, StmtS, Var};
@@ -37,14 +38,39 @@ impl Interpreter {
                 }
             }
             Stmt::Class(class) => {
-                let methods = class
-                    .methods
-                    .iter()
-                    .map(|decl| {
-                        (decl.name.to_string(), Function { decl: decl.clone(), env: env.clone() })
-                    })
-                    .collect();
-                let object = Object::Class(Class { decl: class.clone(), methods });
+                let super_ = match &class.super_ {
+                    Some(super_) => {
+                        let super_ = match self.run_expr(env, super_)? {
+                            Object::Class(super_) => super_,
+                            object => {
+                                return Err(Error::TypeError(TypeError::SuperclassInvalidType {
+                                    type_: object.type_(),
+                                }))
+                            }
+                        };
+                        Some(Box::new(super_))
+                    }
+                    None => None,
+                };
+
+                let methods = {
+                    let mut env = env.clone();
+                    if let Some(super_) = &super_ {
+                        env = Env::with_parent(&mut env);
+                        env.insert_unchecked("super", Object::Class(*super_.clone()));
+                    };
+                    class
+                        .methods
+                        .iter()
+                        .map(|decl| {
+                            (
+                                decl.name.to_string(),
+                                Function { decl: decl.clone(), env: env.clone() },
+                            )
+                        })
+                        .collect()
+                };
+                let object = Object::Class(Class { decl: class.clone(), super_, methods });
                 self.insert_var(env, &class.name, object);
             }
             Stmt::Expr(expr) => {

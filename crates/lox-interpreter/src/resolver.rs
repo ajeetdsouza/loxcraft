@@ -27,6 +27,11 @@ impl Resolver {
                 self.end_scope();
             }
             Stmt::Class(class) => {
+                if let Some(super_) = &mut class.super_ {
+                    self.begin_scope();
+                    self.define("super")?;
+                    self.resolve_expr(super_);
+                }
                 self.define(&class.name)?;
                 self.begin_scope();
                 self.define("this")?;
@@ -34,6 +39,9 @@ impl Resolver {
                     self.resolve_fun(method)?;
                 }
                 self.end_scope();
+                if class.super_.is_some() {
+                    self.end_scope();
+                }
             }
             Stmt::Expr(expr) => self.resolve_expr(&mut expr.value),
             Stmt::For(for_) => {

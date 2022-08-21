@@ -56,6 +56,8 @@ pub enum TypeError {
     InitInvalidReturnType { type_: String },
     #[error("{:?} object is not callable", type_)]
     NotCallable { type_: String },
+    #[error(r#"superclass should be of type "class", not "{type_}""#)]
+    SuperclassInvalidType { type_: String },
     #[error("unsupported operand type(s) for {}: {:?}", op, rt_type)]
     UnsupportedOperandPrefix { op: String, rt_type: String },
     #[error("unsupported operand type(s) for {}: {:?} and {:?}", op, lt_type, rt_type)]

@@ -83,14 +83,22 @@ impl Object {
             return Ok(object.clone());
         }
 
-        let method = instance.class.methods.get(name).ok_or_else(|| {
-            Error::AttributeError(AttributeError::NoSuchAttribute {
-                object: self.type_().to_string(),
-                name: name.to_string(),
-            })
-        })?;
-        let object = Object::Function(method.bind(self.clone()));
-        Ok(object)
+        if let Some(method) = instance.class.methods.get(name) {
+            let object = Object::Function(method.bind(self.clone()));
+            return Ok(object);
+        }
+
+        if let Some(super_) = &instance.class.super_ {
+            if let Some(method) = super_.methods.get(name) {
+                let object = Object::Function(method.bind(self.clone()));
+                return Ok(object);
+            }
+        }
+
+        Err(Error::AttributeError(AttributeError::NoSuchAttribute {
+            object: self.type_().to_string(),
+            name: name.to_string(),
+        }))
     }
 
     pub fn set(&mut self, name: &str, value: &Object) -> Result<()> {
@@ -153,6 +161,7 @@ pub trait Callable {
 #[derive(Clone)]
 pub struct Class {
     pub decl: StmtClass,
+    pub super_: Option<Box<Class>>,
     pub methods: FxHashMap<String, Function>,
 }
 
