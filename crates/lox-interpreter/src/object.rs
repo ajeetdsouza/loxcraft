@@ -2,6 +2,7 @@ use crate::env::Env;
 use crate::Interpreter;
 
 use lox_common::error::{AttributeError, Error, Result, SyntaxError, TypeError};
+use lox_common::types::Span;
 use lox_syntax::ast::{Spanned, Stmt, StmtClass, StmtFun};
 use rustc_hash::FxHashMap;
 
@@ -68,13 +69,14 @@ impl Object {
         }
     }
 
-    pub fn get(&self, name: &str) -> Result<Object> {
+    pub fn get(&self, name: &str, span: &Span) -> Result<Object> {
         let instance = match &self {
             Object::Instance(instance) => instance.borrow(),
             _ => {
                 return Err(Error::AttributeError(AttributeError::NoSuchAttribute {
                     type_: self.type_().to_string(),
                     name: name.to_string(),
+                    span: span.clone(),
                 }))
             }
         };
@@ -83,10 +85,16 @@ impl Object {
             return Ok(object.clone());
         }
 
-        instance.class.get_method(name, self.clone())
+        instance.class.method(name, self.clone()).ok_or_else(|| {
+            Error::AttributeError(AttributeError::NoSuchAttribute {
+                type_: self.type_().to_string(),
+                name: name.to_string(),
+                span: span.clone(),
+            })
+        })
     }
 
-    pub fn set(&mut self, name: &str, value: &Object) -> Result<()> {
+    pub fn set(&mut self, name: &str, value: &Object, span: &Span) -> Result<()> {
         match &self {
             Object::Instance(instance) => {
                 instance.borrow_mut().fields.insert(name.to_string(), value.clone());
@@ -95,6 +103,7 @@ impl Object {
             _ => Err(Error::AttributeError(AttributeError::NoSuchAttribute {
                 type_: self.type_().to_string(),
                 name: name.to_string(),
+                span: span.clone(),
             })),
         }
     }
@@ -104,14 +113,16 @@ impl Object {
         interpreter: &mut Interpreter,
         env: &mut Env,
         args: Vec<Object>,
+        span: &Span,
     ) -> Result<Object> {
         match &self {
-            Object::Class(class) => class.call(interpreter, env, args),
-            Object::Function(function) => function.call(interpreter, env, args),
-            Object::Native(native) => native.call(interpreter, env, args),
-            object => {
-                Err(Error::TypeError(TypeError::NotCallable { type_: object.type_().to_string() }))
-            }
+            Object::Class(class) => class.call(interpreter, env, args, span),
+            Object::Function(function) => function.call(interpreter, env, args, span),
+            Object::Native(native) => native.call(interpreter, env, args, span),
+            object => Err(Error::TypeError(TypeError::NotCallable {
+                type_: object.type_().to_string(),
+                span: span.clone(),
+            })),
         }
     }
 }
@@ -126,6 +137,7 @@ pub trait Callable {
         interpreter: &mut Interpreter,
         env: &mut Env,
         args: Vec<Object>,
+        span: &Span,
     ) -> Result<Object>;
 
     fn call(
@@ -133,6 +145,7 @@ pub trait Callable {
         interpreter: &mut Interpreter,
         env: &mut Env,
         args: Vec<Object>,
+        span: &Span,
     ) -> Result<Object> {
         let exp_args = self.arity();
         let got_args = args.len();
@@ -141,9 +154,10 @@ pub trait Callable {
                 name: self.name().to_string(),
                 exp_args,
                 got_args,
+                span: span.clone(),
             }));
         }
-        self.call_unchecked(interpreter, env, args)
+        self.call_unchecked(interpreter, env, args, span)
     }
 }
 
@@ -177,16 +191,17 @@ impl Callable for Class {
         interpreter: &mut Interpreter,
         env: &mut Env,
         args: Vec<Object>,
+        span: &Span,
     ) -> Result<Object> {
         let instance = Object::Instance(Rc::new(RefCell::new(Instance {
             class: self.clone(),
             fields: FxHashMap::default(),
         })));
-        if let Ok(init) = instance.get("init") {
+        if let Some(init) = self.method("init", instance.clone()) {
             match init {
                 Object::Function(function) => {
                     let constructor = Object::Function(function.bind(instance.clone()));
-                    constructor.call(interpreter, env, args)?;
+                    constructor.call(interpreter, env, args, span)?;
                 }
                 _ => unreachable!(
                     "expected {:?} of type {:?}, found {:?} instead",
@@ -201,16 +216,13 @@ impl Callable for Class {
 }
 
 impl Class {
-    pub fn get_method(&self, name: &str, this: Object) -> Result<Object> {
+    pub fn method(&self, name: &str, this: Object) -> Option<Object> {
         if let Some(method) = self.methods.get(name) {
-            Ok(Object::Function(method.clone().bind(this)))
+            Some(Object::Function(method.clone().bind(this)))
         } else if let Some(super_) = &self.super_ {
-            super_.get_method(name, this)
+            super_.method(name, this)
         } else {
-            Err(Error::AttributeError(AttributeError::NoSuchAttribute {
-                type_: self.name().to_string(),
-                name: name.to_string(),
-            }))
+            None
         }
     }
 }
@@ -241,6 +253,7 @@ impl Callable for Function {
         interpreter: &mut Interpreter,
         _env: &mut Env,
         args: Vec<Object>,
+        span: &Span,
     ) -> Result<Object> {
         let env = &mut Env::with_parent(&self.env);
         for (param, arg) in self.params().iter().zip(args) {
@@ -261,6 +274,7 @@ impl Callable for Function {
                             Some(object) => {
                                 Err(Error::TypeError(TypeError::InitInvalidReturnType {
                                     type_: object.type_().to_string(),
+                                    span: span.clone(),
                                 }))
                             }
                         }
@@ -331,6 +345,7 @@ impl Callable for Native {
         _interpreter: &mut Interpreter,
         _env: &mut Env,
         _args: Vec<Object>,
+        span: &Span,
     ) -> Result<Object> {
         match self {
             Native::Clock => {

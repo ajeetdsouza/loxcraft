@@ -1,7 +1,9 @@
 use crate::env::Env;
-use crate::object::{Class, Function, Native, Object};
+use crate::object::{Callable, Class, Function, Native, Object};
 
-use lox_common::error::{Error, IoError, NameError, Result, SyntaxError, TypeError};
+use lox_common::error::{
+    AttributeError, Error, IoError, NameError, Result, SyntaxError, TypeError,
+};
 use lox_common::types::Span;
 use lox_syntax::ast::{Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Program, Stmt, StmtS, Var};
 
@@ -46,6 +48,7 @@ impl Interpreter {
                             object => {
                                 return Err(Error::TypeError(TypeError::SuperclassInvalidType {
                                     type_: object.type_(),
+                                    span: span.clone(),
                                 }))
                             }
                         };
@@ -156,11 +159,11 @@ impl Interpreter {
                     .map(|arg| self.run_expr(env, arg))
                     .collect::<Result<Vec<_>>>()?;
                 let callee = self.run_expr(env, &call.callee)?;
-                callee.call(self, env, args)
+                callee.call(self, env, args, span)
             }
             Expr::Get(get) => {
                 let object = self.run_expr(env, &get.object)?;
-                object.get(&get.name)
+                object.get(&get.name, span)
             }
             Expr::Infix(infix) => {
                 let lt = self.run_expr(env, &infix.lt)?;
@@ -205,6 +208,7 @@ impl Interpreter {
                                     op: op.to_string(),
                                     lt_type: a.type_().to_string(),
                                     rt_type: b.type_().to_string(),
+                                    span: span.clone(),
                                 }))
                             }
                         }
@@ -225,6 +229,7 @@ impl Interpreter {
                         val => Err(Error::TypeError(TypeError::UnsupportedOperandPrefix {
                             op: prefix.op.to_string(),
                             rt_type: val.type_().to_string(),
+                            span: span.clone(),
                         })),
                     },
                     OpPrefix::Not => Ok(Object::Bool(!rt.bool())),
@@ -233,7 +238,7 @@ impl Interpreter {
             Expr::Set(set) => {
                 let value = self.run_expr(env, &set.value)?;
                 let mut object = self.run_expr(env, &set.object)?;
-                object.set(&set.name, &value)?;
+                object.set(&set.name, &value, span)?;
                 Ok(value)
             }
             Expr::Super(super_) => {
@@ -259,7 +264,13 @@ impl Interpreter {
                             .unwrap_or_else(|| unreachable!(r#""this" not found in method scope"#)),
                     )
                     .unwrap_or_else(|| unreachable!());
-                class.get_method(&super_.name, this)
+                class.method(&super_.name, this).ok_or_else(|| {
+                    Error::AttributeError(AttributeError::NoSuchAttribute {
+                        type_: class.name().to_string(),
+                        name: super_.name.to_string(),
+                        span: span.clone(),
+                    })
+                })
             }
             Expr::Var(var) => self.get_var(env, &var.var, span),
         }

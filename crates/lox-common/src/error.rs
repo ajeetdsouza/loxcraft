@@ -37,12 +37,17 @@ impl AsDiagnostic for Error {
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum AttributeError {
     #[error("{type_:?} object has no attribute {name:?}")]
-    NoSuchAttribute { type_: String, name: String },
+    NoSuchAttribute { type_: String, name: String, span: Span },
 }
 
 impl AsDiagnostic for AttributeError {
     fn as_diagnostic(&self) -> Diagnostic<()> {
-        todo!()
+        match self {
+            AttributeError::NoSuchAttribute { span, .. } => Diagnostic::error()
+                .with_code("AttributeError")
+                .with_message(self.to_string())
+                .with_labels(vec![Label::primary((), span.clone())]),
+        }
     }
 }
 
@@ -126,22 +131,32 @@ impl AsDiagnostic for SyntaxError {
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum TypeError {
     #[error("{name}() takes {exp_args} arguments but {got_args} were given")]
-    ArityMismatch { name: String, exp_args: usize, got_args: usize },
+    ArityMismatch { name: String, exp_args: usize, got_args: usize, span: Span },
     #[error("init() should use an empty return, not {type_:?}")]
-    InitInvalidReturnType { type_: String },
+    InitInvalidReturnType { type_: String, span: Span },
     #[error("{type_:?} object is not callable")]
-    NotCallable { type_: String },
+    NotCallable { type_: String, span: Span },
     #[error(r#"superclass should be of type "class", not {type_:?}"#)]
-    SuperclassInvalidType { type_: String },
+    SuperclassInvalidType { type_: String, span: Span },
     #[error("unsupported operand type(s) for {op}: {rt_type:?}")]
-    UnsupportedOperandPrefix { op: String, rt_type: String },
+    UnsupportedOperandPrefix { op: String, rt_type: String, span: Span },
     #[error("unsupported operand type(s) for {op}: {lt_type:?} and {rt_type:?}")]
-    UnsupportedOperandInfix { op: String, lt_type: String, rt_type: String },
+    UnsupportedOperandInfix { op: String, lt_type: String, rt_type: String, span: Span },
 }
 
 impl AsDiagnostic for TypeError {
     fn as_diagnostic(&self) -> Diagnostic<()> {
-        todo!()
+        match self {
+            TypeError::ArityMismatch { span, .. }
+            | TypeError::InitInvalidReturnType { span, .. }
+            | TypeError::NotCallable { span, .. }
+            | TypeError::SuperclassInvalidType { span, .. }
+            | TypeError::UnsupportedOperandPrefix { span, .. }
+            | TypeError::UnsupportedOperandInfix { span, .. } => Diagnostic::error()
+                .with_code("TypeError")
+                .with_message(self.to_string())
+                .with_labels(vec![Label::primary((), span.clone())]),
+        }
     }
 }
 
