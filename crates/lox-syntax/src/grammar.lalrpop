@@ -112,8 +112,6 @@ ExprAssign = {
         })),
     <object:Spanned<ExprCall>> "." <name:identifier> "=" <value:ExprS> =>
         ast::Expr::Set(Box::new(ast::ExprSet { <> })),
-    <object:Spanned<ExprSuper>> "." <name:identifier> "=" <value:ExprS> =>
-        ast::Expr::Set(Box::new(ast::ExprSet { <> })),
     ExprLogicOr,
 }
 
@@ -164,8 +162,14 @@ ExprCall: ast::Expr = {
         ast::Expr::Call(Box::new(ast::ExprCall { callee, args })),
     <object:Spanned<ExprCall>> "." <name:identifier> =>
         ast::Expr::Get(Box::new(ast::ExprGet { <> })),
-    <object:Spanned<ExprSuper>> "." <name:identifier> =>
-        ast::Expr::Get(Box::new(ast::ExprGet { <> })),
+    "super" "." <name:identifier> =>
+        ast::Expr::Super(ast::ExprSuper {
+            super_: ast::Var {
+                name: "super".to_string(),
+                depth: None,
+            },
+            name,
+        }),
     ExprPrimary,
 }
 
@@ -187,10 +191,6 @@ ExprPrimary: ast::Expr = {
 
 ExprVar: ast::Expr = <name:identifier> =>
     ast::Expr::Var(ast::ExprVar { var: ast::Var { name, depth: None } });
-ExprSuper: ast::Expr = "super" => ast::Expr::Var(ast::ExprVar { var: ast::Var {
-    name: "super".to_string(),
-    depth: None,
-}});
 ExprThis: ast::Expr = "this" => ast::Expr::Var(ast::ExprVar { var: ast::Var {
     name: "this".to_string(),
     depth: None,

@@ -24,8 +24,8 @@ pub enum Error {
 
 #[derive(Debug, Error)]
 pub enum AttributeError {
-    #[error("{:?} object has no attribute {:?}", object, name)]
-    NoSuchAttribute { object: String, name: String },
+    #[error(r#""{type_}" object has no attribute "{name}""#)]
+    NoSuchAttribute { type_: String, name: String },
 }
 
 #[derive(Debug, Error)]
@@ -45,14 +45,14 @@ pub enum NameError {
 #[derive(Debug, Error)]
 pub enum SyntaxError {
     #[error(r#""return" outside function"#)]
-    ReturnOutsideFunction { object: Object },
+    ReturnOutsideFunction { object: Option<Object> },
 }
 
 #[derive(Debug, Error)]
 pub enum TypeError {
     #[error("{name}() takes {exp_args} arguments but {got_args} were given")]
     ArityMismatch { name: String, exp_args: usize, got_args: usize },
-    #[error(r#"init() should return "nil", not "{type_}""#)]
+    #[error(r#"init() should use an empty return, not "{type_}""#)]
     InitInvalidReturnType { type_: String },
     #[error("{:?} object is not callable", type_)]
     NotCallable { type_: String },

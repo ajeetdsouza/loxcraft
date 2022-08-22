@@ -1,6 +1,5 @@
 use crate::env::Env;
-use crate::error::{Error, IoError, Result, SyntaxError, TypeError};
-use crate::interpreter;
+use crate::error::{Error, IoError, NameError, Result, SyntaxError, TypeError};
 use crate::object::{Class, Function, Native, Object};
 
 use lox_syntax::ast::{Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Program, Stmt, StmtS, Var};
@@ -112,8 +111,8 @@ impl Interpreter {
             }
             Stmt::Return(return_) => {
                 let object = match &return_.value {
-                    Some(value) => self.run_expr(env, value)?,
-                    None => Object::Nil,
+                    Some(value) => Some(self.run_expr(env, value)?),
+                    None => None,
                 };
                 return Err(Error::SyntaxError(SyntaxError::ReturnOutsideFunction { object }));
             }
@@ -228,6 +227,25 @@ impl Interpreter {
                 let mut object = self.run_expr(env, &set.object)?;
                 object.set(&set.name, &value)?;
                 Ok(value)
+            }
+            Expr::Super(super_) => {
+                let depth = super_.super_.depth.ok_or_else(|| {
+                    Error::NameError(NameError::NotDefined { name: "super".to_string() })
+                })?;
+                let class = match env.get_at("super", depth)? {
+                    Object::Class(class) => class,
+                    object => unreachable!(
+                        r#"expected "super" of type "class", found "{}" instead"#,
+                        object.type_()
+                    ),
+                };
+                let this = env.get_at(
+                    "this",
+                    depth
+                        .checked_sub(1)
+                        .unwrap_or_else(|| unreachable!(r#""this" not found in method scope"#)),
+                )?;
+                class.get_method(&super_.name, this)
             }
             Expr::Var(var) => self.get_var(env, &var.var),
         }

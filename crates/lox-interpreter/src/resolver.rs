@@ -125,6 +125,7 @@ impl Resolver {
                 self.resolve_expr(&mut set.value);
                 self.resolve_expr(&mut set.object);
             }
+            Expr::Super(super_) => self.access(&mut super_.super_),
             Expr::Var(var) => self.access(&mut var.var),
         }
     }

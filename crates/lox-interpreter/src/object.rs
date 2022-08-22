@@ -73,7 +73,7 @@ impl Object {
             Object::Instance(instance) => instance.borrow(),
             _ => {
                 return Err(Error::AttributeError(AttributeError::NoSuchAttribute {
-                    object: self.type_().to_string(),
+                    type_: self.type_().to_string(),
                     name: name.to_string(),
                 }))
             }
@@ -83,22 +83,7 @@ impl Object {
             return Ok(object.clone());
         }
 
-        if let Some(method) = instance.class.methods.get(name) {
-            let object = Object::Function(method.bind(self.clone()));
-            return Ok(object);
-        }
-
-        if let Some(super_) = &instance.class.super_ {
-            if let Some(method) = super_.methods.get(name) {
-                let object = Object::Function(method.bind(self.clone()));
-                return Ok(object);
-            }
-        }
-
-        Err(Error::AttributeError(AttributeError::NoSuchAttribute {
-            object: self.type_().to_string(),
-            name: name.to_string(),
-        }))
+        instance.class.get_method(name, self.clone())
     }
 
     pub fn set(&mut self, name: &str, value: &Object) -> Result<()> {
@@ -108,7 +93,7 @@ impl Object {
                 Ok(())
             }
             _ => Err(Error::AttributeError(AttributeError::NoSuchAttribute {
-                object: self.type_().to_string(),
+                type_: self.type_().to_string(),
                 name: name.to_string(),
             })),
         }
@@ -120,28 +105,14 @@ impl Object {
         env: &mut Env,
         args: Vec<Object>,
     ) -> Result<Object> {
-        let callable: Box<dyn Callable> = match &self {
-            Object::Class(class) => Box::new(class.clone()),
-            Object::Function(function) => Box::new(function.clone()),
-            Object::Native(native) => Box::new(native.clone()),
+        match &self {
+            Object::Class(class) => class.call(interpreter, env, args),
+            Object::Function(function) => function.call(interpreter, env, args),
+            Object::Native(native) => native.call(interpreter, env, args),
             object => {
-                return Err(Error::TypeError(TypeError::NotCallable {
-                    type_: object.type_().to_string(),
-                }))
+                Err(Error::TypeError(TypeError::NotCallable { type_: object.type_().to_string() }))
             }
-        };
-
-        let exp_args = callable.arity();
-        let got_args = args.len();
-        if exp_args != got_args {
-            return Err(Error::TypeError(TypeError::ArityMismatch {
-                name: callable.name().to_string(),
-                exp_args,
-                got_args,
-            }));
         }
-
-        callable.call_unchecked(interpreter, env, args)
     }
 }
 
@@ -156,6 +127,24 @@ pub trait Callable {
         env: &mut Env,
         args: Vec<Object>,
     ) -> Result<Object>;
+
+    fn call(
+        &self,
+        interpreter: &mut Interpreter,
+        env: &mut Env,
+        args: Vec<Object>,
+    ) -> Result<Object> {
+        let exp_args = self.arity();
+        let got_args = args.len();
+        if exp_args != got_args {
+            return Err(Error::TypeError(TypeError::ArityMismatch {
+                name: self.name().to_string(),
+                exp_args,
+                got_args,
+            }));
+        }
+        self.call_unchecked(interpreter, env, args)
+    }
 }
 
 #[derive(Clone)]
@@ -211,6 +200,21 @@ impl Callable for Class {
     }
 }
 
+impl Class {
+    pub fn get_method(&self, name: &str, this: Object) -> Result<Object> {
+        if let Some(method) = self.methods.get(name) {
+            Ok(Object::Function(method.clone().bind(this)))
+        } else if let Some(super_) = &self.super_ {
+            super_.get_method(name, this)
+        } else {
+            Err(Error::AttributeError(AttributeError::NoSuchAttribute {
+                type_: self.name().to_string(),
+                name: name.to_string(),
+            }))
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Function {
     pub decl: StmtFun,
@@ -247,18 +251,20 @@ impl Callable for Function {
                 Err(Error::SyntaxError(SyntaxError::ReturnOutsideFunction { object, .. })) => {
                     return if self.is_init() {
                         match object {
-                            Object::Nil => Ok(self.env.get("this").unwrap_or_else(|_| {
+                            None => Ok(self.env.get("this").unwrap_or_else(|_| {
                                 unreachable!(
                                     "{:?} not present inside {:?} function",
                                     "this", "init"
                                 )
                             })),
-                            _ => Err(Error::TypeError(TypeError::InitInvalidReturnType {
-                                type_: object.type_().to_string(),
-                            })),
+                            Some(object) => {
+                                Err(Error::TypeError(TypeError::InitInvalidReturnType {
+                                    type_: object.type_().to_string(),
+                                }))
+                            }
                         }
                     } else {
-                        Ok(object)
+                        Ok(object.unwrap_or(Object::Nil))
                     };
                 }
                 result => result?,

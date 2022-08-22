@@ -98,6 +98,7 @@ pub enum Expr {
     Infix(Box<ExprInfix>),
     Prefix(Box<ExprPrefix>),
     Set(Box<ExprSet>),
+    Super(ExprSuper),
     Var(ExprVar),
 }
 
@@ -199,6 +200,12 @@ pub struct ExprSet {
     pub object: ExprS,
     pub name: String,
     pub value: ExprS,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ExprSuper {
+    pub super_: Var,
+    pub name: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
