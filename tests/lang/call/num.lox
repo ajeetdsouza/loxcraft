@@ -1,4 +1,2 @@
-// err: TypeError: 'number' value is not callable
-// err: Traceback (most recent call last):
-// err:   in <script>
+// out: TypeError: "number" object is not callable
 123();

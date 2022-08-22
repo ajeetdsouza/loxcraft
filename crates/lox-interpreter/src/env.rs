@@ -64,7 +64,7 @@ impl EnvNode {
         } else {
             self.parent
                 .as_ref()
-                .unwrap_or_else(|| unreachable!("variable pointed to invalid scope: {:?}", name))
+                .unwrap_or_else(|| unreachable!("variable pointed to invalid scope: {name:?}"))
                 .borrow()
                 .get_at(name, depth - 1)
         }
@@ -86,7 +86,7 @@ impl EnvNode {
         } else {
             self.parent
                 .as_ref()
-                .unwrap_or_else(|| unreachable!("variable pointed to invalid scope: {:?}", name))
+                .unwrap_or_else(|| unreachable!("variable pointed to invalid scope: {name:?}"))
                 .borrow_mut()
                 .set_at(name, value, depth - 1)
         }

@@ -1,7 +1,7 @@
 use crate::repl::{self, Prompt};
 
 use clap::Parser as Clap;
-use lox_interpreter::{Interpreter, Resolver};
+use lox_interpreter::Interpreter;
 use reedline::Signal;
 
 use std::fs;
@@ -33,8 +33,8 @@ impl Cmd {
 }
 
 pub fn repl() {
-    let stdout = Box::new(io::stdout());
-    let mut interpreter = Interpreter::new(stdout);
+    let mut stdout = io::stdout().lock();
+    let mut interpreter = Interpreter::new();
     let mut editor = repl::editor().unwrap();
 
     loop {
@@ -49,7 +49,7 @@ pub fn repl() {
                     io::stderr().write_all(buffer.as_slice()).unwrap();
                     continue;
                 }
-                let errors = Resolver::default().resolve(&mut program);
+                let errors = lox_interpreter::resolve(&mut program);
                 if !errors.is_empty() {
                     let mut buffer = termcolor::Buffer::ansi();
                     for e in errors {
@@ -58,7 +58,7 @@ pub fn repl() {
                     io::stderr().write_all(buffer.as_slice()).unwrap();
                     continue;
                 }
-                if let Err(e) = interpreter.run(&program) {
+                if let Err(e) = interpreter.run(&program, &mut stdout) {
                     let mut buffer = termcolor::Buffer::ansi();
                     lox_common::error::report_err(&mut buffer, &line, e);
                     io::stderr().write_all(buffer.as_slice()).unwrap();
@@ -68,7 +68,7 @@ pub fn repl() {
             Ok(Signal::CtrlC) => eprintln!("^C"),
             Ok(Signal::CtrlD) => break,
             Err(e) => {
-                eprintln!("error: {:?}", e);
+                eprintln!("error: {e:?}");
                 break;
             }
         }

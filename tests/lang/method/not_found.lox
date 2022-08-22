@@ -1,0 +1,4 @@
+class Foo {}
+
+// out: AttributeError: "Foo" object has no attribute "unknown"
+Foo().unknown();

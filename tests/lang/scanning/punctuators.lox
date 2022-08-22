@@ -1,0 +1,21 @@
+(){};,+-*!===<=>=!=<>/.
+
+// out: LEFT_PAREN ( null
+// out: RIGHT_PAREN ) null
+// out: LEFT_BRACE { null
+// out: RIGHT_BRACE } null
+// out: SEMICOLON ; null
+// out: COMMA , null
+// out: PLUS + null
+// out: MINUS - null
+// out: STAR * null
+// out: BANG_EQUAL != null
+// out: EQUAL_EQUAL == null
+// out: LESS_EQUAL <= null
+// out: GREATER_EQUAL >= null
+// out: BANG_EQUAL != null
+// out: LESS < null
+// out: GREATER > null
+// out: SLASH / null
+// out: DOT . null
+// out: EOF  null

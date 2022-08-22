@@ -8,6 +8,7 @@ use rustc_hash::FxHashMap;
 
 use std::cell::RefCell;
 use std::fmt::{self, Debug, Display, Formatter};
+use std::io::Write;
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -30,7 +31,7 @@ impl Display for Object {
             Object::Class(class) => write!(f, "<class {}>", class.name()),
             Object::Function(function) => write!(f, "<function {}>", function.name()),
             Object::Instance(instance) => write!(f, "<object {}>", instance.borrow().class.name()),
-            Object::Native(native) => write!(f, "<native {}>", native.name()),
+            Object::Native(native) => write!(f, "<function {}>", native.name()),
             Object::Nil => write!(f, "nil"),
             Object::Number(number) => write!(f, "{}", number),
             Object::String(string) => write!(f, "{}", string),
@@ -108,17 +109,18 @@ impl Object {
         }
     }
 
-    pub fn call(
+    pub fn call<W: Write>(
         &self,
         interpreter: &mut Interpreter,
         env: &mut Env,
         args: Vec<Object>,
+        stdout: &mut W,
         span: &Span,
     ) -> Result<Object> {
         match &self {
-            Object::Class(class) => class.call(interpreter, env, args, span),
-            Object::Function(function) => function.call(interpreter, env, args, span),
-            Object::Native(native) => native.call(interpreter, env, args, span),
+            Object::Class(class) => class.call(interpreter, env, args, stdout, span),
+            Object::Function(function) => function.call(interpreter, env, args, stdout, span),
+            Object::Native(native) => native.call(interpreter, env, args, stdout, span),
             object => Err(Error::TypeError(TypeError::NotCallable {
                 type_: object.type_().to_string(),
                 span: span.clone(),
@@ -132,19 +134,21 @@ pub trait Callable {
 
     fn name(&self) -> &str;
 
-    fn call_unchecked(
+    fn call_unchecked<W: Write>(
         &self,
         interpreter: &mut Interpreter,
         env: &mut Env,
         args: Vec<Object>,
+        stdout: &mut W,
         span: &Span,
     ) -> Result<Object>;
 
-    fn call(
+    fn call<W: Write>(
         &self,
         interpreter: &mut Interpreter,
         env: &mut Env,
         args: Vec<Object>,
+        stdout: &mut W,
         span: &Span,
     ) -> Result<Object> {
         let exp_args = self.arity();
@@ -157,7 +161,7 @@ pub trait Callable {
                 span: span.clone(),
             }));
         }
-        self.call_unchecked(interpreter, env, args, span)
+        self.call_unchecked(interpreter, env, args, stdout, span)
     }
 }
 
@@ -186,11 +190,12 @@ impl Callable for Class {
         &self.decl.name
     }
 
-    fn call_unchecked(
+    fn call_unchecked<W: Write>(
         &self,
         interpreter: &mut Interpreter,
         env: &mut Env,
         args: Vec<Object>,
+        stdout: &mut W,
         span: &Span,
     ) -> Result<Object> {
         let instance = Object::Instance(Rc::new(RefCell::new(Instance {
@@ -201,12 +206,10 @@ impl Callable for Class {
             match init {
                 Object::Function(function) => {
                     let constructor = Object::Function(function.bind(instance.clone()));
-                    constructor.call(interpreter, env, args, span)?;
+                    constructor.call(interpreter, env, args, stdout, span)?;
                 }
                 _ => unreachable!(
-                    "expected {:?} of type {:?}, found {:?} instead",
-                    "init",
-                    "function",
+                    r#"expected "init" of type "function", found {:?} instead"#,
                     init.type_()
                 ),
             }
@@ -248,11 +251,12 @@ impl Callable for Function {
         &self.decl.name
     }
 
-    fn call_unchecked(
+    fn call_unchecked<W: Write>(
         &self,
         interpreter: &mut Interpreter,
         _env: &mut Env,
         args: Vec<Object>,
+        stdout: &mut W,
         span: &Span,
     ) -> Result<Object> {
         let env = &mut Env::with_parent(&self.env);
@@ -260,16 +264,13 @@ impl Callable for Function {
             interpreter.insert_var(env, param, arg);
         }
         for stmt_s in self.stmts().iter() {
-            match interpreter.run_stmt(env, stmt_s) {
+            match interpreter.run_stmt(env, stmt_s, stdout) {
                 Err(Error::SyntaxError(SyntaxError::ReturnOutsideFunction { .. })) => {
                     let object = interpreter.return_.take();
                     return if self.is_init() {
                         match object {
                             None => Ok(self.env.get("this").unwrap_or_else(|| {
-                                unreachable!(
-                                    "{:?} not present inside {:?} function",
-                                    "this", "init"
-                                )
+                                unreachable!(r#""this" not present inside "init" function"#,)
                             })),
                             Some(object) => {
                                 Err(Error::TypeError(TypeError::InitInvalidReturnType {
@@ -286,9 +287,9 @@ impl Callable for Function {
             }
         }
         Ok(if self.is_init() {
-            self.env.get("this").unwrap_or_else(|| {
-                unreachable!("{:?} not present inside {:?} function", "this", "init")
-            })
+            self.env
+                .get("this")
+                .unwrap_or_else(|| unreachable!(r#""this" not present inside "init" function"#))
         } else {
             Object::Nil
         })
@@ -340,12 +341,13 @@ impl Callable for Native {
         }
     }
 
-    fn call_unchecked(
+    fn call_unchecked<W: Write>(
         &self,
         _interpreter: &mut Interpreter,
         _env: &mut Env,
         _args: Vec<Object>,
-        span: &Span,
+        _stdout: &mut W,
+        _span: &Span,
     ) -> Result<Object> {
         match self {
             Native::Clock => {

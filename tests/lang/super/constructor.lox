@@ -1,0 +1,16 @@
+class Base {
+  init(a, b) {
+    print "Base.init(" + a + ", " + b + ")";
+  }
+}
+
+class Derived < Base {
+  init() {
+    print "Derived.init()";
+    super.init("a", "b");
+  }
+}
+
+Derived();
+// out: Derived.init()
+// out: Base.init(a, b)

@@ -12,38 +12,42 @@ use std::io::Write;
 pub struct Interpreter {
     globals: Env,
     pub return_: Option<Object>,
-    stdout: Box<dyn Write>,
 }
 
 impl Interpreter {
-    pub fn new(stdout: Box<dyn Write>) -> Self {
+    pub fn new() -> Self {
         let mut globals = Env::default();
         globals.insert_unchecked("clock", Object::Native(Native::Clock));
-        Self { globals, return_: None, stdout: Box::new(stdout) }
+        Self { globals, return_: None }
     }
 
-    pub fn run(&mut self, program: &Program) -> Result<()> {
+    pub fn run<W: Write>(&mut self, program: &Program, stdout: &mut W) -> Result<()> {
         // TODO: Ranges can be duplicated. Find another way to index.
         let env = &mut self.globals.clone();
         for stmt_s in &program.stmts {
-            self.run_stmt(env, stmt_s)?;
+            self.run_stmt(env, stmt_s, stdout)?;
         }
         Ok(())
     }
 
-    pub fn run_stmt(&mut self, env: &mut Env, stmt_s: &StmtS) -> Result<()> {
+    pub fn run_stmt<W: Write>(
+        &mut self,
+        env: &mut Env,
+        stmt_s: &StmtS,
+        stdout: &mut W,
+    ) -> Result<()> {
         let (stmt, span) = stmt_s;
         match stmt {
             Stmt::Block(block) => {
                 let env = &mut Env::with_parent(env);
                 for stmt_s in &block.stmts {
-                    self.run_stmt(env, stmt_s)?;
+                    self.run_stmt(env, stmt_s, stdout)?;
                 }
             }
             Stmt::Class(class) => {
                 let super_ = match &class.super_ {
                     Some(super_) => {
-                        let super_ = match self.run_expr(env, super_)? {
+                        let super_ = match self.run_expr(env, super_, stdout)? {
                             Object::Class(super_) => super_,
                             object => {
                                 return Err(Error::TypeError(TypeError::SuperclassInvalidType {
@@ -78,21 +82,21 @@ impl Interpreter {
                 self.insert_var(env, &class.name, object);
             }
             Stmt::Expr(expr) => {
-                self.run_expr(env, &expr.value)?;
+                self.run_expr(env, &expr.value, stdout)?;
             }
             Stmt::For(for_) => {
                 let env = &mut Env::with_parent(env);
                 if let Some(init) = &for_.init {
-                    self.run_stmt(env, init)?;
+                    self.run_stmt(env, init, stdout)?;
                 }
                 let cond = match &for_.cond {
                     Some(cond) => cond,
                     None => &(Expr::Literal(ExprLiteral::Bool(true)), 0..0),
                 };
-                while self.run_expr(env, cond)?.bool() {
-                    self.run_stmt(env, &for_.body)?;
+                while self.run_expr(env, cond, stdout)?.bool() {
+                    self.run_stmt(env, &for_.body, stdout)?;
                     if let Some(incr) = &for_.incr {
-                        self.run_expr(env, incr)?;
+                        self.run_expr(env, incr, stdout)?;
                     }
                 }
             }
@@ -101,16 +105,16 @@ impl Interpreter {
                 self.insert_var(env, &fun.name, object);
             }
             Stmt::If(if_) => {
-                let cond = self.run_expr(env, &if_.cond)?;
+                let cond = self.run_expr(env, &if_.cond, stdout)?;
                 if cond.bool() {
-                    self.run_stmt(env, &if_.then)?;
+                    self.run_stmt(env, &if_.then, stdout)?;
                 } else if let Some(else_) = &if_.else_ {
-                    self.run_stmt(env, else_)?;
+                    self.run_stmt(env, else_, stdout)?;
                 }
             }
             Stmt::Print(print) => {
-                let value = self.run_expr(env, &print.value)?;
-                writeln!(self.stdout, "{}", value).map_err(|_| {
+                let value = self.run_expr(env, &print.value, stdout)?;
+                writeln!(stdout, "{}", value).map_err(|_| {
                     Error::IoError(IoError::WriteError {
                         file: "stdout".to_string(),
                         span: span.clone(),
@@ -119,7 +123,7 @@ impl Interpreter {
             }
             Stmt::Return(return_) => {
                 let object = match &return_.value {
-                    Some(value) => Some(self.run_expr(env, value)?),
+                    Some(value) => Some(self.run_expr(env, value, stdout)?),
                     None => None,
                 };
                 self.return_ = object;
@@ -129,14 +133,14 @@ impl Interpreter {
             }
             Stmt::Var(var) => {
                 let value = match &var.value {
-                    Some(value) => self.run_expr(env, value)?,
+                    Some(value) => self.run_expr(env, value, stdout)?,
                     None => Object::Nil,
                 };
                 self.insert_var(env, &var.var.name, value);
             }
             Stmt::While(while_) => {
-                while self.run_expr(env, &while_.cond)?.bool() {
-                    self.run_stmt(env, &while_.body)?;
+                while self.run_expr(env, &while_.cond, stdout)?.bool() {
+                    self.run_stmt(env, &while_.body, stdout)?;
                 }
             }
             Stmt::Error => unreachable!("interpreter started despite parsing errors"),
@@ -144,11 +148,16 @@ impl Interpreter {
         Ok(())
     }
 
-    fn run_expr(&mut self, env: &mut Env, expr_s: &ExprS) -> Result<Object> {
+    fn run_expr<W: Write>(
+        &mut self,
+        env: &mut Env,
+        expr_s: &ExprS,
+        stdout: &mut W,
+    ) -> Result<Object> {
         let (expr, span) = expr_s;
         match expr {
             Expr::Assign(assign) => {
-                let value = self.run_expr(env, &assign.value)?;
+                let value = self.run_expr(env, &assign.value, stdout)?;
                 self.set_var(env, &assign.var, value.clone(), span)?;
                 Ok(value)
             }
@@ -156,21 +165,33 @@ impl Interpreter {
                 let args = call
                     .args
                     .iter()
-                    .map(|arg| self.run_expr(env, arg))
+                    .map(|arg| self.run_expr(env, arg, stdout))
                     .collect::<Result<Vec<_>>>()?;
-                let callee = self.run_expr(env, &call.callee)?;
-                callee.call(self, env, args, span)
+                let callee = self.run_expr(env, &call.callee, stdout)?;
+                callee.call(self, env, args, stdout, span)
             }
             Expr::Get(get) => {
-                let object = self.run_expr(env, &get.object)?;
+                let object = self.run_expr(env, &get.object, stdout)?;
                 object.get(&get.name, span)
             }
             Expr::Infix(infix) => {
-                let lt = self.run_expr(env, &infix.lt)?;
-                let mut rt = || self.run_expr(env, &infix.rt);
+                let lt = self.run_expr(env, &infix.lt, stdout)?;
+                let mut rt = || self.run_expr(env, &infix.rt, stdout);
                 match infix.op {
-                    OpInfix::LogicAnd => Ok(Object::Bool(lt.bool() && rt()?.bool())),
-                    OpInfix::LogicOr => Ok(Object::Bool(lt.bool() || rt()?.bool())),
+                    OpInfix::LogicAnd => {
+                        if lt.bool() {
+                            rt()
+                        } else {
+                            Ok(lt)
+                        }
+                    }
+                    OpInfix::LogicOr => {
+                        if lt.bool() {
+                            Ok(lt)
+                        } else {
+                            rt()
+                        }
+                    }
                     op => {
                         let rt = rt()?;
                         match (op, lt, rt) {
@@ -222,7 +243,7 @@ impl Interpreter {
                 ExprLiteral::String(string) => Object::String(string.clone()),
             }),
             Expr::Prefix(prefix) => {
-                let rt = self.run_expr(env, &prefix.rt)?;
+                let rt = self.run_expr(env, &prefix.rt, stdout)?;
                 match prefix.op {
                     OpPrefix::Negate => match &rt {
                         Object::Number(number) => Ok(Object::Number(-number)),
@@ -236,8 +257,8 @@ impl Interpreter {
                 }
             }
             Expr::Set(set) => {
-                let value = self.run_expr(env, &set.value)?;
-                let mut object = self.run_expr(env, &set.object)?;
+                let value = self.run_expr(env, &set.value, stdout)?;
+                let mut object = self.run_expr(env, &set.object, stdout)?;
                 object.set(&set.name, &value, span)?;
                 Ok(value)
             }

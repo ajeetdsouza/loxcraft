@@ -1,0 +1,2 @@
+// out: SyntaxError: unexpected "fun"
+if (true) "ok"; else fun foo() {}

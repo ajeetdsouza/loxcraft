@@ -1,0 +1,12 @@
+123
+123.456
+.456
+123.
+
+// out: NUMBER 123 123.0
+// out: NUMBER 123.456 123.456
+// out: DOT . null
+// out: NUMBER 456 456.0
+// out: NUMBER 123 123.0
+// out: DOT . null
+// out: EOF  null

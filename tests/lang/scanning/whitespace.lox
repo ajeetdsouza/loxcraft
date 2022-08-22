@@ -1,0 +1,12 @@
+space    tabs				newlines
+
+
+
+
+end
+
+// out: IDENTIFIER space null
+// out: IDENTIFIER tabs null
+// out: IDENTIFIER newlines null
+// out: IDENTIFIER end null
+// out: EOF  null

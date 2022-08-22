@@ -1,4 +1,2 @@
-// err: TypeError: unsupported operand type(s) for OP_LESS: 'string' and 'number'
-// err: Traceback (most recent call last):
-// err:   in <script>
+// out: TypeError: unsupported operand type(s) for >=: "string" and "number"
 "1" >= 1;

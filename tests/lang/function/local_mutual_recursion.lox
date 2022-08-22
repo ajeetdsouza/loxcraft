@@ -1,10 +1,7 @@
 {
   fun isEven(n) {
     if (n == 0) return true;
-    // err: NameError: name 'isOdd' is not defined
-    // err: Traceback (most recent call last):
-    // err:   in <function isEven>
-    // err:   in <script>
+    // out: NameError: name "isOdd" is not defined
     return isOdd(n - 1);
   }
 

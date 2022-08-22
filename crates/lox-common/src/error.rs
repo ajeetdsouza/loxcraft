@@ -138,7 +138,7 @@ pub enum TypeError {
     NotCallable { type_: String, span: Span },
     #[error(r#"superclass should be of type "class", not {type_:?}"#)]
     SuperclassInvalidType { type_: String, span: Span },
-    #[error("unsupported operand type(s) for {op}: {rt_type:?}")]
+    #[error("unsupported operand type for {op}: {rt_type:?}")]
     UnsupportedOperandPrefix { op: String, rt_type: String, span: Span },
     #[error("unsupported operand type(s) for {op}: {lt_type:?} and {rt_type:?}")]
     UnsupportedOperandInfix { op: String, lt_type: String, rt_type: String, span: Span },

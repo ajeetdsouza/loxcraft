@@ -1,0 +1,9 @@
+class Foo {
+  method(a, b) {
+    print a;
+    print b;
+  }
+}
+
+// out: TypeError: method() takes 2 arguments but 4 were given
+Foo().method(1, 2, 3, 4);
