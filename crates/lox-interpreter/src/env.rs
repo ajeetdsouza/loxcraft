@@ -1,4 +1,3 @@
-use crate::error::{Error, NameError, Result};
 use crate::object::Object;
 
 use rustc_hash::FxHashMap;
@@ -19,19 +18,19 @@ impl Env {
         self.0.borrow().contains(name)
     }
 
-    pub fn get(&self, name: &str) -> Result<Object> {
+    pub fn get(&self, name: &str) -> Option<Object> {
         self.0.borrow().get(name)
     }
 
-    pub fn get_at(&self, name: &str, depth: usize) -> Result<Object> {
+    pub fn get_at(&self, name: &str, depth: usize) -> Option<Object> {
         self.0.borrow().get_at(name, depth)
     }
 
-    pub fn set(&mut self, name: &str, value: Object) -> Result<()> {
+    pub fn set(&mut self, name: &str, value: Object) -> Result<(), ()> {
         self.0.borrow_mut().set(name, value)
     }
 
-    pub fn set_at(&mut self, name: &str, value: Object, depth: usize) -> Result<()> {
+    pub fn set_at(&mut self, name: &str, value: Object, depth: usize) -> Result<(), ()> {
         self.0.borrow_mut().set_at(name, value, depth)
     }
 
@@ -55,14 +54,11 @@ impl EnvNode {
         self.map.contains_key(name)
     }
 
-    fn get(&self, name: &str) -> Result<Object> {
-        match self.map.get(name) {
-            Some(value) => Ok(value.clone()),
-            None => Err(Error::NameError(NameError::NotDefined { name: name.to_string() })),
-        }
+    fn get(&self, name: &str) -> Option<Object> {
+        self.map.get(name).cloned()
     }
 
-    fn get_at(&self, name: &str, depth: usize) -> Result<Object> {
+    fn get_at(&self, name: &str, depth: usize) -> Option<Object> {
         if depth == 0 {
             self.get(name)
         } else {
@@ -74,17 +70,17 @@ impl EnvNode {
         }
     }
 
-    fn set(&mut self, name: &str, value: Object) -> Result<()> {
+    fn set(&mut self, name: &str, value: Object) -> Result<(), ()> {
         match self.map.get_mut(name) {
             Some(entry) => {
                 *entry = value;
                 Ok(())
             }
-            None => Err(Error::NameError(NameError::NotDefined { name: name.to_string() })),
+            None => Err(()),
         }
     }
 
-    fn set_at(&mut self, name: &str, value: Object, depth: usize) -> Result<()> {
+    fn set_at(&mut self, name: &str, value: Object, depth: usize) -> Result<(), ()> {
         if depth == 0 {
             self.set(name, value)
         } else {

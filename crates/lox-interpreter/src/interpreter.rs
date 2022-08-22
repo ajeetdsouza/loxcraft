@@ -1,13 +1,15 @@
 use crate::env::Env;
-use crate::error::{Error, IoError, NameError, Result, SyntaxError, TypeError};
 use crate::object::{Class, Function, Native, Object};
 
+use lox_common::error::{Error, IoError, NameError, Result, SyntaxError, TypeError};
+use lox_common::types::Span;
 use lox_syntax::ast::{Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Program, Stmt, StmtS, Var};
 
 use std::io::Write;
 
 pub struct Interpreter {
     globals: Env,
+    pub return_: Option<Object>,
     stdout: Box<dyn Write>,
 }
 
@@ -15,7 +17,7 @@ impl Interpreter {
     pub fn new(stdout: Box<dyn Write>) -> Self {
         let mut globals = Env::default();
         globals.insert_unchecked("clock", Object::Native(Native::Clock));
-        Self { globals, stdout: Box::new(stdout) }
+        Self { globals, return_: None, stdout: Box::new(stdout) }
     }
 
     pub fn run(&mut self, program: &Program) -> Result<()> {
@@ -28,7 +30,7 @@ impl Interpreter {
     }
 
     pub fn run_stmt(&mut self, env: &mut Env, stmt_s: &StmtS) -> Result<()> {
-        let (stmt, _) = stmt_s;
+        let (stmt, span) = stmt_s;
         match stmt {
             Stmt::Block(block) => {
                 let env = &mut Env::with_parent(env);
@@ -61,7 +63,7 @@ impl Interpreter {
                     class
                         .methods
                         .iter()
-                        .map(|decl| {
+                        .map(|(decl, _)| {
                             (
                                 decl.name.to_string(),
                                 Function { decl: decl.clone(), env: env.clone() },
@@ -106,7 +108,10 @@ impl Interpreter {
             Stmt::Print(print) => {
                 let value = self.run_expr(env, &print.value)?;
                 writeln!(self.stdout, "{}", value).map_err(|_| {
-                    Error::IoError(IoError::WriteError { file: "stdout".to_string() })
+                    Error::IoError(IoError::WriteError {
+                        file: "stdout".to_string(),
+                        span: span.clone(),
+                    })
                 })?;
             }
             Stmt::Return(return_) => {
@@ -114,7 +119,10 @@ impl Interpreter {
                     Some(value) => Some(self.run_expr(env, value)?),
                     None => None,
                 };
-                return Err(Error::SyntaxError(SyntaxError::ReturnOutsideFunction { object }));
+                self.return_ = object;
+                return Err(Error::SyntaxError(SyntaxError::ReturnOutsideFunction {
+                    span: span.clone(),
+                }));
             }
             Stmt::Var(var) => {
                 let value = match &var.value {
@@ -134,11 +142,11 @@ impl Interpreter {
     }
 
     fn run_expr(&mut self, env: &mut Env, expr_s: &ExprS) -> Result<Object> {
-        let (expr, _) = expr_s;
+        let (expr, span) = expr_s;
         match expr {
             Expr::Assign(assign) => {
                 let value = self.run_expr(env, &assign.value)?;
-                self.set_var(env, &assign.var, value.clone())?;
+                self.set_var(env, &assign.var, value.clone(), span)?;
                 Ok(value)
             }
             Expr::Call(call) => {
@@ -230,42 +238,58 @@ impl Interpreter {
             }
             Expr::Super(super_) => {
                 let depth = super_.super_.depth.ok_or_else(|| {
-                    Error::NameError(NameError::NotDefined { name: "super".to_string() })
+                    Error::NameError(NameError::NotDefined {
+                        name: "super".to_string(),
+                        span: span.clone(),
+                    })
                 })?;
-                let class = match env.get_at("super", depth)? {
-                    Object::Class(class) => class,
-                    object => unreachable!(
+                let class = match env.get_at("super", depth) {
+                    Some(Object::Class(class)) => class,
+                    Some(object) => unreachable!(
                         r#"expected "super" of type "class", found "{}" instead"#,
                         object.type_()
                     ),
+                    None => todo!(),
                 };
-                let this = env.get_at(
-                    "this",
-                    depth
-                        .checked_sub(1)
-                        .unwrap_or_else(|| unreachable!(r#""this" not found in method scope"#)),
-                )?;
+                let this = env
+                    .get_at(
+                        "this",
+                        depth
+                            .checked_sub(1)
+                            .unwrap_or_else(|| unreachable!(r#""this" not found in method scope"#)),
+                    )
+                    .unwrap_or_else(|| unreachable!());
                 class.get_method(&super_.name, this)
             }
-            Expr::Var(var) => self.get_var(env, &var.var),
+            Expr::Var(var) => self.get_var(env, &var.var, span),
         }
     }
 
-    fn get_var(&self, env: &Env, var: &Var) -> Result<Object> {
+    fn get_var(&self, env: &Env, var: &Var, span: &Span) -> Result<Object> {
         match var.depth {
-            Some(depth) => Ok(env.get_at(&var.name, depth).unwrap_or_else(|_| {
+            Some(depth) => Ok(env.get_at(&var.name, depth).unwrap_or_else(|| {
                 unreachable!("variable was resolved but could not be found: {:?}", &var.name)
             })),
-            None => self.globals.get(&var.name),
+            None => self.globals.get(&var.name).ok_or_else(|| {
+                Error::NameError(NameError::NotDefined {
+                    name: var.name.to_string(),
+                    span: span.clone(),
+                })
+            }),
         }
     }
 
-    fn set_var(&mut self, env: &mut Env, var: &Var, value: Object) -> Result<()> {
+    fn set_var(&mut self, env: &mut Env, var: &Var, value: Object, span: &Span) -> Result<()> {
         match var.depth {
             Some(depth) => Ok(env.set_at(&var.name, value, depth).unwrap_or_else(|_| {
                 unreachable!("variable was resolved but could not be found: {:?}", &var.name)
             })),
-            None => self.globals.set(&var.name, value),
+            None => self.globals.set(&var.name, value).map_err(|_| {
+                Error::NameError(NameError::NotDefined {
+                    name: var.name.to_string(),
+                    span: span.clone(),
+                })
+            }),
         }
     }
 

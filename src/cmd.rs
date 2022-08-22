@@ -10,6 +10,7 @@ use std::io::{self, Write};
 #[derive(Clap, Debug)]
 #[clap(about, author, disable_help_subcommand = true, propagate_version = true, version)]
 pub enum Cmd {
+    #[cfg(feature = "playground")]
     Playground {
         #[clap(long, default_value = "3000")]
         port: u16,
@@ -23,6 +24,7 @@ pub enum Cmd {
 impl Cmd {
     pub fn run(&self) {
         match self {
+            #[cfg(feature = "playground")]
             Cmd::Playground { port } => lox_playground::serve(*port),
             Cmd::Repl => repl(),
             Cmd::Run { path } => run(path),
@@ -38,19 +40,29 @@ pub fn repl() {
     loop {
         match editor.read_line(&Prompt) {
             Ok(Signal::Success(line)) => {
-                let mut errors = Vec::new();
-                let mut program = lox_syntax::parse(&line, &mut errors);
+                let (mut program, errors) = lox_syntax::parse(&line);
                 if !errors.is_empty() {
                     let mut buffer = termcolor::Buffer::ansi();
-                    lox_interpreter::report_err(&mut buffer, &line, errors);
+                    for e in errors {
+                        lox_common::error::report_err(&mut buffer, &line, e);
+                    }
                     io::stderr().write_all(buffer.as_slice()).unwrap();
                     continue;
                 }
-                if let Err(e) = Resolver::default().resolve(&mut program) {
-                    println!("{e}")
+                let errors = Resolver::default().resolve(&mut program);
+                if !errors.is_empty() {
+                    let mut buffer = termcolor::Buffer::ansi();
+                    for e in errors {
+                        lox_common::error::report_err(&mut buffer, &line, e);
+                    }
+                    io::stderr().write_all(buffer.as_slice()).unwrap();
+                    continue;
                 }
                 if let Err(e) = interpreter.run(&program) {
-                    println!("{e}")
+                    let mut buffer = termcolor::Buffer::ansi();
+                    lox_common::error::report_err(&mut buffer, &line, e);
+                    io::stderr().write_all(buffer.as_slice()).unwrap();
+                    continue;
                 }
             }
             Ok(Signal::CtrlC) => eprintln!("^C"),

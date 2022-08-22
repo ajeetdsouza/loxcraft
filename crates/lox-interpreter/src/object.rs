@@ -1,7 +1,7 @@
 use crate::env::Env;
-use crate::error::{AttributeError, Error, Result, SyntaxError, TypeError};
 use crate::Interpreter;
 
+use lox_common::error::{AttributeError, Error, Result, SyntaxError, TypeError};
 use lox_syntax::ast::{Spanned, Stmt, StmtClass, StmtFun};
 use rustc_hash::FxHashMap;
 
@@ -248,10 +248,11 @@ impl Callable for Function {
         }
         for stmt_s in self.stmts().iter() {
             match interpreter.run_stmt(env, stmt_s) {
-                Err(Error::SyntaxError(SyntaxError::ReturnOutsideFunction { object, .. })) => {
+                Err(Error::SyntaxError(SyntaxError::ReturnOutsideFunction { .. })) => {
+                    let object = interpreter.return_.take();
                     return if self.is_init() {
                         match object {
-                            None => Ok(self.env.get("this").unwrap_or_else(|_| {
+                            None => Ok(self.env.get("this").unwrap_or_else(|| {
                                 unreachable!(
                                     "{:?} not present inside {:?} function",
                                     "this", "init"
@@ -271,7 +272,7 @@ impl Callable for Function {
             }
         }
         Ok(if self.is_init() {
-            self.env.get("this").unwrap_or_else(|_| {
+            self.env.get("this").unwrap_or_else(|| {
                 unreachable!("{:?} not present inside {:?} function", "this", "init")
             })
         } else {

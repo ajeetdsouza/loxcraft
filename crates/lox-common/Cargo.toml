@@ -1,5 +1,5 @@
 [package]
-name = "lox-interpreter"
+name = "lox-common"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,9 +7,5 @@ edition = "2021"
 
 [dependencies]
 codespan-reporting = "0.11.1"
-gc = { version = "0.4.1", features = ["derive"] }
-lox-common = { path = "../lox-common" }
-lox-syntax = { path = "../lox-syntax" }
-rustc-hash = "1.1.0"
 termcolor = "1.1.3"
 thiserror = "1.0.32"

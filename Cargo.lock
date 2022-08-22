@@ -974,6 +974,7 @@ dependencies = [
  "clap",
  "dirs",
  "human-panic",
+ "lox-common",
  "lox-interpreter",
  "lox-playground",
  "lox-syntax",
@@ -988,11 +989,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "lox-common"
+version = "0.1.0"
+dependencies = [
+ "codespan-reporting",
+ "termcolor",
+ "thiserror",
+]
+
+[[package]]
 name = "lox-interpreter"
 version = "0.1.0"
 dependencies = [
  "codespan-reporting",
  "gc",
+ "lox-common",
  "lox-syntax",
  "rustc-hash",
  "termcolor",
@@ -1014,10 +1025,10 @@ dependencies = [
 name = "lox-syntax"
 version = "0.1.0"
 dependencies = [
- "codespan-reporting",
  "lalrpop",
  "lalrpop-util",
  "logos",
+ "lox-common",
  "pretty_assertions",
 ]
 

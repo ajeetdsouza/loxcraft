@@ -1,9 +1,8 @@
+use lox_common::types::Span;
+
 use std::fmt::{self, Display, Formatter};
-use std::ops::Range;
 
 pub type Spanned<T> = (T, Span);
-pub type Span = Range<usize>;
-
 pub type StmtS = Spanned<Stmt>;
 pub type ExprS = Spanned<Expr>;
 
@@ -36,7 +35,7 @@ pub struct StmtBlock {
 pub struct StmtClass {
     pub name: String,
     pub super_: Option<ExprS>,
-    pub methods: Vec<StmtFun>,
+    pub methods: Vec<Spanned<StmtFun>>,
 }
 
 /// An expression statement evaluates an expression and discards the result.

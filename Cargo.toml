@@ -17,19 +17,24 @@ maintenance = { status = "actively-developed" }
 
 [workspace]
 members = [
+    "crates/lox-common",
     "crates/lox-interpreter",
     "crates/lox-playground",
     "crates/lox-syntax",
     "crates/tree-sitter-lox",
 ]
 
+[features]
+playground = ["dep:lox-playground"]
+
 [dependencies]
 anyhow = "1.0.52"
 clap = { version = "3.2.0", features = ["derive"] }
 dirs = "4.0.0"
 human-panic = "1.0.3"
+lox-common = { path = "crates/lox-common" }
 lox-interpreter = { path = "crates/lox-interpreter" }
-lox-playground = { path = "crates/lox-playground" }
+lox-playground = { path = "crates/lox-playground", optional = true }
 lox-syntax = { path = "crates/lox-syntax" }
 mimalloc = { version = "0.1.27", default-features = false }
 nu-ansi-term = "0.46.0"

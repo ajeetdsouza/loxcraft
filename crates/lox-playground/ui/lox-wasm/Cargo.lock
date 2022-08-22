@@ -281,13 +281,22 @@ dependencies = [
 ]
 
 [[package]]
-name = "lox-syntax"
+name = "lox-common"
 version = "0.1.0"
 dependencies = [
  "codespan-reporting",
+ "termcolor",
+ "thiserror",
+]
+
+[[package]]
+name = "lox-syntax"
+version = "0.1.0"
+dependencies = [
  "lalrpop",
  "lalrpop-util",
  "logos",
+ "lox-common",
 ]
 
 [[package]]
