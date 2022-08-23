@@ -17,7 +17,7 @@ pub enum Stmt {
     Class(StmtClass),
     Expr(StmtExpr),
     For(Box<StmtFor>),
-    Fun(Box<StmtFun>),
+    Fun(StmtFun),
     If(Box<StmtIf>),
     Print(StmtPrint),
     Return(StmtReturn),

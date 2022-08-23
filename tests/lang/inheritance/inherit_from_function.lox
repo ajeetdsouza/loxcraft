@@ -1,3 +1,4 @@
 fun foo() {}
 
-class Subclass < foo {} // out: Superclass must be a class.
+// out: TypeError: superclass should be of type "class", not "function"
+class Subclass < foo {}

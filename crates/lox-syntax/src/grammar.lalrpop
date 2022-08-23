@@ -29,7 +29,7 @@ DeclClass: ast::Stmt =
     "class" <name:identifier> <super_:("<" <Spanned<ExprVar>>)?> "{" <methods:Spanned<Function>*> "}" =>
         ast::Stmt::Class(ast::StmtClass { <> });
 
-DeclFun: ast::Stmt = "fun" <function:Function> => ast::Stmt::Fun(Box::new(<>));
+DeclFun: ast::Stmt = "fun" <function:Function> => ast::Stmt::Fun(<>);
 
 DeclVar: ast::Stmt = "var" <name:identifier> <value:("=" <ExprS>)?> ";" =>
     ast::Stmt::Var(ast::StmtVar {

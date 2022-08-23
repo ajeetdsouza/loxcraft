@@ -1,2 +1,3 @@
-super.foo("bar"); // Error at 'super': Can't use 'super' outside of a class.
-super.foo; // Error at 'super': Can't use 'super' outside of a class.
+// out: NameError: name "super" is not defined
+super.foo("bar");
+super.foo;

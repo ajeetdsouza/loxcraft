@@ -1,2 +1,2 @@
-// [line 2] Error at 'var': Expect expression.
+// out: SyntaxError: unexpected "var"
 while (true) var foo;

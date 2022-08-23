@@ -1,6 +1,6 @@
 use lox_common::error::{Error, NameError};
 use lox_common::types::Span;
-use lox_syntax::ast::{Expr, ExprS, Program, Spanned, Stmt, StmtFun, StmtS, Var};
+use lox_syntax::ast::{Expr, ExprS, Program, Stmt, StmtFun, StmtS, Var};
 use rustc_hash::FxHashSet;
 
 #[derive(Debug, Default)]
@@ -29,15 +29,17 @@ impl Resolver {
             }
             Stmt::Class(class) => {
                 if let Some(super_) = &mut class.super_ {
-                    self.begin_scope();
-                    self.define("super", &super_.1);
                     self.resolve_expr(super_);
                 }
                 self.define(&class.name, span);
+                if let Some((_, span)) = &class.super_ {
+                    self.begin_scope();
+                    self.define("super", span);
+                }
                 self.begin_scope();
                 self.define("this", span);
-                for fun_s in class.methods.iter_mut() {
-                    self.resolve_fun(fun_s);
+                for (fun, span) in class.methods.iter_mut() {
+                    self.resolve_fun(fun, span);
                 }
                 self.end_scope();
                 if class.super_.is_some() {
@@ -61,6 +63,7 @@ impl Resolver {
             }
             Stmt::Fun(fun) => {
                 self.define(&fun.name, span);
+                self.resolve_fun(fun, span);
                 self.begin_scope();
                 for param in &fun.params {
                     self.define(param, span);
@@ -130,9 +133,7 @@ impl Resolver {
         }
     }
 
-    fn resolve_fun(&mut self, fun_s: &mut Spanned<StmtFun>) {
-        let (fun, span) = fun_s;
-        self.define(&fun.name, span);
+    fn resolve_fun(&mut self, fun: &mut StmtFun, span: &Span) {
         self.begin_scope();
         for param in &fun.params {
             self.define(param, span);

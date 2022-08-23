@@ -22,7 +22,6 @@ impl Interpreter {
     }
 
     pub fn run<W: Write>(&mut self, program: &Program, stdout: &mut W) -> Result<()> {
-        // TODO: Ranges can be duplicated. Find another way to index.
         let env = &mut self.globals.clone();
         for stmt_s in &program.stmts {
             self.run_stmt(env, stmt_s, stdout)?;
@@ -101,7 +100,7 @@ impl Interpreter {
                 }
             }
             Stmt::Fun(fun) => {
-                let object = Object::Function(Function { decl: *fun.clone(), env: env.clone() });
+                let object = Object::Function(Function { decl: fun.clone(), env: env.clone() });
                 self.insert_var(env, &fun.name, object);
             }
             Stmt::If(if_) => {

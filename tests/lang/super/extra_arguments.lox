@@ -7,7 +7,7 @@ class Base {
 class Derived < Base {
   foo() {
     print "Derived.foo()"; // out: Derived.foo()
-    super.foo("a", "b", "c", "d"); // out: Expected 2 arguments but got 4.
+    super.foo("a", "b", "c", "d"); // out: TypeError: foo() takes 2 arguments but 4 were given
   }
 }
 

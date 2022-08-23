@@ -1,2 +1,3 @@
 var Nil = nil;
-class Foo < Nil {} // out: Superclass must be a class.
+// out: TypeError: superclass should be of type "class", not "nil"
+class Foo < Nil {}

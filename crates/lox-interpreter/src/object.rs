@@ -180,7 +180,7 @@ impl Debug for Class {
 
 impl Callable for Class {
     fn arity(&self) -> usize {
-        match self.methods.get("init") {
+        match self.method_helper("init") {
             Some(function) => function.arity(),
             None => 0,
         }
@@ -203,16 +203,7 @@ impl Callable for Class {
             fields: FxHashMap::default(),
         })));
         if let Some(init) = self.method("init", instance.clone()) {
-            match init {
-                Object::Function(function) => {
-                    let constructor = Object::Function(function.bind(instance.clone()));
-                    constructor.call(interpreter, env, args, stdout, span)?;
-                }
-                _ => unreachable!(
-                    r#"expected "init" of type "function", found {:?} instead"#,
-                    init.type_()
-                ),
-            }
+            init.call(interpreter, env, args, stdout, span)?;
         }
         Ok(instance)
     }
@@ -220,10 +211,15 @@ impl Callable for Class {
 
 impl Class {
     pub fn method(&self, name: &str, this: Object) -> Option<Object> {
+        let function = self.method_helper(name)?;
+        Some(Object::Function(function.bind(this)))
+    }
+
+    fn method_helper(&self, name: &str) -> Option<&Function> {
         if let Some(method) = self.methods.get(name) {
-            Some(Object::Function(method.clone().bind(this)))
+            Some(method)
         } else if let Some(super_) = &self.super_ {
-            super_.method(name, this)
+            super_.method_helper(name)
         } else {
             None
         }

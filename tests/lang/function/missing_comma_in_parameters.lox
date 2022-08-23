@@ -1,3 +1,2 @@
-// [line 3] Error at 'c': Expect ')' after parameters.
-// [c line 4] Error at end: Expect '}' after block.
+// out: SyntaxError: unexpected "c"
 fun foo(a, b c, d, e, f) {}

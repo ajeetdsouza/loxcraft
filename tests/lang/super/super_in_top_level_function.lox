@@ -1,3 +1,4 @@
-  super.bar(); // Error at 'super': Can't use 'super' outside of a class.
+// out: NameError: name "super" is not defined
+super.bar();
 fun foo() {
 }

@@ -1,6 +1,6 @@
 class Foo {
   method() {
-    print method; // out: NameError: name "Foo" is not defined
+    print method; // out: NameError: name "method" is not defined
   }
 }
 

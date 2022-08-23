@@ -1,4 +1,4 @@
 class Foo {}
 
-// [line 4] Error at '(': Expect superclass name.
+// out: SyntaxError: unexpected "("
 class Bar < (Foo) {}

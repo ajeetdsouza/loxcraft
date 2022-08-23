@@ -4,7 +4,7 @@ class A {
 
 class B < A {
   method() {
-    // [line 8] Error at ')': Expect '.' after 'super'.
+    // out: SyntaxError: unexpected ")"
     (super).method();
   }
 }

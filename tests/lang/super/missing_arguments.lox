@@ -6,7 +6,7 @@ class Base {
 
 class Derived < Base {
   foo() {
-    super.foo(1); // out: Expected 2 arguments but got 1.
+    super.foo(1); // out: TypeError: foo() takes 2 arguments but 1 were given
   }
 }
 
