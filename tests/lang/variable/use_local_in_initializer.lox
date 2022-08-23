@@ -1,4 +1,6 @@
+// https://github.com/munificent/craftinginterpreters/issues/1083
 var a = "outer";
 {
-  var a = a; // Error at 'a': Can't read local variable in its own initializer.
+  // out: Error at 'a': Can't read local variable in its own initializer.
+  var a = a;
 }

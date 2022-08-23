@@ -1,11 +1,12 @@
 use crate::repl::{self, Prompt};
 
 use clap::Parser as Clap;
+use lox_common::error::Error;
 use lox_interpreter::Interpreter;
 use reedline::Signal;
 
-use std::fs;
 use std::io::{self, Write};
+use std::{fs, process};
 
 #[derive(Clap, Debug)]
 #[clap(about, author, disable_help_subcommand = true, propagate_version = true, version)]
@@ -40,29 +41,9 @@ pub fn repl() {
     loop {
         match editor.read_line(&Prompt) {
             Ok(Signal::Success(line)) => {
-                let (mut program, errors) = lox_syntax::parse(&line);
+                let errors = interpreter.run(&line, &mut stdout);
                 if !errors.is_empty() {
-                    let mut buffer = termcolor::Buffer::ansi();
-                    for e in errors {
-                        lox_common::error::report_err(&mut buffer, &line, e);
-                    }
-                    io::stderr().write_all(buffer.as_slice()).unwrap();
-                    continue;
-                }
-                let errors = lox_interpreter::resolve(&mut program);
-                if !errors.is_empty() {
-                    let mut buffer = termcolor::Buffer::ansi();
-                    for e in errors {
-                        lox_common::error::report_err(&mut buffer, &line, e);
-                    }
-                    io::stderr().write_all(buffer.as_slice()).unwrap();
-                    continue;
-                }
-                if let Err(e) = interpreter.run(&program, &mut stdout) {
-                    let mut buffer = termcolor::Buffer::ansi();
-                    lox_common::error::report_err(&mut buffer, &line, e);
-                    io::stderr().write_all(buffer.as_slice()).unwrap();
-                    continue;
+                    report_err(&line, errors);
                 }
             }
             Ok(Signal::CtrlC) => eprintln!("^C"),
@@ -77,19 +58,18 @@ pub fn repl() {
 
 fn run(path: &str) {
     let source = fs::read_to_string(&path).unwrap();
-    todo!()
-    // let compiler = Compiler::new();
-    // let mut errors = Vec::new();
-    // let function = compiler.compile(&source, &mut errors);
-    // if !errors.is_empty() {
-    //     let mut buffer = termcolor::Buffer::ansi();
-    //     lox_vm::report_err(&mut buffer, &source, errors);
-    //     io::stderr().write_all(buffer.as_slice()).unwrap();
-    //     return;
-    // };
+    let mut interpreter = Interpreter::new();
+    let errors = interpreter.run(&source, &mut io::stdout());
+    if !errors.is_empty() {
+        report_err(&source, errors);
+        process::exit(1);
+    }
+}
 
-    // let stdout = io::stdout().lock();
-    // let stderr = io::stderr().lock();
-    // let mut vm = VM::new(stdout, stderr, debug);
-    // vm.run(function);
+fn report_err(source: &str, errors: Vec<Error>) {
+    let mut buffer = termcolor::Buffer::ansi();
+    for e in errors {
+        lox_common::error::report_err(&mut buffer, &source, e);
+    }
+    io::stderr().write_all(buffer.as_slice()).unwrap();
 }

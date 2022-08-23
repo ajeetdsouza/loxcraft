@@ -1,3 +1,6 @@
 fun foo() {
-  this; // Error at 'this': Can't use 'this' outside of a class.
+  this;
 }
+
+// out: NameError: name "this" is not defined
+foo();

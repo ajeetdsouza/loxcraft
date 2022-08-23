@@ -20,22 +20,9 @@ fn lox(path: &str) {
     }
 
     let mut got_output = Vec::new();
-    let (mut program, errors) = lox_syntax::parse(&source);
+    let errors = Interpreter::new().run(&source, &mut got_output);
     if let Some(e) = errors.first() {
         writeln!(&mut got_output, "{e}").unwrap();
-        assert_eq!(exp_output, std::str::from_utf8(&got_output).unwrap());
-        return;
-    }
-
-    let errors = lox_interpreter::resolve(&mut program);
-    if let Some(e) = errors.first() {
-        writeln!(&mut got_output, "{e}").unwrap();
-        assert_eq!(exp_output, std::str::from_utf8(&got_output).unwrap());
-        return;
-    }
-
-    if let Err(e) = Interpreter::new().run(&program, &mut got_output) {
-        writeln!(got_output, "{e}").unwrap();
     }
     assert_eq!(exp_output, std::str::from_utf8(&got_output).unwrap());
 }

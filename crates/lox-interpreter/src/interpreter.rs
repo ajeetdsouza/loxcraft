@@ -21,7 +21,22 @@ impl Interpreter {
         Self { globals, return_: None }
     }
 
-    pub fn run<W: Write>(&mut self, program: &Program, stdout: &mut W) -> Result<()> {
+    pub fn run<W: Write>(&mut self, source: &str, stdout: &mut W) -> Vec<Error> {
+        let (mut program, errors) = lox_syntax::parse(source);
+        if !errors.is_empty() {
+            return errors;
+        }
+        let errors = crate::resolve(&mut program);
+        if !errors.is_empty() {
+            return errors;
+        }
+        if let Err(e) = self.run_program(&program, stdout) {
+            return vec![e];
+        }
+        return Vec::new();
+    }
+
+    pub fn run_program<W: Write>(&mut self, program: &Program, stdout: &mut W) -> Result<()> {
         let env = &mut self.globals.clone();
         for stmt_s in &program.stmts {
             self.run_stmt(env, stmt_s, stdout)?;

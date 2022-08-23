@@ -1,5 +1,8 @@
 class Foo {
   init() {
-    return "result"; // Error at 'return': Can't return a value from an initializer.
+    return "result";
   }
 }
+
+// out: TypeError: init() should use an empty return, not "string"
+Foo();

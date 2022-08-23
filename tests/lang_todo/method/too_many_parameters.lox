@@ -1,5 +1,7 @@
-// 256 parameters.
-fun f(
+class Foo {
+  // 256 parameters.
+  // out: SyntaxError: can't have more than 255 parameters (found 256)
+  method(
     a1,
     a2,
     a3,
@@ -254,4 +256,5 @@ fun f(
     a252,
     a253,
     a254,
-    a255, a) {} // out: Error at 'a': Can't have more than 255 parameters.
+    a255, a) {}
+}
