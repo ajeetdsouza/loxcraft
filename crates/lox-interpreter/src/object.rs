@@ -8,7 +8,6 @@ use rustc_hash::FxHashMap;
 
 use std::cell::RefCell;
 use std::fmt::{self, Debug, Display, Formatter};
-use std::io::Write;
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -109,18 +108,18 @@ impl Object {
         }
     }
 
-    pub fn call<W: Write>(
+    pub fn call(
         &self,
         interpreter: &mut Interpreter,
         env: &mut Env,
         args: Vec<Object>,
-        stdout: &mut W,
+
         span: &Span,
     ) -> Result<Object> {
         match &self {
-            Object::Class(class) => class.call(interpreter, env, args, stdout, span),
-            Object::Function(function) => function.call(interpreter, env, args, stdout, span),
-            Object::Native(native) => native.call(interpreter, env, args, stdout, span),
+            Object::Class(class) => class.call(interpreter, env, args, span),
+            Object::Function(function) => function.call(interpreter, env, args, span),
+            Object::Native(native) => native.call(interpreter, env, args, span),
             object => Err(Error::TypeError(TypeError::NotCallable {
                 type_: object.type_().to_string(),
                 span: span.clone(),
@@ -134,21 +133,21 @@ pub trait Callable {
 
     fn name(&self) -> &str;
 
-    fn call_unchecked<W: Write>(
+    fn call_unchecked(
         &self,
         interpreter: &mut Interpreter,
         env: &mut Env,
         args: Vec<Object>,
-        stdout: &mut W,
+
         span: &Span,
     ) -> Result<Object>;
 
-    fn call<W: Write>(
+    fn call(
         &self,
         interpreter: &mut Interpreter,
         env: &mut Env,
         args: Vec<Object>,
-        stdout: &mut W,
+
         span: &Span,
     ) -> Result<Object> {
         let exp_args = self.arity();
@@ -161,7 +160,7 @@ pub trait Callable {
                 span: span.clone(),
             }));
         }
-        self.call_unchecked(interpreter, env, args, stdout, span)
+        self.call_unchecked(interpreter, env, args, span)
     }
 }
 
@@ -190,12 +189,12 @@ impl Callable for Class {
         &self.decl.name
     }
 
-    fn call_unchecked<W: Write>(
+    fn call_unchecked(
         &self,
         interpreter: &mut Interpreter,
         env: &mut Env,
         args: Vec<Object>,
-        stdout: &mut W,
+
         span: &Span,
     ) -> Result<Object> {
         let instance = Object::Instance(Rc::new(RefCell::new(Instance {
@@ -203,7 +202,7 @@ impl Callable for Class {
             fields: FxHashMap::default(),
         })));
         if let Some(init) = self.method("init", instance.clone()) {
-            init.call(interpreter, env, args, stdout, span)?;
+            init.call(interpreter, env, args, span)?;
         }
         Ok(instance)
     }
@@ -247,12 +246,12 @@ impl Callable for Function {
         &self.decl.name
     }
 
-    fn call_unchecked<W: Write>(
+    fn call_unchecked(
         &self,
         interpreter: &mut Interpreter,
         _env: &mut Env,
         args: Vec<Object>,
-        stdout: &mut W,
+
         span: &Span,
     ) -> Result<Object> {
         let env = &mut Env::with_parent(&self.env);
@@ -260,7 +259,7 @@ impl Callable for Function {
             interpreter.insert_var(env, param, arg);
         }
         for stmt_s in self.stmts().iter() {
-            match interpreter.run_stmt(env, stmt_s, stdout) {
+            match interpreter.run_stmt(env, stmt_s) {
                 Err(Error::SyntaxError(SyntaxError::ReturnOutsideFunction { .. })) => {
                     let object = interpreter.return_.take();
                     return if self.is_init() {
@@ -337,12 +336,11 @@ impl Callable for Native {
         }
     }
 
-    fn call_unchecked<W: Write>(
+    fn call_unchecked(
         &self,
         _interpreter: &mut Interpreter,
         _env: &mut Env,
         _args: Vec<Object>,
-        _stdout: &mut W,
         _span: &Span,
     ) -> Result<Object> {
         match self {

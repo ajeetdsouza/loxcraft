@@ -34,14 +34,14 @@ impl Cmd {
 }
 
 pub fn repl() {
-    let mut stdout = io::stdout().lock();
-    let mut interpreter = Interpreter::new();
+    let stdout = &mut io::stdout().lock();
+    let mut interpreter = Interpreter::new(stdout);
     let mut editor = repl::editor().unwrap();
 
     loop {
         match editor.read_line(&Prompt) {
             Ok(Signal::Success(line)) => {
-                let errors = interpreter.run(&line, &mut stdout);
+                let errors = interpreter.run(&line);
                 if !errors.is_empty() {
                     report_err(&line, errors);
                 }
@@ -58,8 +58,9 @@ pub fn repl() {
 
 fn run(path: &str) {
     let source = fs::read_to_string(&path).unwrap();
-    let mut interpreter = Interpreter::new();
-    let errors = interpreter.run(&source, &mut io::stdout());
+    let stdout = &mut io::stdout().lock();
+    let mut interpreter = Interpreter::new(stdout);
+    let errors = interpreter.run(&source);
     if !errors.is_empty() {
         report_err(&source, errors);
         process::exit(1);

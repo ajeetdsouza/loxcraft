@@ -20,7 +20,7 @@ fn lox(path: &str) {
     }
 
     let mut got_output = Vec::new();
-    let errors = Interpreter::new().run(&source, &mut got_output);
+    let errors = Interpreter::new(&mut got_output).run(&source);
     if let Some(e) = errors.first() {
         writeln!(&mut got_output, "{e}").unwrap();
     }
