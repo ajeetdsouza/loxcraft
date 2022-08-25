@@ -55,40 +55,7 @@ impl<'stdout> Interpreter<'stdout> {
                 }
             }
             Stmt::Class(class) => {
-                let super_ = match &class.super_ {
-                    Some(super_) => {
-                        let super_ = match self.run_expr(env, super_)? {
-                            Object::Class(super_) => super_,
-                            object => {
-                                return Err(Error::TypeError(TypeError::SuperclassInvalidType {
-                                    type_: object.type_(),
-                                    span: span.clone(),
-                                }))
-                            }
-                        };
-                        Some(Box::new(super_))
-                    }
-                    None => None,
-                };
-
-                let methods = {
-                    let mut env = env.clone();
-                    if let Some(super_) = &super_ {
-                        env = Env::with_parent(&env);
-                        env.insert_unchecked("super", Object::Class(*super_.clone()));
-                    };
-                    class
-                        .methods
-                        .iter()
-                        .map(|(decl, _)| {
-                            (
-                                decl.name.to_string(),
-                                Function { decl: decl.clone(), env: env.clone() },
-                            )
-                        })
-                        .collect()
-                };
-                let object = Object::Class(Class { decl: class.clone(), super_, methods });
+                let object = Object::Class(Class::new(self, env, class, span)?);
                 self.insert_var(env, &class.name, object);
             }
             Stmt::Expr(expr) => {
@@ -158,7 +125,7 @@ impl<'stdout> Interpreter<'stdout> {
         Ok(())
     }
 
-    fn run_expr(&mut self, env: &mut Env, expr_s: &ExprS) -> Result<Object> {
+    pub fn run_expr(&mut self, env: &mut Env, expr_s: &ExprS) -> Result<Object> {
         let (expr, span) = expr_s;
         match expr {
             Expr::Assign(assign) => {

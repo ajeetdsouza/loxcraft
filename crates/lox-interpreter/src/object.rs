@@ -1,6 +1,7 @@
 use crate::env::Env;
 use crate::Interpreter;
 
+use gc::{Finalize, Gc, Trace};
 use lox_common::error::{AttributeError, Error, Result, SyntaxError, TypeError};
 use lox_common::types::Span;
 use lox_syntax::ast::{Spanned, Stmt, StmtClass, StmtFun};
@@ -8,6 +9,7 @@ use rustc_hash::FxHashMap;
 
 use std::cell::RefCell;
 use std::fmt::{self, Debug, Display, Formatter};
+use std::ops::Deref;
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -164,16 +166,73 @@ pub trait Callable {
     }
 }
 
-#[derive(Clone)]
-pub struct Class {
-    pub decl: StmtClass,
-    pub super_: Option<Box<Class>>,
-    pub methods: FxHashMap<String, Function>,
+#[derive(Clone, Finalize, Trace)]
+pub struct Class(Gc<ClassImpl>);
+
+impl Class {
+    pub fn new(
+        interpreter: &mut Interpreter,
+        env: &mut Env,
+        decl: &StmtClass,
+        span: &Span,
+    ) -> Result<Self> {
+        let super_ = match &decl.super_ {
+            Some(super_) => match interpreter.run_expr(env, super_)? {
+                Object::Class(super_) => Some(super_),
+                object => {
+                    return Err(Error::TypeError(TypeError::SuperclassInvalidType {
+                        type_: object.type_(),
+                        span: span.clone(),
+                    }))
+                }
+            },
+            None => None,
+        };
+
+        let methods = {
+            let mut env = env.clone();
+            if let Some(super_) = &super_ {
+                env = Env::with_parent(&env);
+                env.insert_unchecked("super", Object::Class(super_.clone()));
+            };
+            decl.methods
+                .iter()
+                .map(|(decl, _)| {
+                    (decl.name.to_string(), Function { decl: decl.clone(), env: env.clone() })
+                })
+                .collect()
+        };
+        let class = ClassImpl { decl: decl.clone(), super_, methods };
+        Ok(Self(Gc::new(class)))
+    }
+
+    pub fn method(&self, name: &str, this: Object) -> Option<Object> {
+        let function = self.method_helper(name)?;
+        Some(Object::Function(function.bind(this)))
+    }
+
+    fn method_helper(&self, name: &str) -> Option<&Function> {
+        if let Some(method) = self.methods.get(name) {
+            Some(method)
+        } else if let Some(super_) = &self.super_ {
+            super_.method_helper(name)
+        } else {
+            None
+        }
+    }
 }
 
 impl Debug for Class {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "<class {}>", self.name())
+    }
+}
+
+impl Deref for Class {
+    type Target = ClassImpl;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
@@ -208,21 +267,13 @@ impl Callable for Class {
     }
 }
 
-impl Class {
-    pub fn method(&self, name: &str, this: Object) -> Option<Object> {
-        let function = self.method_helper(name)?;
-        Some(Object::Function(function.bind(this)))
-    }
-
-    fn method_helper(&self, name: &str) -> Option<&Function> {
-        if let Some(method) = self.methods.get(name) {
-            Some(method)
-        } else if let Some(super_) = &self.super_ {
-            super_.method_helper(name)
-        } else {
-            None
-        }
-    }
+#[derive(Clone, Finalize, Trace)]
+pub struct ClassImpl {
+    #[unsafe_ignore_trace]
+    pub decl: StmtClass,
+    pub super_: Option<Class>,
+    #[unsafe_ignore_trace]
+    pub methods: FxHashMap<String, Function>,
 }
 
 #[derive(Clone)]

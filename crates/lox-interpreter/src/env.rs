@@ -3,8 +3,18 @@ use crate::object::Object;
 use gc::{Finalize, Gc, GcCell, Trace};
 use rustc_hash::FxHashMap;
 
+use std::ops::Deref;
+
 #[derive(Clone, Debug, Default, Finalize, Trace)]
 pub struct Env(Gc<GcCell<EnvNode>>);
+
+impl Deref for Env {
+    type Target = Gc<GcCell<EnvNode>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 impl Env {
     pub fn with_parent(parent: &Env) -> Self {
@@ -13,32 +23,32 @@ impl Env {
     }
 
     pub fn contains(&self, name: &str) -> bool {
-        self.0.borrow().contains(name)
+        self.borrow().contains(name)
     }
 
     pub fn get(&self, name: &str) -> Option<Object> {
-        self.0.borrow().get(name)
+        self.borrow().get(name)
     }
 
     pub fn get_at(&self, name: &str, depth: usize) -> Option<Object> {
-        self.0.borrow().get_at(name, depth)
+        self.borrow().get_at(name, depth)
     }
 
     pub fn set(&mut self, name: &str, value: Object) -> Result<(), ()> {
-        self.0.borrow_mut().set(name, value)
+        self.borrow_mut().set(name, value)
     }
 
     pub fn set_at(&mut self, name: &str, value: Object, depth: usize) -> Result<(), ()> {
-        self.0.borrow_mut().set_at(name, value, depth)
+        self.borrow_mut().set_at(name, value, depth)
     }
 
     pub fn insert_unchecked(&mut self, name: &str, value: Object) {
-        self.0.borrow_mut().insert_unchecked(name, value)
+        self.borrow_mut().insert_unchecked(name, value)
     }
 }
 
 #[derive(Debug, Default, Finalize, Trace)]
-struct EnvNode {
+pub struct EnvNode {
     #[unsafe_ignore_trace]
     map: FxHashMap<String, Object>,
     parent: Option<Gc<GcCell<EnvNode>>>,
