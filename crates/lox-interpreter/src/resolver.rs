@@ -145,7 +145,7 @@ impl Resolver {
     }
 
     fn define(&mut self, name: &str, span: &Span) {
-        if self.scopes.len() == 0 {
+        if self.scopes.is_empty() {
             return;
         }
         if let Some(scope) = self.scopes.last_mut() {

@@ -123,7 +123,7 @@ impl AsDiagnostic for SyntaxError {
                 .with_code("SyntaxError")
                 .with_message(self.to_string())
                 .with_labels(vec![Label::primary((), span.clone())])
-                .with_notes(vec![format!("expected: {}", one_of(&expected))]),
+                .with_notes(vec![format!("expected: {}", one_of(expected))]),
         }
     }
 }

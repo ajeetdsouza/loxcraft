@@ -1,17 +1,15 @@
 use crate::object::Object;
 
+use gc::{Finalize, Gc, GcCell, Trace};
 use rustc_hash::FxHashMap;
 
-use std::cell::RefCell;
-use std::rc::Rc;
-
-#[derive(Clone, Debug, Default)]
-pub struct Env(Rc<RefCell<EnvNode>>);
+#[derive(Clone, Debug, Default, Finalize, Trace)]
+pub struct Env(Gc<GcCell<EnvNode>>);
 
 impl Env {
     pub fn with_parent(parent: &Env) -> Self {
         let node = EnvNode::with_parent(parent.0.clone());
-        Self(Rc::new(RefCell::new(node)))
+        Self(Gc::new(GcCell::new(node)))
     }
 
     pub fn contains(&self, name: &str) -> bool {
@@ -39,14 +37,15 @@ impl Env {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Finalize, Trace)]
 struct EnvNode {
+    #[unsafe_ignore_trace]
     map: FxHashMap<String, Object>,
-    parent: Option<Rc<RefCell<EnvNode>>>,
+    parent: Option<Gc<GcCell<EnvNode>>>,
 }
 
 impl EnvNode {
-    fn with_parent(parent: Rc<RefCell<EnvNode>>) -> Self {
+    fn with_parent(parent: Gc<GcCell<EnvNode>>) -> Self {
         Self { map: FxHashMap::default(), parent: Some(parent) }
     }
 

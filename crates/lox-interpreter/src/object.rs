@@ -74,7 +74,7 @@ impl Object {
             Object::Instance(instance) => instance.borrow(),
             _ => {
                 return Err(Error::AttributeError(AttributeError::NoSuchAttribute {
-                    type_: self.type_().to_string(),
+                    type_: self.type_(),
                     name: name.to_string(),
                     span: span.clone(),
                 }))
@@ -87,7 +87,7 @@ impl Object {
 
         instance.class.method(name, self.clone()).ok_or_else(|| {
             Error::AttributeError(AttributeError::NoSuchAttribute {
-                type_: self.type_().to_string(),
+                type_: self.type_(),
                 name: name.to_string(),
                 span: span.clone(),
             })
@@ -101,7 +101,7 @@ impl Object {
                 Ok(())
             }
             _ => Err(Error::AttributeError(AttributeError::NoSuchAttribute {
-                type_: self.type_().to_string(),
+                type_: self.type_(),
                 name: name.to_string(),
                 span: span.clone(),
             })),
@@ -121,7 +121,7 @@ impl Object {
             Object::Function(function) => function.call(interpreter, env, args, span),
             Object::Native(native) => native.call(interpreter, env, args, span),
             object => Err(Error::TypeError(TypeError::NotCallable {
-                type_: object.type_().to_string(),
+                type_: object.type_(),
                 span: span.clone(),
             })),
         }
@@ -251,7 +251,6 @@ impl Callable for Function {
         interpreter: &mut Interpreter,
         _env: &mut Env,
         args: Vec<Object>,
-
         span: &Span,
     ) -> Result<Object> {
         let env = &mut Env::with_parent(&self.env);
@@ -269,7 +268,7 @@ impl Callable for Function {
                             })),
                             Some(object) => {
                                 Err(Error::TypeError(TypeError::InitInvalidReturnType {
-                                    type_: object.type_().to_string(),
+                                    type_: object.type_(),
                                     span: span.clone(),
                                 }))
                             }

@@ -44,10 +44,7 @@ pub fn parse(source: &str) -> (Program, Vec<Error>) {
             Error::SyntaxError(SyntaxError::InvalidToken { span: location..location })
         }
         ParseError::UnrecognizedEOF { location, expected } => {
-            Error::SyntaxError(SyntaxError::UnrecognizedEOF {
-                expected: expected.into_iter().map(|t| t.to_string()).collect(),
-                span: location..location,
-            })
+            Error::SyntaxError(SyntaxError::UnrecognizedEOF { expected, span: location..location })
         }
         ParseError::UnrecognizedToken { token: (start, _, end), expected } => {
             Error::SyntaxError(SyntaxError::UnrecognizedToken {

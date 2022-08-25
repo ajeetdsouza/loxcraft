@@ -34,7 +34,7 @@ impl<'stdout> Interpreter<'stdout> {
         if let Err(e) = self.run_program(&program) {
             return vec![e];
         }
-        return Vec::new();
+        Vec::new()
     }
 
     pub fn run_program(&mut self, program: &Program) -> Result<()> {
@@ -74,7 +74,7 @@ impl<'stdout> Interpreter<'stdout> {
                 let methods = {
                     let mut env = env.clone();
                     if let Some(super_) = &super_ {
-                        env = Env::with_parent(&mut env);
+                        env = Env::with_parent(&env);
                         env.insert_unchecked("super", Object::Class(*super_.clone()));
                     };
                     class
@@ -232,8 +232,8 @@ impl<'stdout> Interpreter<'stdout> {
                             (op, a, b) => {
                                 Err(Error::TypeError(TypeError::UnsupportedOperandInfix {
                                     op: op.to_string(),
-                                    lt_type: a.type_().to_string(),
-                                    rt_type: b.type_().to_string(),
+                                    lt_type: a.type_(),
+                                    rt_type: b.type_(),
                                     span: span.clone(),
                                 }))
                             }
@@ -254,7 +254,7 @@ impl<'stdout> Interpreter<'stdout> {
                         Object::Number(number) => Ok(Object::Number(-number)),
                         val => Err(Error::TypeError(TypeError::UnsupportedOperandPrefix {
                             op: prefix.op.to_string(),
-                            rt_type: val.type_().to_string(),
+                            rt_type: val.type_(),
                             span: span.clone(),
                         })),
                     },
@@ -318,9 +318,12 @@ impl<'stdout> Interpreter<'stdout> {
 
     fn set_var(&mut self, env: &mut Env, var: &Var, value: Object, span: &Span) -> Result<()> {
         match var.depth {
-            Some(depth) => Ok(env.set_at(&var.name, value, depth).unwrap_or_else(|_| {
-                unreachable!("variable was resolved but could not be found: {:?}", &var.name)
-            })),
+            Some(depth) => {
+                env.set_at(&var.name, value, depth).unwrap_or_else(|_| {
+                    unreachable!("variable was resolved but could not be found: {:?}", &var.name)
+                });
+                Ok(())
+            }
             None => self.globals.set(&var.name, value).map_err(|_| {
                 Error::NameError(NameError::NotDefined {
                     name: var.name.to_string(),

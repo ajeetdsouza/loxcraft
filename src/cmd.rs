@@ -70,7 +70,7 @@ fn run(path: &str) {
 fn report_err(source: &str, errors: Vec<Error>) {
     let mut buffer = termcolor::Buffer::ansi();
     for e in errors {
-        lox_common::error::report_err(&mut buffer, &source, e);
+        lox_common::error::report_err(&mut buffer, source, e);
     }
     io::stderr().write_all(buffer.as_slice()).unwrap();
 }

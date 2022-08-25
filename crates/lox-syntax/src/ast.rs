@@ -201,7 +201,7 @@ pub struct ExprSet {
     pub value: ExprS,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ExprSuper {
     pub super_: Var,
     pub name: String,
