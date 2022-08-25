@@ -40,11 +40,12 @@ impl Display for Object {
     }
 }
 
-// TODO: verify how this works once everything is a pointer.
 impl PartialEq for Object {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Object::Bool(b1), Object::Bool(b2)) => b1 == b2,
+            (Object::Class(c1), Object::Class(c2)) => c1 == c2,
+            (Object::Function(f1), Object::Function(f2)) => f1 == f2,
             (Object::Native(n1), Object::Native(n2)) => n1 == n2,
             (Object::Nil, Object::Nil) => true,
             (Object::Number(n1), Object::Number(n2)) => n1 == n2,
@@ -197,9 +198,7 @@ impl Class {
             };
             decl.methods
                 .iter()
-                .map(|(decl, _)| {
-                    (decl.name.to_string(), Function { decl: decl.clone(), env: env.clone() })
-                })
+                .map(|(decl, _)| (decl.name.to_string(), Function::new(decl, &env)))
                 .collect()
         };
         let class = ClassImpl { decl: decl.clone(), super_, methods };
@@ -233,6 +232,14 @@ impl Deref for Class {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl Eq for Class {}
+
+impl PartialEq for Class {
+    fn eq(&self, other: &Self) -> bool {
+        Gc::ptr_eq(&self.0, &other.0)
     }
 }
 
@@ -272,19 +279,56 @@ pub struct ClassImpl {
     #[unsafe_ignore_trace]
     pub decl: StmtClass,
     pub super_: Option<Class>,
-    #[unsafe_ignore_trace]
     pub methods: FxHashMap<String, Function>,
 }
 
-#[derive(Clone)]
-pub struct Function {
-    pub decl: StmtFun,
-    pub env: Env,
+#[derive(Clone, Finalize, Trace)]
+pub struct Function(Gc<FunctionImpl>);
+
+impl Function {
+    pub fn new(decl: &StmtFun, env: &Env) -> Self {
+        Function(Gc::new(FunctionImpl { decl: decl.clone(), env: env.clone() }))
+    }
+
+    pub fn params(&self) -> &[String] {
+        &self.decl.params
+    }
+
+    pub fn stmts(&self) -> &[Spanned<Stmt>] {
+        &self.decl.body.stmts
+    }
+
+    pub fn bind(&self, this: Object) -> Function {
+        let mut env = Env::with_parent(&self.env);
+        env.insert_unchecked("this", this);
+        Function::new(&self.decl, &env)
+    }
+
+    /// Checks if the function is a constructor.
+    pub fn is_init(&self) -> bool {
+        self.env.contains("this") && self.name() == "init"
+    }
 }
 
 impl Debug for Function {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "<function {}>", self.name())
+    }
+}
+
+impl Deref for Function {
+    type Target = FunctionImpl;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Eq for Function {}
+
+impl PartialEq for Function {
+    fn eq(&self, other: &Self) -> bool {
+        Gc::ptr_eq(&self.0, &other.0)
     }
 }
 
@@ -341,25 +385,11 @@ impl Callable for Function {
     }
 }
 
-impl Function {
-    pub fn params(&self) -> &[String] {
-        &self.decl.params
-    }
-
-    pub fn stmts(&self) -> &[Spanned<Stmt>] {
-        &self.decl.body.stmts
-    }
-
-    pub fn bind(&self, this: Object) -> Function {
-        let mut env = Env::with_parent(&self.env);
-        env.insert_unchecked("this", this);
-        Function { decl: self.decl.clone(), env }
-    }
-
-    /// Checks if the function is a constructor.
-    pub fn is_init(&self) -> bool {
-        self.env.contains("this") && self.name() == "init"
-    }
+#[derive(Clone, Finalize, Trace)]
+pub struct FunctionImpl {
+    #[unsafe_ignore_trace]
+    pub decl: StmtFun,
+    pub env: Env,
 }
 
 #[derive(Clone, Debug)]

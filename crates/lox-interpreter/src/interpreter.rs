@@ -78,7 +78,7 @@ impl<'stdout> Interpreter<'stdout> {
                 }
             }
             Stmt::Fun(fun) => {
-                let object = Object::Function(Function { decl: fun.clone(), env: env.clone() });
+                let object = Object::Function(Function::new(fun, env));
                 self.insert_var(env, &fun.name, object);
             }
             Stmt::If(if_) => {
