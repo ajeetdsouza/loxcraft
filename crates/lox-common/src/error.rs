@@ -70,6 +70,8 @@ impl AsDiagnostic for IoError {
 
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum NameError {
+    #[error("cannot access variable {name:?} in its own initializer")]
+    AccessInsideInitializer { name: String, span: Span },
     #[error("name {name:?} is already defined")]
     AlreadyDefined { name: String, span: Span },
     #[error("name {name:?} is not defined")]
@@ -79,12 +81,12 @@ pub enum NameError {
 impl AsDiagnostic for NameError {
     fn as_diagnostic(&self) -> Diagnostic<()> {
         match self {
-            NameError::AlreadyDefined { span, .. } | NameError::NotDefined { span, .. } => {
-                Diagnostic::error()
-                    .with_code("NameError")
-                    .with_message(self.to_string())
-                    .with_labels(vec![Label::primary((), span.clone())])
-            }
+            NameError::AccessInsideInitializer { span, .. }
+            | NameError::AlreadyDefined { span, .. }
+            | NameError::NotDefined { span, .. } => Diagnostic::error()
+                .with_code("NameError")
+                .with_message(self.to_string())
+                .with_labels(vec![Label::primary((), span.clone())]),
         }
     }
 }

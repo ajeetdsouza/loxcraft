@@ -1,11 +1,11 @@
 use lox_common::error::{Error, NameError};
 use lox_common::types::Span;
 use lox_syntax::ast::{Expr, ExprS, Program, Stmt, StmtFun, StmtS, Var};
-use rustc_hash::FxHashSet;
+use rustc_hash::FxHashMap;
 
 #[derive(Debug, Default)]
 pub struct Resolver {
-    scopes: Vec<FxHashSet<String>>,
+    scopes: Vec<FxHashMap<String, bool>>,
     errors: Vec<Error>,
 }
 
@@ -31,13 +31,13 @@ impl Resolver {
                 if let Some(super_) = &mut class.super_ {
                     self.resolve_expr(super_);
                 }
-                self.define(&class.name, span);
+                self.declare_define(&class.name, span);
                 if let Some((_, span)) = &class.super_ {
                     self.begin_scope();
-                    self.define("super", span);
+                    self.declare_define("super", span);
                 }
                 self.begin_scope();
-                self.define("this", span);
+                self.declare_define("this", span);
                 for (fun, span) in class.methods.iter_mut() {
                     self.resolve_fun(fun, span);
                 }
@@ -62,11 +62,11 @@ impl Resolver {
                 self.end_scope();
             }
             Stmt::Fun(fun) => {
-                self.define(&fun.name, span);
+                self.declare_define(&fun.name, span);
                 self.resolve_fun(fun, span);
                 self.begin_scope();
                 for param in &fun.params {
-                    self.define(param, span);
+                    self.declare_define(param, span);
                 }
                 for stmt_s in fun.body.stmts.iter_mut() {
                     self.resolve_stmt(stmt_s);
@@ -87,10 +87,11 @@ impl Resolver {
                 }
             }
             Stmt::Var(var) => {
+                self.declare(&var.var.name, span);
                 if let Some(value) = &mut var.value {
                     self.resolve_expr(value);
                 }
-                self.define(&var.var.name, span);
+                self.define(&var.var.name);
             }
             Stmt::While(while_) => {
                 self.resolve_expr(&mut while_.cond);
@@ -101,7 +102,7 @@ impl Resolver {
     }
 
     fn resolve_expr(&mut self, expr_s: &mut ExprS) {
-        let (expr, _) = expr_s;
+        let (expr, span) = expr_s;
         match expr {
             Expr::Assign(assign) => {
                 self.resolve_expr(&mut assign.value);
@@ -129,14 +130,24 @@ impl Resolver {
                 self.resolve_expr(&mut set.object);
             }
             Expr::Super(super_) => self.access(&mut super_.super_),
-            Expr::Var(var) => self.access(&mut var.var),
+            Expr::Var(var) => {
+                if let Some(scope) = self.scopes.last() {
+                    if scope.get(&var.var.name) == Some(&false) {
+                        self.errors.push(Error::NameError(NameError::AccessInsideInitializer {
+                            name: var.var.name.clone(),
+                            span: span.clone(),
+                        }));
+                    }
+                }
+                self.access(&mut var.var);
+            }
         }
     }
 
     fn resolve_fun(&mut self, fun: &mut StmtFun, span: &Span) {
         self.begin_scope();
         for param in &fun.params {
-            self.define(param, span);
+            self.declare_define(param, span);
         }
         for stmt_s in fun.body.stmts.iter_mut() {
             self.resolve_stmt(stmt_s);
@@ -144,25 +155,32 @@ impl Resolver {
         self.end_scope();
     }
 
-    fn define(&mut self, name: &str, span: &Span) {
-        if self.scopes.is_empty() {
-            return;
-        }
+    fn declare_define(&mut self, name: &str, span: &Span) {
+        self.declare(name, span);
+        self.define(name);
+    }
+
+    fn declare(&mut self, name: &str, span: &Span) {
         if let Some(scope) = self.scopes.last_mut() {
-            if scope.contains(name) {
+            if scope.contains_key(name) {
                 self.errors.push(Error::NameError(NameError::AlreadyDefined {
                     name: name.to_string(),
                     span: span.clone(),
-                }));
-            } else {
-                scope.insert(name.to_string());
+                }))
             }
+            scope.insert(name.to_string(), false);
+        }
+    }
+
+    fn define(&mut self, name: &str) {
+        if let Some(scope) = self.scopes.last_mut() {
+            scope.insert(name.to_string(), true);
         }
     }
 
     fn access(&mut self, var: &mut Var) {
         for (depth, scope) in self.scopes.iter_mut().rev().enumerate() {
-            if scope.contains(&var.name) {
+            if scope.contains_key(&var.name) {
                 var.depth = Some(depth);
                 break;
             }
@@ -170,7 +188,7 @@ impl Resolver {
     }
 
     fn begin_scope(&mut self) {
-        self.scopes.push(FxHashSet::default());
+        self.scopes.push(FxHashMap::default());
     }
 
     fn end_scope(&mut self) {
