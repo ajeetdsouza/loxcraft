@@ -1,4 +1,4 @@
 fun foo() {}
 print foo; // out: <function foo>
 
-print clock; // out: <function clock>
+print clock; // out: <native clock>

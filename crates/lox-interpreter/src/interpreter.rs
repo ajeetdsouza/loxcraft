@@ -18,7 +18,7 @@ pub struct Interpreter<'stdout> {
 impl<'stdout> Interpreter<'stdout> {
     pub fn new(stdout: &'stdout mut dyn Write) -> Self {
         let mut globals = Env::default();
-        globals.insert_unchecked("clock", Object::Native(Native::Clock));
+        globals.insert_unchecked("clock", Native::Clock.into());
         Self { globals, stdout, return_: None }
     }
 
@@ -55,7 +55,22 @@ impl<'stdout> Interpreter<'stdout> {
                 }
             }
             Stmt::Class(class) => {
-                let object = Object::Class(Class::new(self, env, class, span)?);
+                let super_ = match &class.super_ {
+                    Some(decl) => {
+                        let super_ = self.run_expr(env, decl)?;
+                        match &super_ {
+                            Object::Class(class) => Some(class.clone()),
+                            object => {
+                                return Err(Error::TypeError(TypeError::SuperclassInvalidType {
+                                    type_: object.type_(),
+                                    span: span.clone(),
+                                }))
+                            }
+                        }
+                    }
+                    None => None,
+                };
+                let object = Class::new(class, super_, env).into();
                 self.insert_var(env, &class.name, object);
             }
             Stmt::Expr(expr) => {
@@ -78,7 +93,7 @@ impl<'stdout> Interpreter<'stdout> {
                 }
             }
             Stmt::Fun(fun) => {
-                let object = Object::Function(Function::new(fun, env));
+                let object = Function::new(fun, env).into();
                 self.insert_var(env, &fun.name, object);
             }
             Stmt::If(if_) => {
@@ -166,12 +181,12 @@ impl<'stdout> Interpreter<'stdout> {
                     }
                     op => {
                         let rt = rt()?;
-                        match (op, lt, rt) {
+                        match (op, &lt, &rt) {
                             (OpInfix::Add, Object::Number(a), Object::Number(b)) => {
                                 Ok(Object::Number(a + b))
                             }
                             (OpInfix::Add, Object::String(a), Object::String(b)) => {
-                                Ok(Object::String(a + &b))
+                                Ok(Object::String(a.to_string() + &b))
                             }
                             (OpInfix::Subtract, Object::Number(a), Object::Number(b)) => {
                                 Ok(Object::Number(a - b))
@@ -241,7 +256,8 @@ impl<'stdout> Interpreter<'stdout> {
                         span: span.clone(),
                     })
                 })?;
-                let class = match env.get_at("super", depth) {
+                let class = env.get_at("super", depth);
+                let class = match &class {
                     Some(Object::Class(class)) => class,
                     Some(object) => unreachable!(
                         r#"expected "super" of type "class", found "{}" instead"#,

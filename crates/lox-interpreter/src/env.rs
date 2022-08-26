@@ -49,7 +49,6 @@ impl Env {
 
 #[derive(Debug, Default, Finalize, Trace)]
 pub struct EnvNode {
-    #[unsafe_ignore_trace]
     map: FxHashMap<String, Object>,
     parent: Option<Gc<GcCell<EnvNode>>>,
 }
