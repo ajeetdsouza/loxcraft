@@ -51,11 +51,14 @@ impl Object {
         let instance = match &self {
             Object::Instance(instance) => instance,
             _ => {
-                return Err(Error::AttributeError(AttributeError::NoSuchAttribute {
-                    type_: self.type_(),
-                    name: name.to_string(),
-                    span: span.clone(),
-                }))
+                return Err((
+                    Error::AttributeError(AttributeError::NoSuchAttribute {
+                        type_: self.type_(),
+                        name: name.to_string(),
+                        span: span.clone(),
+                    }),
+                    span.clone(),
+                ))
             }
         };
 
@@ -64,11 +67,14 @@ impl Object {
         }
 
         instance.class().method(name, self.clone()).ok_or_else(|| {
-            Error::AttributeError(AttributeError::NoSuchAttribute {
-                type_: self.type_(),
-                name: name.to_string(),
-                span: span.clone(),
-            })
+            (
+                Error::AttributeError(AttributeError::NoSuchAttribute {
+                    type_: self.type_(),
+                    name: name.to_string(),
+                    span: span.clone(),
+                }),
+                span.clone(),
+            )
         })
     }
 
@@ -78,11 +84,14 @@ impl Object {
                 instance.set(name, value.clone());
                 Ok(())
             }
-            _ => Err(Error::AttributeError(AttributeError::NoSuchAttribute {
-                type_: self.type_(),
-                name: name.to_string(),
-                span: span.clone(),
-            })),
+            _ => Err((
+                Error::AttributeError(AttributeError::NoSuchAttribute {
+                    type_: self.type_(),
+                    name: name.to_string(),
+                    span: span.clone(),
+                }),
+                span.clone(),
+            )),
         }
     }
 
@@ -97,10 +106,13 @@ impl Object {
             Object::Class(class) => class.call(interpreter, env, args, span),
             Object::Function(function) => function.call(interpreter, env, args, span),
             Object::Native(native) => native.call(interpreter, env, args, span),
-            object => Err(Error::TypeError(TypeError::NotCallable {
-                type_: object.type_(),
-                span: span.clone(),
-            })),
+            object => Err((
+                Error::TypeError(TypeError::NotCallable {
+                    type_: object.type_(),
+                    span: span.clone(),
+                }),
+                span.clone(),
+            )),
         }
     }
 }

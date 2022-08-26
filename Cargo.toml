@@ -28,6 +28,7 @@ clap = { version = "3.2.0", features = ["derive"] }
 dirs = "4.0.0"
 human-panic = "1.0.3"
 lox-common = { path = "crates/lox-common" }
+lox-lsp = { path = "crates/lox-lsp" }
 lox-interpreter = { path = "crates/lox-interpreter" }
 lox-playground = { path = "crates/lox-playground", optional = true }
 lox-syntax = { path = "crates/lox-syntax" }

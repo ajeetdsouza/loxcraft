@@ -6,5 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio = { version = "1.17.0", features = ["rt-multi-thread"] }
+anyhow = "1.0.52"
+lox-common = { path = "../lox-common" }
+lox-interpreter = { path = "../lox-interpreter" }
+lox-syntax = { path = "../lox-syntax" }
+tokio = { version = "1.17.0", features = ["io-std", "rt"] }
 tower-lsp = "0.17.0"

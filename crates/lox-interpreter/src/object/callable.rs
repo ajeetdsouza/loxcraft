@@ -28,12 +28,15 @@ pub trait Callable {
         let exp_args = self.arity();
         let got_args = args.len();
         if exp_args != got_args {
-            return Err(Error::TypeError(TypeError::ArityMismatch {
-                name: self.name().to_string(),
-                exp_args,
-                got_args,
-                span: span.clone(),
-            }));
+            return Err((
+                Error::TypeError(TypeError::ArityMismatch {
+                    name: self.name().to_string(),
+                    exp_args,
+                    got_args,
+                    span: span.clone(),
+                }),
+                span.clone(),
+            ));
         }
         self.call_unchecked(interpreter, env, args, span)
     }

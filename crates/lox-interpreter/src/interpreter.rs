@@ -2,7 +2,7 @@ use crate::env::Env;
 use crate::object::{Callable, Class, Function, Native, Object};
 
 use lox_common::error::{
-    AttributeError, Error, IoError, NameError, Result, SyntaxError, TypeError,
+    AttributeError, Error, ErrorS, IoError, NameError, Result, SyntaxError, TypeError,
 };
 use lox_common::types::Span;
 use lox_syntax::ast::{Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Program, Stmt, StmtS, Var};
@@ -22,14 +22,14 @@ impl<'stdout> Interpreter<'stdout> {
         Self { globals, stdout, return_: None }
     }
 
-    pub fn run(&mut self, source: &str) -> Vec<Error> {
+    pub fn run(&mut self, source: &str) -> Vec<ErrorS> {
         let (mut program, errors) = lox_syntax::parse(source);
         if !errors.is_empty() {
-            return errors;
+            // return errors;
         }
         let errors = crate::resolve(&mut program);
         if !errors.is_empty() {
-            return errors;
+            // return errors;
         }
         if let Err(e) = self.run_program(&program) {
             return vec![e];
@@ -61,10 +61,13 @@ impl<'stdout> Interpreter<'stdout> {
                         match &super_ {
                             Object::Class(class) => Some(class.clone()),
                             object => {
-                                return Err(Error::TypeError(TypeError::SuperclassInvalidType {
-                                    type_: object.type_(),
-                                    span: span.clone(),
-                                }))
+                                return Err((
+                                    Error::TypeError(TypeError::SuperclassInvalidType {
+                                        type_: object.type_(),
+                                        span: span.clone(),
+                                    }),
+                                    span.clone(),
+                                ))
                             }
                         }
                     }
@@ -107,10 +110,13 @@ impl<'stdout> Interpreter<'stdout> {
             Stmt::Print(print) => {
                 let value = self.run_expr(env, &print.value)?;
                 writeln!(self.stdout, "{}", value).map_err(|_| {
-                    Error::IoError(IoError::WriteError {
-                        file: "stdout".to_string(),
-                        span: span.clone(),
-                    })
+                    (
+                        Error::IoError(IoError::WriteError {
+                            file: "stdout".to_string(),
+                            span: span.clone(),
+                        }),
+                        span.clone(),
+                    )
                 })?;
             }
             Stmt::Return(return_) => {
@@ -119,9 +125,10 @@ impl<'stdout> Interpreter<'stdout> {
                     None => None,
                 };
                 self.return_ = object;
-                return Err(Error::SyntaxError(SyntaxError::ReturnOutsideFunction {
-                    span: span.clone(),
-                }));
+                return Err((
+                    Error::SyntaxError(SyntaxError::ReturnOutsideFunction { span: span.clone() }),
+                    span.clone(),
+                ));
             }
             Stmt::Var(var) => {
                 let value = match &var.value {
@@ -211,14 +218,15 @@ impl<'stdout> Interpreter<'stdout> {
                             }
                             (OpInfix::Equal, a, b) => Ok(Object::Bool(a == b)),
                             (OpInfix::NotEqual, a, b) => Ok(Object::Bool(a != b)),
-                            (op, a, b) => {
-                                Err(Error::TypeError(TypeError::UnsupportedOperandInfix {
+                            (op, a, b) => Err((
+                                Error::TypeError(TypeError::UnsupportedOperandInfix {
                                     op: op.to_string(),
                                     lt_type: a.type_(),
                                     rt_type: b.type_(),
                                     span: span.clone(),
-                                }))
-                            }
+                                }),
+                                span.clone(),
+                            )),
                         }
                     }
                 }
@@ -234,11 +242,14 @@ impl<'stdout> Interpreter<'stdout> {
                 match prefix.op {
                     OpPrefix::Negate => match &rt {
                         Object::Number(number) => Ok(Object::Number(-number)),
-                        val => Err(Error::TypeError(TypeError::UnsupportedOperandPrefix {
-                            op: prefix.op.to_string(),
-                            rt_type: val.type_(),
-                            span: span.clone(),
-                        })),
+                        val => Err((
+                            Error::TypeError(TypeError::UnsupportedOperandPrefix {
+                                op: prefix.op.to_string(),
+                                rt_type: val.type_(),
+                                span: span.clone(),
+                            }),
+                            span.clone(),
+                        )),
                     },
                     OpPrefix::Not => Ok(Object::Bool(!rt.bool())),
                 }
@@ -251,10 +262,13 @@ impl<'stdout> Interpreter<'stdout> {
             }
             Expr::Super(super_) => {
                 let depth = super_.super_.depth.ok_or_else(|| {
-                    Error::NameError(NameError::NotDefined {
-                        name: "super".to_string(),
-                        span: span.clone(),
-                    })
+                    (
+                        Error::NameError(NameError::NotDefined {
+                            name: "super".to_string(),
+                            span: span.clone(),
+                        }),
+                        span.clone(),
+                    )
                 })?;
                 let class = env.get_at("super", depth);
                 let class = match &class {
@@ -269,11 +283,14 @@ impl<'stdout> Interpreter<'stdout> {
                     .get_at("this", depth - 1)
                     .unwrap_or_else(|| unreachable!(r#""this" not found in method scope"#));
                 class.method(&super_.name, this).ok_or_else(|| {
-                    Error::AttributeError(AttributeError::NoSuchAttribute {
-                        type_: class.name().to_string(),
-                        name: super_.name.to_string(),
-                        span: span.clone(),
-                    })
+                    (
+                        Error::AttributeError(AttributeError::NoSuchAttribute {
+                            type_: class.name().to_string(),
+                            name: super_.name.to_string(),
+                            span: span.clone(),
+                        }),
+                        span.clone(),
+                    )
                 })
             }
             Expr::Var(var) => self.get_var(env, &var.var, span),
@@ -286,10 +303,13 @@ impl<'stdout> Interpreter<'stdout> {
                 unreachable!("variable was resolved but could not be found: {:?}", &var.name)
             })),
             None => self.globals.get(&var.name).ok_or_else(|| {
-                Error::NameError(NameError::NotDefined {
-                    name: var.name.to_string(),
-                    span: span.clone(),
-                })
+                (
+                    Error::NameError(NameError::NotDefined {
+                        name: var.name.to_string(),
+                        span: span.clone(),
+                    }),
+                    span.clone(),
+                )
             }),
         }
     }
@@ -303,10 +323,13 @@ impl<'stdout> Interpreter<'stdout> {
                 Ok(())
             }
             None => self.globals.set(&var.name, value).map_err(|_| {
-                Error::NameError(NameError::NotDefined {
-                    name: var.name.to_string(),
-                    span: span.clone(),
-                })
+                (
+                    Error::NameError(NameError::NotDefined {
+                        name: var.name.to_string(),
+                        span: span.clone(),
+                    }),
+                    span.clone(),
+                )
             }),
         }
     }

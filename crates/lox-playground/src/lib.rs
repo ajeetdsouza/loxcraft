@@ -16,7 +16,7 @@ use std::path::Path;
 struct Asset;
 
 pub fn serve(port: u16) -> Result<()> {
-    tokio::runtime::Builder::new_multi_thread()
+    tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .context("failed to start async runtime")?

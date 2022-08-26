@@ -1,4 +1,4 @@
-use crate::types::Span;
+use crate::types::{Span, Spanned};
 
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use codespan_reporting::files::SimpleFile;
@@ -6,7 +6,8 @@ use codespan_reporting::term;
 use termcolor::WriteColor;
 use thiserror::Error;
 
-pub type Result<T, E = Error> = std::result::Result<T, E>;
+pub type Result<T, E = Error> = std::result::Result<T, (E, Span)>;
+pub type ErrorS = Spanned<Error>;
 
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum Error {
