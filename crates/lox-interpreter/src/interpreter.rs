@@ -186,7 +186,7 @@ impl<'stdout> Interpreter<'stdout> {
                                 Ok(Object::Number(a + b))
                             }
                             (OpInfix::Add, Object::String(a), Object::String(b)) => {
-                                Ok(Object::String(a.to_string() + &b))
+                                Ok(Object::String(a.to_string() + b))
                             }
                             (OpInfix::Subtract, Object::Number(a), Object::Number(b)) => {
                                 Ok(Object::Number(a - b))

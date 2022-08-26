@@ -60,7 +60,7 @@ impl Object {
         };
 
         if let Some(object) = instance.get(name) {
-            return Ok(object.clone());
+            return Ok(object);
         }
 
         instance.class().method(name, self.clone()).ok_or_else(|| {

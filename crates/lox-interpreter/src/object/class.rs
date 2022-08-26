@@ -67,7 +67,7 @@ impl Callable for Class {
         args: Vec<Object>,
         span: &Span,
     ) -> Result<Object> {
-        let instance = Object::Instance(Instance::new(&self));
+        let instance = Object::Instance(Instance::new(self));
         if let Some(init) = self.method("init", instance.clone()) {
             init.call(interpreter, env, args, span)?;
         }
@@ -91,6 +91,7 @@ impl Deref for Class {
 
 impl Eq for Class {}
 
+#[allow(clippy::from_over_into)]
 impl Into<Object> for Class {
     fn into(self) -> Object {
         Object::Class(self)

@@ -107,6 +107,7 @@ impl Deref for Function {
 
 impl Eq for Function {}
 
+#[allow(clippy::from_over_into)]
 impl Into<Object> for Function {
     fn into(self) -> Object {
         Object::Function(self)

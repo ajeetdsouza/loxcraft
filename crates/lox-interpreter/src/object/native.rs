@@ -49,6 +49,7 @@ impl Display for Native {
     }
 }
 
+#[allow(clippy::from_over_into)]
 impl Into<Object> for Native {
     fn into(self) -> Object {
         Object::Native(self)

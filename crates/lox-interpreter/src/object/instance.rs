@@ -37,6 +37,7 @@ impl Display for Instance {
 
 impl Eq for Instance {}
 
+#[allow(clippy::from_over_into)]
 impl Into<Object> for Instance {
     fn into(self) -> Object {
         Object::Instance(self)
