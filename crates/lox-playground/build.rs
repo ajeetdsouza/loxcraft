@@ -3,9 +3,9 @@ use std::path::Path;
 use std::process::Command;
 
 fn main() {
-    println!("cargo:rerun-if-changed=ui/lox-wasm/src/");
-    println!("cargo:rerun-if-changed=ui/lox-wasm/Cargo.toml");
-    println!("cargo:rerun-if-changed=ui/lox-wasm/Cargo.lock");
+    println!("cargo:rerun-if-changed=../lox-wasm/src/");
+    println!("cargo:rerun-if-changed=../lox-wasm/Cargo.toml");
+    println!("cargo:rerun-if-changed=../lox-wasm/Cargo.lock");
     println!("cargo:rerun-if-changed=ui/src/");
     println!("cargo:rerun-if-changed=ui/package-lock.json");
     println!("cargo:rerun-if-changed=ui/package.json");

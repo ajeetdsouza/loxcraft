@@ -16,13 +16,8 @@ version = "0.1.0"
 maintenance = { status = "actively-developed" }
 
 [workspace]
-members = [
-    "crates/lox-common",
-    "crates/lox-interpreter",
-    "crates/lox-playground",
-    "crates/lox-syntax",
-    "crates/tree-sitter-lox",
-]
+members = ["crates/*"]
+exclude = ["crates/lox-wasm"]
 
 [features]
 playground = ["dep:lox-playground"]
