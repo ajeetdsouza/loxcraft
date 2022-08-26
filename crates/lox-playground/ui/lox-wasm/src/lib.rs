@@ -1,3 +1,5 @@
+use lox_common::error::report_err;
+use lox_interpreter::Interpreter;
 use serde::Serialize;
 use termcolor::{Color, WriteColor};
 use wasm_bindgen::prelude::*;
@@ -9,22 +11,18 @@ use std::io::{self, Write};
 pub fn loxRun(source: &str) {
     console_error_panic_hook::set_once();
 
-    todo!()
-    // let compiler = Compiler::new();
-    // let mut errors = Vec::new();
-    // let function = compiler.compile(source, &mut errors);
-    // let output = Output::new();
-
-    // if !errors.is_empty() {
-    //     let mut writer = HtmlWriter::new(&output);
-    //     lox_vm::report_err(&mut writer, source, errors);
-    //     postMessage(&serde_json::to_string(&Message::CompileFailure).unwrap());
-    //     return;
-    // };
-
-    // VM::new(&output, &output, false).run(function);
-    // let message = Message::ExitSuccess; // TODO: VM::run() should return a Result.
-    // postMessage(&serde_json::to_string(&message).unwrap());
+    let mut output = Output::new();
+    let errors = Interpreter::new(&mut output).run(source);
+    if !errors.is_empty() {
+        let mut writer = HtmlWriter::new(&mut output);
+        for e in errors {
+            report_err(&mut writer, source, e);
+        }
+        postMessage(&serde_json::to_string(&Message::ExitFailure).unwrap());
+        return;
+    };
+    let message = Message::ExitSuccess;
+    postMessage(&serde_json::to_string(&message).unwrap());
 }
 
 #[allow(dead_code)]
@@ -32,8 +30,6 @@ pub fn loxRun(source: &str) {
 #[serde(tag = "type")]
 enum Message {
     Output { text: String },
-    CompileSuccess,
-    CompileFailure,
     ExitSuccess,
     ExitFailure,
 }
@@ -52,7 +48,7 @@ impl Output {
     }
 }
 
-impl Write for &Output {
+impl Write for Output {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         let text = String::from_utf8_lossy(buf).to_string();
         let message = serde_json::to_string(&Message::Output { text }).unwrap();
