@@ -55,7 +55,6 @@ impl Object {
                     Error::AttributeError(AttributeError::NoSuchAttribute {
                         type_: self.type_(),
                         name: name.to_string(),
-                        span: span.clone(),
                     }),
                     span.clone(),
                 ))
@@ -71,7 +70,6 @@ impl Object {
                 Error::AttributeError(AttributeError::NoSuchAttribute {
                     type_: self.type_(),
                     name: name.to_string(),
-                    span: span.clone(),
                 }),
                 span.clone(),
             )
@@ -88,7 +86,6 @@ impl Object {
                 Error::AttributeError(AttributeError::NoSuchAttribute {
                     type_: self.type_(),
                     name: name.to_string(),
-                    span: span.clone(),
                 }),
                 span.clone(),
             )),
@@ -107,10 +104,7 @@ impl Object {
             Object::Function(function) => function.call(interpreter, env, args, span),
             Object::Native(native) => native.call(interpreter, env, args, span),
             object => Err((
-                Error::TypeError(TypeError::NotCallable {
-                    type_: object.type_(),
-                    span: span.clone(),
-                }),
+                Error::TypeError(TypeError::NotCallable { type_: object.type_() }),
                 span.clone(),
             )),
         }

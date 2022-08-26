@@ -76,8 +76,8 @@ fn run(path: &str) -> Result<()> {
 
 fn report_err(source: &str, errors: Vec<ErrorS>) {
     let mut buffer = termcolor::Buffer::ansi();
-    for (e, _) in errors {
-        lox_common::error::report_err(&mut buffer, source, e);
+    for err in errors {
+        lox_common::error::report_err(&mut buffer, source, &err);
     }
     io::stderr().write_all(buffer.as_slice()).expect("failed to write to stderr");
 }

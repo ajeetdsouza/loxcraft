@@ -33,7 +33,6 @@ pub trait Callable {
                     name: self.name().to_string(),
                     exp_args,
                     got_args,
-                    span: span.clone(),
                 }),
                 span.clone(),
             ));

@@ -36,25 +36,19 @@ pub fn parse(source: &str) -> (Program, Vec<ErrorS>) {
 
     errors.extend(parser_errors.into_iter().map(|err| match err {
         ParseError::ExtraToken { token: (start, _, end) } => (
-            Error::SyntaxError(SyntaxError::ExtraToken {
-                token: source[start..end].to_string(),
-                span: start..end,
-            }),
+            Error::SyntaxError(SyntaxError::ExtraToken { token: source[start..end].to_string() }),
             start..end,
         ),
-        ParseError::InvalidToken { location } => (
-            Error::SyntaxError(SyntaxError::InvalidToken { span: location..location }),
-            location..location,
-        ),
-        ParseError::UnrecognizedEOF { location, expected } => (
-            Error::SyntaxError(SyntaxError::UnrecognizedEOF { expected, span: location..location }),
-            location..location,
-        ),
+        ParseError::InvalidToken { location } => {
+            (Error::SyntaxError(SyntaxError::InvalidToken), location..location)
+        }
+        ParseError::UnrecognizedEOF { location, expected } => {
+            (Error::SyntaxError(SyntaxError::UnrecognizedEOF { expected }), location..location)
+        }
         ParseError::UnrecognizedToken { token: (start, _, end), expected } => (
             Error::SyntaxError(SyntaxError::UnrecognizedToken {
                 token: source[start..end].to_string(),
                 expected,
-                span: start..end,
             }),
             start..end,
         ),
