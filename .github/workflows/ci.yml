@@ -26,11 +26,6 @@ jobs:
           toolchain: stable
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@v1
-      - name: Install cargo-audit
-        uses: actions-rs/install@v0.1
-        with:
-          crate: cargo-audit
-          version: 0.16.0
       - name: Install wasm-pack
         uses: actions-rs/install@v0.1
         with:
@@ -51,8 +46,3 @@ jobs:
         with:
           command: test
           args: --all --all-features --all-targets --color=always --no-fail-fast
-      - name: cargo audit
-        uses: actions-rs/cargo@v1
-        with:
-          command: audit
-          args: --color=always --deny=warnings
