@@ -1,3 +1,6 @@
+// This grammar has been adapted from
+// https://craftinginterpreters.com/appendix-i.html#syntax-grammar.
+
 const precTable = {
   call: 8,
   prefix: 7,
@@ -20,8 +23,8 @@ module.exports = grammar({
   rules: {
     // Program
     program: ($) => field("decl", repeat($.decl)),
-    // Declarations
 
+    // Declarations
     decl: ($) =>
       choice(
         $.decl_class,
@@ -33,7 +36,7 @@ module.exports = grammar({
       seq(
         "class",
         field("name", $.identifier),
-        optional(seq("<", field("base", $.identifier))),
+        optional(seq(field("extends", $.extends), field("base", $.identifier))),
         "{",
         field("method", repeat($.function)),
         "}"
@@ -96,17 +99,17 @@ module.exports = grammar({
         $.expr_infix,
         $.expr_prefix,
         $.expr_primary,
-        $.expr_attribute
+        $.expr_field
       ),
     expr_call: ($) =>
       prec.left(
         precTable.call,
         seq(field("callee", $._expr), field("args", $.args))
       ),
-    expr_attribute: ($) => prec.left(precTable.call, seq(
+    expr_field: ($) => prec.left(precTable.call, seq(
       field("object", $._expr),
       '.',
-      field("attribute", $.identifier)
+      field("field", $.identifier)
     )),
     expr_infix: ($) => {
       const table = [
@@ -143,9 +146,10 @@ module.exports = grammar({
     string: ($) => /"[^"]*"/,
     var: ($) => field("name", $.identifier),
     grouping: ($) => seq("(", field("inner", $._expr), ")"),
-    super: ($) => seq("super", ".", field("attribute", $.identifier)),
+    super: ($) => seq("super", ".", field("field", $.identifier)),
 
     // Utilities
+    extends: ($) => "<",
     function: ($) =>
       seq(
         field("name", $.identifier),
@@ -155,6 +159,10 @@ module.exports = grammar({
     args: ($) => seq("(", optional(commaSep($._expr)), ")"),
     params: ($) => seq("(", optional(commaSep($.identifier)), ")"),
     comment: ($) => token(seq("//", /.*/)),
+    // Currently, this regex allows keywords to show up as identifiers in
+    // certain contexts; i.e. statements like `var nil = "foo";` are allowed.
+    // This can be fixed once tree-sitter adds support for reserved words:
+    // https://github.com/tree-sitter/tree-sitter/pull/1635
     identifier: ($) => /[a-zA-Z_][a-zA-Z0-9_]*/
   },
   word: ($) => $.identifier,

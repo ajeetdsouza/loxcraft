@@ -1,26 +1,20 @@
+; Comments
+(comment) @comment
+
 ; Keywords
 [
   "class"
+  "else"
+  "for"
+  "fun"
+  "if"
   "print"
-  "var"
+  "return"
   "super"
+  "var"
+  "while"
   (this)
 ] @keyword
-
-"fun" @keyword.function
-"return" @keyword.return
-
-; Looping Keywords
-[
-  "for"
-  "while"
-] @repeat
-
-; Conditional keywords
-[
-  "if"
-  "else"
-] @conditional
 
 ; Operators
 [
@@ -46,18 +40,21 @@
   "}"
   "("
   ")"
-] @punctuation.bracket
-[
   ","
   "."
   ";"
-] @punctuation.delimiter
+] @punctuation
 
 ; Literals
 (string) @string
-(number) @number
+(number) @constant
 (nil) @constant
 (bool) @constant
+
+; Function / method declaration
+(function
+  name: (identifier) @function
+)
 
 ; Function call
 (expr_call
@@ -70,36 +67,37 @@
 
 ; Class declaration
 (decl_class
-  name: (identifier) @type
-  base: (identifier)? @type
-  (function
-    name: (identifier) @method
-  )?
+  name: (identifier) @class
+  extends: (extends)? @keyword
+  base: (identifier)? @class
 )
 
 ; Function declaration
 (function
   name: (identifier) @function
-  params: (params)? @parameter
 )
 
 ; Method call
 (expr_call
-  (expr_attribute
-    attribute: (identifier) @method
+  callee: (expr_field
+    field: (identifier) @function
+  )
+)
+(expr_call
+  callee: (expr_primary
+    (super
+      field: (identifier) @function
+    )
   )
 )
 
 ; Field access
-(expr_attribute
-  attribute: (identifier) @field
+(expr_field
+  field: (identifier) @variable
 )
 (super
-  attribute: (identifier) @field
+  field: (identifier) @variable
 )
 
 ; Variable
 (identifier) @variable
-
-; Comments
-(comment) @comment

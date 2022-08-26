@@ -1,0 +1,3 @@
+{
+  class Foo < Foo {} // out: NameError: name "Foo" is not defined
+}

@@ -1,0 +1,14 @@
+class Base {
+  foo(a, b) {
+    print "Base.foo(" + a + ", " + b + ")";
+  }
+}
+
+class Derived < Base {
+  foo() {
+    print "Derived.foo()"; // out: Derived.foo()
+    super.foo("a", "b", "c", "d"); // out: TypeError: foo() takes 2 arguments but 4 were given
+  }
+}
+
+Derived().foo();

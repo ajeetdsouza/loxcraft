@@ -1,0 +1,14 @@
+class Foo {
+  methodOnFoo() { print "foo"; }
+  override() { print "foo"; }
+}
+
+class Bar < Foo {
+  methodOnBar() { print "bar"; }
+  override() { print "bar"; }
+}
+
+var bar = Bar();
+bar.methodOnFoo(); // out: foo
+bar.methodOnBar(); // out: bar
+bar.override(); // out: bar

@@ -24,7 +24,7 @@ export function App(): JSX.Element {
   };
 
   // The worker is set back to null once it finishes executing.
-  const [worker, setWorker] = useState<Worker>(null);
+  const [worker, setWorker] = useState<Worker | null>(null);
   const stopWorker = () => {
     setWorker((worker) => {
       if (worker !== null) {
@@ -53,11 +53,7 @@ export function App(): JSX.Element {
           break;
         case "ExitFailure":
           stopWorker();
-          addOutputText("---\nProgram exited with an error.\n");
-          break;
-        case "CompileFailure":
-          stopWorker();
-          addOutputText("---\nCompiler exited with an error.\n");
+          addOutputText("---\nProgram exited with errors.\n");
           break;
       }
     };
@@ -161,15 +157,11 @@ type OutputProps = {
 
 type LoxOutMessage =
   | LoxOutMessageOutput
-  | LoxOutMessageCompileFailure
   | LoxOutMessageExitFailure
   | LoxOutMessageExitSuccess;
 type LoxOutMessageOutput = {
   type: "Output";
   text: string;
-};
-type LoxOutMessageCompileFailure = {
-  type: "CompileFailure";
 };
 type LoxOutMessageExitFailure = {
   type: "ExitFailure";

@@ -1,0 +1,9 @@
+class Foo {
+  bar(arg) {
+    print arg;
+  }
+}
+
+var bar = Foo().bar;
+print "got method"; // out: got method
+bar("arg");          // out: arg

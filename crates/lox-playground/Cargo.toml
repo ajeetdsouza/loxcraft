@@ -4,6 +4,7 @@ name = "lox-playground"
 version = "0.1.0"
 
 [dependencies]
+anyhow = "1.0.52"
 http = "0.2.6"
 rust-embed = { version = "6.4.0", features = ["include-exclude"] }
 tokio = { version = "1.17.0", features = ["rt-multi-thread"] }

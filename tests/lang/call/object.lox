@@ -1,0 +1,4 @@
+class Foo {}
+
+var foo = Foo();
+foo(); // out: TypeError: "Foo" object is not callable

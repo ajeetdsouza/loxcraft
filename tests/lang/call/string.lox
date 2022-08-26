@@ -1,4 +1,2 @@
-// err: TypeError: 'string' value is not callable
-// err: Traceback (most recent call last):
-// err:   in <script>
+// out: TypeError: "string" object is not callable
 "str"();

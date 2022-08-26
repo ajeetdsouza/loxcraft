@@ -1,4 +1,2 @@
-// err: TypeError: unsupported operand type(s) for OP_ADD: 'number' and 'nil'
-// err: Traceback (most recent call last):
-// err:   in <script>
+// out: TypeError: unsupported operand type(s) for +: "number" and "nil"
 1 + nil;

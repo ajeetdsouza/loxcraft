@@ -1,0 +1,3 @@
+// out: NameError: name "super" is not defined
+super.foo("bar");
+super.foo;

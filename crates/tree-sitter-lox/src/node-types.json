@@ -8,11 +8,11 @@
       "required": false,
       "types": [
         {
-          "type": "expr_attribute",
+          "type": "expr_call",
           "named": true
         },
         {
-          "type": "expr_call",
+          "type": "expr_field",
           "named": true
         },
         {
@@ -72,6 +72,16 @@
         "types": [
           {
             "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "extends": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "extends",
             "named": true
           }
         ]
@@ -172,53 +182,11 @@
         "required": false,
         "types": [
           {
-            "type": "expr_attribute",
-            "named": true
-          },
-          {
             "type": "expr_call",
             "named": true
           },
           {
-            "type": "expr_infix",
-            "named": true
-          },
-          {
-            "type": "expr_prefix",
-            "named": true
-          },
-          {
-            "type": "expr_primary",
-            "named": true
-          }
-        ]
-      }
-    }
-  },
-  {
-    "type": "expr_attribute",
-    "named": true,
-    "fields": {
-      "attribute": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "identifier",
-            "named": true
-          }
-        ]
-      },
-      "object": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "expr_attribute",
-            "named": true
-          },
-          {
-            "type": "expr_call",
+            "type": "expr_field",
             "named": true
           },
           {
@@ -256,11 +224,53 @@
         "required": true,
         "types": [
           {
-            "type": "expr_attribute",
+            "type": "expr_call",
             "named": true
           },
           {
+            "type": "expr_field",
+            "named": true
+          },
+          {
+            "type": "expr_infix",
+            "named": true
+          },
+          {
+            "type": "expr_prefix",
+            "named": true
+          },
+          {
+            "type": "expr_primary",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "expr_field",
+    "named": true,
+    "fields": {
+      "field": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "object": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
             "type": "expr_call",
+            "named": true
+          },
+          {
+            "type": "expr_field",
             "named": true
           },
           {
@@ -288,11 +298,11 @@
         "required": true,
         "types": [
           {
-            "type": "expr_attribute",
+            "type": "expr_call",
             "named": true
           },
           {
-            "type": "expr_call",
+            "type": "expr_field",
             "named": true
           },
           {
@@ -372,11 +382,11 @@
         "required": true,
         "types": [
           {
-            "type": "expr_attribute",
+            "type": "expr_call",
             "named": true
           },
           {
-            "type": "expr_call",
+            "type": "expr_field",
             "named": true
           },
           {
@@ -418,11 +428,11 @@
         "required": true,
         "types": [
           {
-            "type": "expr_attribute",
+            "type": "expr_call",
             "named": true
           },
           {
-            "type": "expr_call",
+            "type": "expr_field",
             "named": true
           },
           {
@@ -485,6 +495,11 @@
     }
   },
   {
+    "type": "extends",
+    "named": true,
+    "fields": {}
+  },
+  {
     "type": "for_paren",
     "named": true,
     "fields": {
@@ -493,11 +508,11 @@
         "required": false,
         "types": [
           {
-            "type": "expr_attribute",
+            "type": "expr_call",
             "named": true
           },
           {
-            "type": "expr_call",
+            "type": "expr_field",
             "named": true
           },
           {
@@ -519,11 +534,11 @@
         "required": false,
         "types": [
           {
-            "type": "expr_attribute",
+            "type": "expr_call",
             "named": true
           },
           {
-            "type": "expr_call",
+            "type": "expr_field",
             "named": true
           },
           {
@@ -601,11 +616,11 @@
         "required": true,
         "types": [
           {
-            "type": "expr_attribute",
+            "type": "expr_call",
             "named": true
           },
           {
-            "type": "expr_call",
+            "type": "expr_field",
             "named": true
           },
           {
@@ -680,11 +695,11 @@
         "required": true,
         "types": [
           {
-            "type": "expr_attribute",
+            "type": "expr_call",
             "named": true
           },
           {
-            "type": "expr_call",
+            "type": "expr_field",
             "named": true
           },
           {
@@ -774,11 +789,11 @@
         "required": true,
         "types": [
           {
-            "type": "expr_attribute",
+            "type": "expr_call",
             "named": true
           },
           {
-            "type": "expr_call",
+            "type": "expr_field",
             "named": true
           },
           {
@@ -806,11 +821,11 @@
         "required": false,
         "types": [
           {
-            "type": "expr_attribute",
+            "type": "expr_call",
             "named": true
           },
           {
-            "type": "expr_call",
+            "type": "expr_field",
             "named": true
           },
           {
@@ -859,7 +874,7 @@
     "type": "super",
     "named": true,
     "fields": {
-      "attribute": {
+      "field": {
         "multiple": false,
         "required": true,
         "types": [

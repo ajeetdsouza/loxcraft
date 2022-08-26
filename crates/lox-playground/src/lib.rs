@@ -1,3 +1,4 @@
+use anyhow::{Context, Result};
 use http::header::{CONTENT_ENCODING, CONTENT_TYPE};
 use http::HeaderValue;
 use rust_embed::RustEmbed;
@@ -14,12 +15,13 @@ use std::path::Path;
 #[exclude = "*.woff"]
 struct Asset;
 
-pub fn serve(port: u16) {
+pub fn serve(port: u16) -> Result<()> {
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
-        .unwrap()
+        .context("failed to start async runtime")?
         .block_on(serve_async(port));
+    Ok(())
 }
 
 async fn serve_async(port: u16) {

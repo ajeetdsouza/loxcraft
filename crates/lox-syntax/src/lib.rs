@@ -6,8 +6,8 @@ use crate::ast::Program;
 use crate::lexer::Lexer;
 use crate::parser::Parser;
 
-use codespan_reporting::diagnostic::{Diagnostic, Label};
 use lalrpop_util::ParseError;
+use lox_common::error::{Error, SyntaxError};
 
 pub fn is_complete(source: &str) -> bool {
     let lexer = Lexer::new(source);
@@ -19,9 +19,10 @@ pub fn is_complete(source: &str) -> bool {
     !errors.iter().any(|e| matches!(e, ParseError::UnrecognizedEOF { .. }))
 }
 
-pub fn parse(source: &str, errors: &mut Vec<Diagnostic<()>>) -> Program {
+pub fn parse(source: &str) -> (Program, Vec<Error>) {
     let lexer = Lexer::new(source);
     let parser = Parser::new();
+    let mut errors = Vec::new();
 
     let mut parser_errors = Vec::new();
     let program = match parser.parse(&mut parser_errors, lexer) {
@@ -32,48 +33,28 @@ pub fn parse(source: &str, errors: &mut Vec<Diagnostic<()>>) -> Program {
         }
     };
 
-    errors.extend(parser_errors.into_iter().map(|err| {
-        match err {
-            ParseError::ExtraToken { token: (start, _, end) } => Diagnostic::error()
-                .with_message(format!("extraneous input: {:?}", &source[start..end]))
-                .with_labels(vec![Label::primary((), start..end)]),
-            ParseError::InvalidToken { location } => Diagnostic::error()
-                .with_message("invalid input")
-                .with_labels(vec![Label::primary((), location..location)]),
-            ParseError::UnrecognizedEOF { location, expected } => Diagnostic::error()
-                .with_message("unexpected end of file")
-                .with_labels(vec![Label::primary((), location..location)])
-                .with_notes(vec![format!("expected: {}", one_of(&expected))]),
-            ParseError::UnrecognizedToken { token: (start, _, end), expected } => {
-                Diagnostic::error()
-                    .with_message(format!("unexpected {:?}", &source[start..end]))
-                    .with_labels(vec![Label::primary((), start..end)])
-                    .with_notes(vec![format!("expected: {}", one_of(&expected))])
-            }
-            ParseError::User { error } => Diagnostic::error()
-                .with_message(error.message.unwrap_or_else(|| {
-                    format!("unexpected {:?}", &source[error.span.start..error.span.end])
-                }))
-                .with_labels(vec![Label::primary((), error.span)]),
+    errors.extend(parser_errors.into_iter().map(|err| match err {
+        ParseError::ExtraToken { token: (start, _, end) } => {
+            Error::SyntaxError(SyntaxError::ExtraToken {
+                token: source[start..end].to_string(),
+                span: start..end,
+            })
         }
+        ParseError::InvalidToken { location } => {
+            Error::SyntaxError(SyntaxError::InvalidToken { span: location..location })
+        }
+        ParseError::UnrecognizedEOF { location, expected } => {
+            Error::SyntaxError(SyntaxError::UnrecognizedEOF { expected, span: location..location })
+        }
+        ParseError::UnrecognizedToken { token: (start, _, end), expected } => {
+            Error::SyntaxError(SyntaxError::UnrecognizedToken {
+                token: source[start..end].to_string(),
+                expected,
+                span: start..end,
+            })
+        }
+        ParseError::User { error } => error,
     }));
 
-    program
-}
-
-fn one_of(tokens: &[String]) -> String {
-    let (token_last, tokens) = match tokens.split_last() {
-        Some((token_last, &[])) => return token_last.to_string(),
-        Some((token_last, tokens)) => (token_last, tokens),
-        None => return "nothing".to_string(),
-    };
-
-    let mut output = String::new();
-    for token in tokens {
-        output.push_str(token);
-        output.push_str(", ");
-    }
-    output.push_str("or ");
-    output.push_str(token_last);
-    output
+    (program, errors)
 }

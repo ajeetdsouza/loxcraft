@@ -1,7 +1,7 @@
 use logos::Logos;
+use lox_common::error::{Error, SyntaxError};
 
 use std::num::ParseFloatError;
-use std::ops::Range;
 
 pub struct Lexer<'a> {
     inner: logos::Lexer<'a, Token>,
@@ -28,8 +28,7 @@ impl<'a> Iterator for Lexer<'a> {
 
                 // Check for unterminated string.
                 if self.inner.slice().starts_with('"') {
-                    let message = Some("unterminated string".to_string());
-                    return Some(Err(Error { message, span }));
+                    return Some(Err(Error::SyntaxError(SyntaxError::UnterminatedString { span })));
                 }
 
                 // Recover error.
@@ -43,8 +42,10 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
 
-                let message = None;
-                Some(Err(Error { message, span }))
+                Some(Err(Error::SyntaxError(SyntaxError::UnexpectedInput {
+                    token: self.inner.source()[span.start..span.end].to_string(),
+                    span,
+                })))
             }
             token => {
                 let span = self.inner.span();
@@ -52,12 +53,6 @@ impl<'a> Iterator for Lexer<'a> {
             }
         }
     }
-}
-
-#[derive(Debug, Eq, PartialEq)]
-pub struct Error {
-    pub message: Option<String>,
-    pub span: Range<usize>,
 }
 
 #[derive(Clone, Debug, Logos, PartialEq)]
@@ -176,7 +171,10 @@ mod tests {
     #[test]
     fn lex_invalid_token() {
         let exp = vec![
-            Err(Error { message: None, span: 0..4 }),
+            Err(Error::SyntaxError(SyntaxError::UnexpectedInput {
+                token: "@foo".to_string(),
+                span: 0..4,
+            })),
             Ok((5, Token::Identifier("bar".to_string()), 8)),
         ];
         let got = Lexer::new("@foo bar").collect::<Vec<_>>();
@@ -185,7 +183,7 @@ mod tests {
 
     #[test]
     fn lex_unterminated_string() {
-        let exp = vec![Err(Error { message: Some("unterminated string".to_string()), span: 0..5 })];
+        let exp = vec![Err(Error::SyntaxError(SyntaxError::UnterminatedString { span: 0..5 }))];
         let got = Lexer::new("\"\nfoo").collect::<Vec<_>>();
         assert_eq!(exp, got);
     }

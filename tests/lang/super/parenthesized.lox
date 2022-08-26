@@ -1,0 +1,10 @@
+class A {
+  method() {}
+}
+
+class B < A {
+  method() {
+    // out: SyntaxError: unexpected ")"
+    (super).method();
+  }
+}

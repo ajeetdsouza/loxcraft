@@ -1,0 +1,12 @@
+{
+  var foo = "closure";
+  fun f() {
+    {
+      print foo; // out: closure
+      var foo = "shadow";
+      print foo; // out: shadow
+    }
+    print foo; // out: closure
+  }
+  f();
+}

@@ -1,0 +1,4 @@
+fun foo(arg,
+        arg) { // out: NameError: name "arg" is already defined
+  "body";
+}

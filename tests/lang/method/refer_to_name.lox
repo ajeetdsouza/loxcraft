@@ -1,0 +1,7 @@
+class Foo {
+  method() {
+    print method; // out: NameError: name "method" is not defined
+  }
+}
+
+Foo().method();

@@ -1,0 +1,2 @@
+// out: SyntaxError: unexpected "fun"
+while (true) fun foo() {}

@@ -4,9 +4,9 @@ name = "lox-syntax"
 version = "0.1.0"
 
 [dependencies]
-codespan-reporting = "0.11.1"
 lalrpop-util = "0.19.6"
 logos = "0.12.0"
+lox-common = { path = "../lox-common" }
 
 [build-dependencies]
 lalrpop = { version = "0.19.1", default-features = false }

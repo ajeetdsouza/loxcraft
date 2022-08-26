@@ -1,0 +1,3 @@
+class Foo {}
+
+print Foo; // out: <class Foo>

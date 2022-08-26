@@ -1,0 +1,10 @@
+class Base {}
+
+class Derived < Base {
+  foo() {
+    // out: AttributeError: "Base" object has no attribute "doesNotExist"
+    super.doesNotExist(1);
+  }
+}
+
+Derived().foo();

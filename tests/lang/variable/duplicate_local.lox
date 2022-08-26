@@ -1,0 +1,4 @@
+{
+  var a = "value";
+  var a = "other"; // out: NameError: name "a" is already defined
+}

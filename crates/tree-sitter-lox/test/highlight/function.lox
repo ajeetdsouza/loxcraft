@@ -1,0 +1,12 @@
+fun add(a, b) {
+//^ keyword
+//  ^^^ function
+//     ^ ^  ^ ^ punctuation
+//      ^  ^ variable
+  return a+b;
+//^^^^^ keyword
+//       ^ ^ variable
+//        ^ operator
+//          ^ punctuation
+}
+//<- punctuation

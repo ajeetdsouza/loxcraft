@@ -1,9 +1,10 @@
-use lox_vm::compiler::Compiler;
-use lox_vm::vm::VM;
+use lox_common::error::report_err;
+use lox_interpreter::Interpreter;
 use serde::Serialize;
 use termcolor::{Color, WriteColor};
 use wasm_bindgen::prelude::*;
 
+use std::fmt::{self, Display, Formatter};
 use std::io::{self, Write};
 
 #[wasm_bindgen]
@@ -11,21 +12,17 @@ use std::io::{self, Write};
 pub fn loxRun(source: &str) {
     console_error_panic_hook::set_once();
 
-    let compiler = Compiler::new();
-    let mut errors = Vec::new();
-    let function = compiler.compile(source, &mut errors);
-    let output = Output::new();
-
+    let mut output = Output::new();
+    let errors = Interpreter::new(&mut output).run(source);
     if !errors.is_empty() {
-        let mut writer = HtmlWriter::new(&output);
-        lox_vm::report_err(&mut writer, source, errors);
-        postMessage(&serde_json::to_string(&Message::CompileFailure).unwrap());
+        let mut writer = HtmlWriter::new(&mut output);
+        for e in errors {
+            report_err(&mut writer, source, e);
+        }
+        postMessage(&Message::ExitFailure.to_string());
         return;
     };
-
-    VM::new(&output, &output, false).run(function);
-    let message = Message::ExitSuccess; // TODO: VM::run() should return a Result.
-    postMessage(&serde_json::to_string(&message).unwrap());
+    postMessage(&Message::ExitSuccess.to_string());
 }
 
 #[allow(dead_code)]
@@ -33,10 +30,14 @@ pub fn loxRun(source: &str) {
 #[serde(tag = "type")]
 enum Message {
     Output { text: String },
-    CompileSuccess,
-    CompileFailure,
     ExitSuccess,
     ExitFailure,
+}
+
+impl Display for Message {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", serde_json::to_string(self).expect("could not serialize message"))
+    }
 }
 
 #[wasm_bindgen]
@@ -53,11 +54,10 @@ impl Output {
     }
 }
 
-impl Write for &Output {
+impl Write for Output {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         let text = String::from_utf8_lossy(buf).to_string();
-        let message = serde_json::to_string(&Message::Output { text }).unwrap();
-        postMessage(&message);
+        postMessage(&Message::Output { text }.to_string());
         Ok(buf.len())
     }
 
@@ -80,14 +80,14 @@ impl<W> HtmlWriter<W> {
 }
 
 impl<W: Write> Write for HtmlWriter<W> {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         let escaped = String::from_utf8_lossy(buf);
         let escaped = askama_escape::escape(&escaped, askama_escape::Html).to_string();
         write!(self.writer, "{}", escaped)?;
         Ok(buf.len())
     }
 
-    fn flush(&mut self) -> std::io::Result<()> {
+    fn flush(&mut self) -> io::Result<()> {
         self.writer.flush()
     }
 }
@@ -97,7 +97,7 @@ impl<W: Write> WriteColor for HtmlWriter<W> {
         true
     }
 
-    fn set_color(&mut self, spec: &termcolor::ColorSpec) -> std::io::Result<()> {
+    fn set_color(&mut self, spec: &termcolor::ColorSpec) -> io::Result<()> {
         if spec.reset() {
             self.reset()?;
         }
@@ -145,7 +145,7 @@ impl<W: Write> WriteColor for HtmlWriter<W> {
         Ok(())
     }
 
-    fn reset(&mut self) -> std::io::Result<()> {
+    fn reset(&mut self) -> io::Result<()> {
         for _ in 0..self.span_count {
             write!(self.writer, "</span>")?;
         }

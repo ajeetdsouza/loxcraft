@@ -1,0 +1,3 @@
+var Number = 123;
+// out: TypeError: superclass should be of type "class", not "number"
+class Foo < Number {}

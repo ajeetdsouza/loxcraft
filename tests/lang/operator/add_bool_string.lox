@@ -1,4 +1,2 @@
-// err: TypeError: unsupported operand type(s) for OP_ADD: 'bool' and 'string'
-// err: Traceback (most recent call last):
-// err:   in <script>
+// out: TypeError: unsupported operand type(s) for +: "bool" and "string"
 true + "s";

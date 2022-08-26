@@ -1,0 +1,10 @@
+class Foo {
+  init() {
+    fun init() {
+      return "bar";
+    }
+    print init(); // out: bar
+  }
+}
+
+print Foo(); // out: <object Foo>
