@@ -4,6 +4,7 @@ use serde::Serialize;
 use termcolor::{Color, WriteColor};
 use wasm_bindgen::prelude::*;
 
+use std::fmt::{self, Display, Formatter};
 use std::io::{self, Write};
 
 #[wasm_bindgen]
@@ -18,11 +19,10 @@ pub fn loxRun(source: &str) {
         for e in errors {
             report_err(&mut writer, source, e);
         }
-        postMessage(&serde_json::to_string(&Message::ExitFailure).unwrap());
+        postMessage(&Message::ExitFailure.to_string());
         return;
     };
-    let message = Message::ExitSuccess;
-    postMessage(&serde_json::to_string(&message).unwrap());
+    postMessage(&Message::ExitSuccess.to_string());
 }
 
 #[allow(dead_code)]
@@ -32,6 +32,12 @@ enum Message {
     Output { text: String },
     ExitSuccess,
     ExitFailure,
+}
+
+impl Display for Message {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", serde_json::to_string(self).expect("could not serialize message"))
+    }
 }
 
 #[wasm_bindgen]
@@ -51,8 +57,7 @@ impl Output {
 impl Write for Output {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         let text = String::from_utf8_lossy(buf).to_string();
-        let message = serde_json::to_string(&Message::Output { text }).unwrap();
-        postMessage(&message);
+        postMessage(&Message::Output { text }.to_string());
         Ok(buf.len())
     }
 
@@ -75,14 +80,14 @@ impl<W> HtmlWriter<W> {
 }
 
 impl<W: Write> Write for HtmlWriter<W> {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         let escaped = String::from_utf8_lossy(buf);
         let escaped = askama_escape::escape(&escaped, askama_escape::Html).to_string();
         write!(self.writer, "{}", escaped)?;
         Ok(buf.len())
     }
 
-    fn flush(&mut self) -> std::io::Result<()> {
+    fn flush(&mut self) -> io::Result<()> {
         self.writer.flush()
     }
 }
@@ -92,7 +97,7 @@ impl<W: Write> WriteColor for HtmlWriter<W> {
         true
     }
 
-    fn set_color(&mut self, spec: &termcolor::ColorSpec) -> std::io::Result<()> {
+    fn set_color(&mut self, spec: &termcolor::ColorSpec) -> io::Result<()> {
         if spec.reset() {
             self.reset()?;
         }
@@ -140,7 +145,7 @@ impl<W: Write> WriteColor for HtmlWriter<W> {
         Ok(())
     }
 
-    fn reset(&mut self) -> std::io::Result<()> {
+    fn reset(&mut self) -> io::Result<()> {
         for _ in 0..self.span_count {
             write!(self.writer, "</span>")?;
         }

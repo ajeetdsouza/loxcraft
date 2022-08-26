@@ -263,16 +263,11 @@ impl<'stdout> Interpreter<'stdout> {
                         r#"expected "super" of type "class", found "{}" instead"#,
                         object.type_()
                     ),
-                    None => todo!(),
+                    None => unreachable!(r#""super" was resolved but could not be found"#),
                 };
                 let this = env
-                    .get_at(
-                        "this",
-                        depth
-                            .checked_sub(1)
-                            .unwrap_or_else(|| unreachable!(r#""this" not found in method scope"#)),
-                    )
-                    .unwrap_or_else(|| unreachable!());
+                    .get_at("this", depth - 1)
+                    .unwrap_or_else(|| unreachable!(r#""this" not found in method scope"#));
                 class.method(&super_.name, this).ok_or_else(|| {
                     Error::AttributeError(AttributeError::NoSuchAttribute {
                         type_: class.name().to_string(),

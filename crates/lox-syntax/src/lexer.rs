@@ -43,7 +43,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
 
                 Some(Err(Error::SyntaxError(SyntaxError::UnexpectedInput {
-                    token: self.inner.slice().to_string(),
+                    token: self.inner.source()[span.start..span.end].to_string(),
                     span,
                 })))
             }
@@ -172,7 +172,7 @@ mod tests {
     fn lex_invalid_token() {
         let exp = vec![
             Err(Error::SyntaxError(SyntaxError::UnexpectedInput {
-                token: "@".to_string(),
+                token: "@foo".to_string(),
                 span: 0..4,
             })),
             Ok((5, Token::Identifier("bar".to_string()), 8)),

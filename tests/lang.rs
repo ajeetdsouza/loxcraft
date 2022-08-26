@@ -8,7 +8,7 @@ use std::str;
 
 #[test_resources("tests/lang/**/*.lox")]
 fn lox(path: &str) {
-    let source = fs::read_to_string(path).unwrap();
+    let source = fs::read_to_string(path).expect("could not read test file: {path}");
 
     let mut exp_output = String::new();
     for line in source.lines() {
@@ -22,7 +22,8 @@ fn lox(path: &str) {
     let mut got_output = Vec::new();
     let errors = Interpreter::new(&mut got_output).run(&source);
     if let Some(e) = errors.first() {
-        writeln!(&mut got_output, "{e}").unwrap();
+        writeln!(&mut got_output, "{e}").expect("could not write to output");
     }
-    assert_eq!(exp_output, std::str::from_utf8(&got_output).unwrap());
+    let got_output = str::from_utf8(&got_output).expect("invalid UTF-8 in output");
+    assert_eq!(exp_output, got_output);
 }

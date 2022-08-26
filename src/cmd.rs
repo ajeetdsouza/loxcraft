@@ -1,12 +1,13 @@
 use crate::repl::{self, Prompt};
 
+use anyhow::{bail, Context, Result};
 use clap::Parser as Clap;
 use lox_common::error::Error;
 use lox_interpreter::Interpreter;
 use reedline::Signal;
 
+use std::fs;
 use std::io::{self, Write};
-use std::{fs, process};
 
 #[derive(Clap, Debug)]
 #[clap(about, author, disable_help_subcommand = true, propagate_version = true, version)]
@@ -23,7 +24,7 @@ pub enum Cmd {
 }
 
 impl Cmd {
-    pub fn run(&self) {
+    pub fn run(&self) -> Result<()> {
         match self {
             #[cfg(feature = "playground")]
             Cmd::Playground { port } => lox_playground::serve(*port),
@@ -33,10 +34,10 @@ impl Cmd {
     }
 }
 
-pub fn repl() {
+pub fn repl() -> Result<()> {
     let stdout = &mut io::stdout().lock();
     let mut interpreter = Interpreter::new(stdout);
-    let mut editor = repl::editor().unwrap();
+    let mut editor = repl::editor().context("could not start REPL")?;
 
     loop {
         match editor.read_line(&Prompt) {
@@ -54,17 +55,21 @@ pub fn repl() {
             }
         }
     }
+
+    Ok(())
 }
 
-fn run(path: &str) {
-    let source = fs::read_to_string(&path).unwrap();
+fn run(path: &str) -> Result<()> {
+    let source =
+        fs::read_to_string(&path).with_context(|| format!("could not read file: {}", path))?;
     let stdout = &mut io::stdout().lock();
     let mut interpreter = Interpreter::new(stdout);
     let errors = interpreter.run(&source);
     if !errors.is_empty() {
         report_err(&source, errors);
-        process::exit(1);
+        bail!("program exited with errors")
     }
+    Ok(())
 }
 
 fn report_err(source: &str, errors: Vec<Error>) {
@@ -72,5 +77,5 @@ fn report_err(source: &str, errors: Vec<Error>) {
     for e in errors {
         lox_common::error::report_err(&mut buffer, source, e);
     }
-    io::stderr().write_all(buffer.as_slice()).unwrap();
+    io::stderr().write_all(buffer.as_slice()).expect("failed to write to stderr");
 }

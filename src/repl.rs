@@ -91,11 +91,19 @@ impl Highlighter {
 
 impl reedline::Highlighter for Highlighter {
     fn highlight(&self, line: &str, _: usize) -> StyledText {
-        let mut highlighter = tree_sitter_highlight::Highlighter::new();
-        let highlights =
-            highlighter.highlight(&self.config, line.as_bytes(), None, |_| None).unwrap();
-
         let mut output = StyledText::new();
+
+        let mut highlighter = tree_sitter_highlight::Highlighter::new();
+        let highlights = match highlighter.highlight(&self.config, line.as_bytes(), None, |_| None)
+        {
+            Ok(highlights) => highlights,
+            Err(_) => {
+                let style = Style::new().fg(PALETTE[0].fg);
+                output.push((style, line.to_string()));
+                return output;
+            }
+        };
+
         let mut curr_fg = PALETTE[0].fg;
         let mut curr_end = 0;
 

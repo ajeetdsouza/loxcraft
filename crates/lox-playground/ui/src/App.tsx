@@ -53,7 +53,7 @@ export function App(): JSX.Element {
           break;
         case "ExitFailure":
           stopWorker();
-          addOutputText("---\nProgram exited with an error.\n");
+          addOutputText("---\nProgram exited with errors.\n");
           break;
       }
     };

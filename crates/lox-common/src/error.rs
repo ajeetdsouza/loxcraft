@@ -187,5 +187,5 @@ pub fn report_err(writer: &mut dyn WriteColor, source: &str, e: Error) {
     let file = SimpleFile::new("<script>", source);
     let config = term::Config::default();
     let diagnostic = e.as_diagnostic();
-    term::emit(writer, &config, &file, &diagnostic).unwrap();
+    term::emit(writer, &config, &file, &diagnostic).expect("failed to write to output");
 }
