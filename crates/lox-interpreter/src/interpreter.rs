@@ -25,15 +25,33 @@ impl<'stdout> Interpreter<'stdout> {
     pub fn run(&mut self, source: &str) -> Vec<ErrorS> {
         let (mut program, errors) = lox_syntax::parse(source);
         if !errors.is_empty() {
-            // return errors;
+            return errors;
         }
         let errors = crate::resolve(&mut program);
         if !errors.is_empty() {
-            // return errors;
+            return errors;
         }
+
+        #[cfg(feature = "profile")]
+        let guard = pprof::ProfilerGuardBuilder::default()
+            .frequency(10000)
+            .build()
+            .expect("could not start profiler");
         if let Err(e) = self.run_program(&program) {
             return vec![e];
         }
+        #[cfg(feature = "profile")]
+        {
+            use pprof::protos::Message;
+            use std::fs::File;
+
+            let report = guard.report().build().expect("profiler could not generate report");
+            let mut profile = File::create("profile.pb").unwrap();
+            report.pprof().unwrap().write_to_writer(&mut profile).unwrap();
+            let mut flamegraph = File::create("flamegraph.svg").unwrap();
+            report.flamegraph(&mut flamegraph).unwrap();
+        }
+
         Vec::new()
     }
 

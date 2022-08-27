@@ -21,6 +21,7 @@ exclude = ["crates/lox-wasm"]
 
 [features]
 playground = ["dep:lox-playground"]
+profile = ["lox-interpreter/profile"]
 
 [dependencies]
 anyhow = "1.0.52"
@@ -44,10 +45,7 @@ pretty_assertions = "1.1.0"
 test-generator = "0.3.0"
 
 [profile.dev]
-debug = 0
 
 [profile.release]
 codegen-units = 1
-debug = 0
 lto = true
-strip = true
