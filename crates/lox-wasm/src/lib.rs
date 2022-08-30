@@ -16,7 +16,7 @@ pub fn loxRun(source: &str) {
     let errors = Interpreter::new(&mut output).run(source);
     if !errors.is_empty() {
         let mut writer = HtmlWriter::new(&mut output);
-        for e in errors {
+        for e in errors.iter() {
             report_err(&mut writer, source, e);
         }
         postMessage(&Message::ExitFailure.to_string());
