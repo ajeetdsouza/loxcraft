@@ -5,12 +5,25 @@ use tower_lsp::jsonrpc;
 use tower_lsp::lsp_types::{
     Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams, DidOpenTextDocumentParams,
     InitializeParams, InitializeResult, Position, Range, ServerCapabilities, ServerInfo,
-    TextDocumentSyncKind,
+    TextDocumentSyncKind, Url,
 };
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 
 struct Backend {
     client: Client,
+}
+
+impl Backend {
+    pub fn new(client: Client) -> Self {
+        Self { client }
+    }
+
+    pub async fn publish_diagnostics(&self, source: &str, uri: Url, version: Option<i32>) {
+        let (mut program, mut errors) = lox_syntax::parse(source);
+        errors.extend(lox_interpreter::resolve(&mut program));
+        let diagnostics = report_err(source, &errors);
+        self.client.publish_diagnostics(uri, diagnostics, version).await;
+    }
 }
 
 #[tower_lsp::async_trait]
@@ -34,32 +47,17 @@ impl LanguageServer for Backend {
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
-        let (mut program, mut errors) = lox_syntax::parse(&params.text_document.text);
-        errors.extend(lox_interpreter::resolve(&mut program));
-        let diagnostics = report_err(&params.text_document.text, &errors);
-
-        self.client
-            .publish_diagnostics(
-                params.text_document.uri,
-                diagnostics,
-                Some(params.text_document.version),
-            )
-            .await;
+        let source = &params.text_document.text;
+        let uri = params.text_document.uri;
+        let version = Some(params.text_document.version);
+        self.publish_diagnostics(source, uri, version).await;
     }
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
         let source = &params.content_changes.first().unwrap().text;
-        let (mut program, mut errors) = lox_syntax::parse(source);
-        errors.extend(lox_interpreter::resolve(&mut program));
-        let diagnostics = report_err(source, &errors);
-
-        self.client
-            .publish_diagnostics(
-                params.text_document.uri,
-                diagnostics,
-                Some(params.text_document.version),
-            )
-            .await;
+        let uri = params.text_document.uri;
+        let version = Some(params.text_document.version);
+        self.publish_diagnostics(source, uri, version).await;
     }
 }
 
@@ -70,7 +68,6 @@ fn get_range(source: &str, span: &Span) -> Range {
 fn get_position(source: &str, idx: usize) -> Position {
     let before = &source[..idx];
     let line = before.lines().count() - 1;
-    // TODO: verify that lines always returns at least one element
     let character = before.lines().last().unwrap().len();
     Position { line: line as _, character: character as _ }
 }
@@ -100,6 +97,6 @@ async fn serve_async() {
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
 
-    let (service, socket) = LspService::new(|client| Backend { client });
+    let (service, socket) = LspService::new(Backend::new);
     Server::new(stdin, stdout, socket).serve(service).await;
 }
