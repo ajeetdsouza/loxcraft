@@ -16,16 +16,13 @@ version = "0.1.0"
 maintenance = { status = "actively-developed" }
 
 [workspace]
-members = [
-    "crates/lox-common",
-    "crates/lox-interpreter",
-    "crates/lox-playground",
-    "crates/lox-syntax",
-    "crates/tree-sitter-lox",
-]
+members = ["crates/*"]
+exclude = ["crates/lox-wasm"]
 
 [features]
+default = ["playground"]
 playground = ["dep:lox-playground"]
+profiling = ["lox-interpreter/profiling"]
 
 [dependencies]
 anyhow = "1.0.52"
@@ -33,6 +30,7 @@ clap = { version = "3.2.0", features = ["derive"] }
 dirs = "4.0.0"
 human-panic = "1.0.3"
 lox-common = { path = "crates/lox-common" }
+lox-lsp = { path = "crates/lox-lsp" }
 lox-interpreter = { path = "crates/lox-interpreter" }
 lox-playground = { path = "crates/lox-playground", optional = true }
 lox-syntax = { path = "crates/lox-syntax" }
@@ -47,8 +45,10 @@ tree-sitter-lox = { path = "crates/tree-sitter-lox", version = "*" }
 pretty_assertions = "1.1.0"
 test-generator = "0.3.0"
 
-[profile.dev]
-debug = 0
+[profile.profiling]
+inherits = "release"
+debug = true
+strip = false
 
 [profile.release]
 codegen-units = 1

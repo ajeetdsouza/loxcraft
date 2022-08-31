@@ -52,7 +52,7 @@ impl Callable for Function {
         interpreter: &mut Interpreter,
         _env: &mut Env,
         args: Vec<Object>,
-        span: &Span,
+        _span: &Span,
     ) -> Result<Object> {
         let env = &mut Env::with_parent(&self.env);
         for (param, arg) in self.params().iter().zip(args) {
@@ -60,19 +60,19 @@ impl Callable for Function {
         }
         for stmt_s in self.stmts().iter() {
             match interpreter.run_stmt(env, stmt_s) {
-                Err(Error::SyntaxError(SyntaxError::ReturnOutsideFunction { .. })) => {
+                Err((Error::SyntaxError(SyntaxError::ReturnOutsideFunction), span)) => {
                     let object = interpreter.return_.take();
                     return if self.is_init() {
                         match object {
                             None => Ok(self.env.get("this").unwrap_or_else(|| {
                                 unreachable!(r#""this" not present inside "init" function"#,)
                             })),
-                            Some(object) => {
-                                Err(Error::TypeError(TypeError::InitInvalidReturnType {
+                            Some(object) => Err((
+                                Error::TypeError(TypeError::InitInvalidReturnType {
                                     type_: object.type_(),
-                                    span: span.clone(),
-                                }))
-                            }
+                                }),
+                                span.clone(),
+                            )),
                         }
                     } else {
                         Ok(object.unwrap_or(Object::Nil))

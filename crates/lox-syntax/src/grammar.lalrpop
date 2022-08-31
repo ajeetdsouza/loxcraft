@@ -7,10 +7,10 @@
 use crate::{ast, lexer};
 
 use lalrpop_util::ParseError;
-use lox_common::error::Error;
+use lox_common::error::ErrorS;
 
 grammar<'err>(
-    errors: &'err mut Vec<ParseError<usize, lexer::Token, Error>>
+    errors: &'err mut Vec<ParseError<usize, lexer::Token, ErrorS>>
 );
 
 pub Program: ast::Program = <stmts:DeclS*> => ast::Program { <> };
@@ -228,7 +228,7 @@ ExprInfix<Lt, Op, Rt>: ast::Expr = {
 
 extern {
     type Location = usize;
-    type Error = Error;
+    type Error = ErrorS;
 
     enum lexer::Token {
         // Single-character tokens.

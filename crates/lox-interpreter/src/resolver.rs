@@ -1,4 +1,4 @@
-use lox_common::error::{Error, NameError};
+use lox_common::error::{Error, ErrorS, NameError};
 use lox_common::types::Span;
 use lox_syntax::ast::{Expr, ExprS, Program, Stmt, StmtFun, StmtS, Var};
 use rustc_hash::FxHashMap;
@@ -6,11 +6,11 @@ use rustc_hash::FxHashMap;
 #[derive(Debug, Default)]
 pub struct Resolver {
     scopes: Vec<FxHashMap<String, bool>>,
-    errors: Vec<Error>,
+    errors: Vec<ErrorS>,
 }
 
 impl Resolver {
-    pub fn resolve(mut self, program: &mut Program) -> Vec<Error> {
+    pub fn resolve(mut self, program: &mut Program) -> Vec<ErrorS> {
         for stmt_s in program.stmts.iter_mut() {
             self.resolve_stmt(stmt_s);
         }
@@ -97,7 +97,7 @@ impl Resolver {
                 self.resolve_expr(&mut while_.cond);
                 self.resolve_stmt(&mut while_.body);
             }
-            Stmt::Error => unreachable!("interpreter started despite parsing errors"),
+            Stmt::Error => (),
         }
     }
 
@@ -133,10 +133,12 @@ impl Resolver {
             Expr::Var(var) => {
                 if let Some(scope) = self.scopes.last() {
                     if scope.get(&var.var.name) == Some(&false) {
-                        self.errors.push(Error::NameError(NameError::AccessInsideInitializer {
-                            name: var.var.name.clone(),
-                            span: span.clone(),
-                        }));
+                        self.errors.push((
+                            Error::NameError(NameError::AccessInsideInitializer {
+                                name: var.var.name.clone(),
+                            }),
+                            span.clone(),
+                        ));
                     }
                 }
                 self.access(&mut var.var);
@@ -163,10 +165,10 @@ impl Resolver {
     fn declare(&mut self, name: &str, span: &Span) {
         if let Some(scope) = self.scopes.last_mut() {
             if scope.contains_key(name) {
-                self.errors.push(Error::NameError(NameError::AlreadyDefined {
-                    name: name.to_string(),
-                    span: span.clone(),
-                }))
+                self.errors.push((
+                    Error::NameError(NameError::AlreadyDefined { name: name.to_string() }),
+                    span.clone(),
+                ))
             }
             scope.insert(name.to_string(), false);
         }

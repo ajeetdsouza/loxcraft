@@ -1,4 +1,4 @@
-use crate::types::Span;
+use crate::types::{Span, Spanned};
 
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use codespan_reporting::files::SimpleFile;
@@ -6,7 +6,8 @@ use codespan_reporting::term;
 use termcolor::WriteColor;
 use thiserror::Error;
 
-pub type Result<T, E = Error> = std::result::Result<T, E>;
+pub type Result<T, E = Error> = std::result::Result<T, (E, Span)>;
+pub type ErrorS = Spanned<Error>;
 
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum Error {
@@ -23,13 +24,13 @@ pub enum Error {
 }
 
 impl AsDiagnostic for Error {
-    fn as_diagnostic(&self) -> Diagnostic<()> {
+    fn as_diagnostic(&self, span: &Span) -> Diagnostic<()> {
         match self {
-            Error::AttributeError(e) => e.as_diagnostic(),
-            Error::IoError(e) => e.as_diagnostic(),
-            Error::NameError(e) => e.as_diagnostic(),
-            Error::SyntaxError(e) => e.as_diagnostic(),
-            Error::TypeError(e) => e.as_diagnostic(),
+            Error::AttributeError(e) => e.as_diagnostic(span),
+            Error::IoError(e) => e.as_diagnostic(span),
+            Error::NameError(e) => e.as_diagnostic(span),
+            Error::SyntaxError(e) => e.as_diagnostic(span),
+            Error::TypeError(e) => e.as_diagnostic(span),
         }
     }
 }
@@ -37,13 +38,13 @@ impl AsDiagnostic for Error {
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum AttributeError {
     #[error("{type_:?} object has no attribute {name:?}")]
-    NoSuchAttribute { type_: String, name: String, span: Span },
+    NoSuchAttribute { type_: String, name: String },
 }
 
 impl AsDiagnostic for AttributeError {
-    fn as_diagnostic(&self) -> Diagnostic<()> {
+    fn as_diagnostic(&self, span: &Span) -> Diagnostic<()> {
         match self {
-            AttributeError::NoSuchAttribute { span, .. } => Diagnostic::error()
+            AttributeError::NoSuchAttribute { .. } => Diagnostic::error()
                 .with_code("AttributeError")
                 .with_message(self.to_string())
                 .with_labels(vec![Label::primary((), span.clone())]),
@@ -54,13 +55,13 @@ impl AsDiagnostic for AttributeError {
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum IoError {
     #[error("unable to write to file: {file:?}")]
-    WriteError { file: String, span: Span },
+    WriteError { file: String },
 }
 
 impl AsDiagnostic for IoError {
-    fn as_diagnostic(&self) -> Diagnostic<()> {
+    fn as_diagnostic(&self, span: &Span) -> Diagnostic<()> {
         match self {
-            IoError::WriteError { span, .. } => Diagnostic::error()
+            IoError::WriteError { .. } => Diagnostic::error()
                 .with_code("IOError")
                 .with_message(self.to_string())
                 .with_labels(vec![Label::primary((), span.clone())]),
@@ -71,19 +72,19 @@ impl AsDiagnostic for IoError {
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum NameError {
     #[error("cannot access variable {name:?} in its own initializer")]
-    AccessInsideInitializer { name: String, span: Span },
+    AccessInsideInitializer { name: String },
     #[error("name {name:?} is already defined")]
-    AlreadyDefined { name: String, span: Span },
+    AlreadyDefined { name: String },
     #[error("name {name:?} is not defined")]
-    NotDefined { name: String, span: Span },
+    NotDefined { name: String },
 }
 
 impl AsDiagnostic for NameError {
-    fn as_diagnostic(&self) -> Diagnostic<()> {
+    fn as_diagnostic(&self, span: &Span) -> Diagnostic<()> {
         match self {
-            NameError::AccessInsideInitializer { span, .. }
-            | NameError::AlreadyDefined { span, .. }
-            | NameError::NotDefined { span, .. } => Diagnostic::error()
+            NameError::AccessInsideInitializer { .. }
+            | NameError::AlreadyDefined { .. }
+            | NameError::NotDefined { .. } => Diagnostic::error()
                 .with_code("NameError")
                 .with_message(self.to_string())
                 .with_labels(vec![Label::primary((), span.clone())]),
@@ -94,34 +95,34 @@ impl AsDiagnostic for NameError {
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum SyntaxError {
     #[error("extraneous input: {token:?}")]
-    ExtraToken { token: String, span: Span },
+    ExtraToken { token: String },
     #[error("invalid input")]
-    InvalidToken { span: Span },
+    InvalidToken,
     #[error("unexpected input")]
-    UnexpectedInput { token: String, span: Span },
+    UnexpectedInput { token: String },
     #[error("unexpected end of file")]
-    UnrecognizedEOF { expected: Vec<String>, span: Span },
+    UnrecognizedEOF { expected: Vec<String> },
     #[error("unexpected {token:?}")]
-    UnrecognizedToken { token: String, expected: Vec<String>, span: Span },
+    UnrecognizedToken { token: String, expected: Vec<String> },
     #[error("unterminated string")]
-    UnterminatedString { span: Span },
+    UnterminatedString,
     #[error(r#""return" outside function"#)]
-    ReturnOutsideFunction { span: Span },
+    ReturnOutsideFunction,
 }
 
 impl AsDiagnostic for SyntaxError {
-    fn as_diagnostic(&self) -> Diagnostic<()> {
+    fn as_diagnostic(&self, span: &Span) -> Diagnostic<()> {
         match self {
-            SyntaxError::ExtraToken { span, .. }
-            | SyntaxError::InvalidToken { span }
-            | SyntaxError::ReturnOutsideFunction { span }
-            | SyntaxError::UnexpectedInput { span, .. }
-            | SyntaxError::UnterminatedString { span } => Diagnostic::error()
+            SyntaxError::ExtraToken { .. }
+            | SyntaxError::InvalidToken
+            | SyntaxError::ReturnOutsideFunction
+            | SyntaxError::UnexpectedInput { .. }
+            | SyntaxError::UnterminatedString => Diagnostic::error()
                 .with_code("SyntaxError")
                 .with_message(self.to_string())
                 .with_labels(vec![Label::primary((), span.clone())]),
-            SyntaxError::UnrecognizedEOF { expected, span }
-            | SyntaxError::UnrecognizedToken { expected, span, .. } => Diagnostic::error()
+            SyntaxError::UnrecognizedEOF { expected }
+            | SyntaxError::UnrecognizedToken { expected, .. } => Diagnostic::error()
                 .with_code("SyntaxError")
                 .with_message(self.to_string())
                 .with_labels(vec![Label::primary((), span.clone())])
@@ -133,28 +134,28 @@ impl AsDiagnostic for SyntaxError {
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum TypeError {
     #[error("{name}() takes {exp_args} arguments but {got_args} were given")]
-    ArityMismatch { name: String, exp_args: usize, got_args: usize, span: Span },
+    ArityMismatch { name: String, exp_args: usize, got_args: usize },
     #[error("init() should use an empty return, not {type_:?}")]
-    InitInvalidReturnType { type_: String, span: Span },
+    InitInvalidReturnType { type_: String },
     #[error("{type_:?} object is not callable")]
-    NotCallable { type_: String, span: Span },
+    NotCallable { type_: String },
     #[error(r#"superclass should be of type "class", not {type_:?}"#)]
-    SuperclassInvalidType { type_: String, span: Span },
+    SuperclassInvalidType { type_: String },
     #[error("unsupported operand type for {op}: {rt_type:?}")]
-    UnsupportedOperandPrefix { op: String, rt_type: String, span: Span },
+    UnsupportedOperandPrefix { op: String, rt_type: String },
     #[error("unsupported operand type(s) for {op}: {lt_type:?} and {rt_type:?}")]
-    UnsupportedOperandInfix { op: String, lt_type: String, rt_type: String, span: Span },
+    UnsupportedOperandInfix { op: String, lt_type: String, rt_type: String },
 }
 
 impl AsDiagnostic for TypeError {
-    fn as_diagnostic(&self) -> Diagnostic<()> {
+    fn as_diagnostic(&self, span: &Span) -> Diagnostic<()> {
         match self {
-            TypeError::ArityMismatch { span, .. }
-            | TypeError::InitInvalidReturnType { span, .. }
-            | TypeError::NotCallable { span, .. }
-            | TypeError::SuperclassInvalidType { span, .. }
-            | TypeError::UnsupportedOperandPrefix { span, .. }
-            | TypeError::UnsupportedOperandInfix { span, .. } => Diagnostic::error()
+            TypeError::ArityMismatch { .. }
+            | TypeError::InitInvalidReturnType { .. }
+            | TypeError::NotCallable { .. }
+            | TypeError::SuperclassInvalidType { .. }
+            | TypeError::UnsupportedOperandPrefix { .. }
+            | TypeError::UnsupportedOperandInfix { .. } => Diagnostic::error()
                 .with_code("TypeError")
                 .with_message(self.to_string())
                 .with_labels(vec![Label::primary((), span.clone())]),
@@ -163,7 +164,7 @@ impl AsDiagnostic for TypeError {
 }
 
 trait AsDiagnostic {
-    fn as_diagnostic(&self) -> Diagnostic<()>;
+    fn as_diagnostic(&self, span: &Span) -> Diagnostic<()>;
 }
 
 fn one_of(tokens: &[String]) -> String {
@@ -183,9 +184,9 @@ fn one_of(tokens: &[String]) -> String {
     output
 }
 
-pub fn report_err(writer: &mut dyn WriteColor, source: &str, e: Error) {
+pub fn report_err(writer: &mut dyn WriteColor, source: &str, (err, span): &ErrorS) {
     let file = SimpleFile::new("<script>", source);
     let config = term::Config::default();
-    let diagnostic = e.as_diagnostic();
+    let diagnostic = err.as_diagnostic(span);
     term::emit(writer, &config, &file, &diagnostic).expect("failed to write to output");
 }

@@ -1,8 +1,7 @@
-use lox_common::types::Span;
+pub use lox_common::types::Spanned;
 
 use std::fmt::{self, Display, Formatter};
 
-pub type Spanned<T> = (T, Span);
 pub type StmtS = Spanned<Stmt>;
 pub type ExprS = Spanned<Expr>;
 

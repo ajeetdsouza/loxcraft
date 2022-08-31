@@ -2,7 +2,7 @@ use crate::repl::{self, Prompt};
 
 use anyhow::{bail, Context, Result};
 use clap::Parser as Clap;
-use lox_common::error::Error;
+use lox_common::error::ErrorS;
 use lox_interpreter::Interpreter;
 use reedline::Signal;
 
@@ -12,6 +12,7 @@ use std::io::{self, Write};
 #[derive(Clap, Debug)]
 #[clap(about, author, disable_help_subcommand = true, propagate_version = true, version)]
 pub enum Cmd {
+    Lsp,
     #[cfg(feature = "playground")]
     Playground {
         #[clap(long, default_value = "3000")]
@@ -26,6 +27,7 @@ pub enum Cmd {
 impl Cmd {
     pub fn run(&self) -> Result<()> {
         match self {
+            Cmd::Lsp => lox_lsp::serve(),
             #[cfg(feature = "playground")]
             Cmd::Playground { port } => lox_playground::serve(*port),
             Cmd::Repl => repl(),
@@ -72,10 +74,10 @@ fn run(path: &str) -> Result<()> {
     Ok(())
 }
 
-fn report_err(source: &str, errors: Vec<Error>) {
+fn report_err(source: &str, errors: Vec<ErrorS>) {
     let mut buffer = termcolor::Buffer::ansi();
-    for e in errors {
-        lox_common::error::report_err(&mut buffer, source, e);
+    for err in errors {
+        lox_common::error::report_err(&mut buffer, source, &err);
     }
     io::stderr().write_all(buffer.as_slice()).expect("failed to write to stderr");
 }
