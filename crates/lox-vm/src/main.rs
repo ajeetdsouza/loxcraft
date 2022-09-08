@@ -19,7 +19,10 @@ fn main() {
 
     let chunk = Compiler::compile(
         r#"
-        print "1234" == ("12"+"34");
+        var a = "foo";
+        var b = "bar";
+        print a + b;
+        print a == b;
     "#,
         &mut intern,
     );

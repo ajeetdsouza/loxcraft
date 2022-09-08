@@ -1,7 +1,7 @@
 use crate::chunk::Chunk;
 use crate::intern::Intern;
 use crate::op;
-use crate::value::{Object, ObjectType, Value};
+use crate::value::Value;
 use lox_syntax;
 use lox_syntax::ast::{Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Program, Stmt, StmtS};
 
@@ -35,12 +35,27 @@ impl Compiler {
                 self.compile_expr(&print.value, intern);
                 self.emit_u8(op::PRINT);
             }
+            Stmt::Var(var) => {
+                match &var.value {
+                    Some(value) => self.compile_expr(value, intern),
+                    None => self.emit_u8(op::NIL),
+                }
+                let (name, _) = intern.insert_str(&var.var.name);
+                self.emit_u8(op::DEFINE_GLOBAL);
+                self.emit_constant(name.into());
+            }
             _ => unimplemented!(),
         }
     }
 
     fn compile_expr(&mut self, (expr, span): &ExprS, intern: &mut Intern) {
         match expr {
+            Expr::Assign(assign) => {
+                let (name, _) = intern.insert_str(&assign.var.name);
+                self.compile_expr(&assign.value, intern);
+                self.emit_u8(op::SET_GLOBAL);
+                self.emit_constant(name.into());
+            }
             Expr::Infix(infix) => {
                 self.compile_expr(&infix.lt, intern);
                 self.compile_expr(&infix.rt, intern);
@@ -70,6 +85,7 @@ impl Compiler {
                         object.into()
                     }
                 };
+                self.emit_u8(op::CONSTANT);
                 self.emit_constant(value);
             }
             Expr::Prefix(prefix) => {
@@ -78,6 +94,11 @@ impl Compiler {
                     OpPrefix::Negate => self.emit_u8(op::NEGATE),
                     OpPrefix::Not => self.emit_u8(op::NOT),
                 };
+            }
+            Expr::Var(var) => {
+                let (name, _) = intern.insert_str(&var.var.name);
+                self.emit_u8(op::GET_GLOBAL);
+                self.emit_constant(name.into())
             }
             _ => unimplemented!(),
         }
@@ -89,7 +110,6 @@ impl Compiler {
 
     fn emit_constant(&mut self, value: Value) {
         let constant_idx = self.chunk.write_constant(value);
-        self.emit_u8(op::CONSTANT);
         self.emit_u8(constant_idx);
     }
 }

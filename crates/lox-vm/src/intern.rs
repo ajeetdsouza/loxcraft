@@ -1,6 +1,6 @@
 use crate::value::Object;
-use hashbrown::hash_map::{Entry, EntryRef, OccupiedEntry, RawEntryMut};
-use hashbrown::{HashMap, HashSet};
+use hashbrown::hash_map::{Entry, RawEntryMut};
+use hashbrown::HashMap;
 use rustc_hash::FxHasher;
 use std::hash::BuildHasherDefault;
 use std::mem;

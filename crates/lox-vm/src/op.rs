@@ -6,6 +6,9 @@ iota! {
             , TRUE
             , FALSE
             , POP
+            , GET_GLOBAL
+            , DEFINE_GLOBAL
+            , SET_GLOBAL
             , EQUAL
             , NOT_EQUAL
             , GREATER

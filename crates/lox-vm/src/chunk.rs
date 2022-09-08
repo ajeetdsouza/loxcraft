@@ -1,5 +1,5 @@
 use crate::op;
-use crate::value::{ObjectType, Value};
+use crate::value::Value;
 
 #[derive(Default)]
 pub struct Chunk {
@@ -34,6 +34,9 @@ impl Chunk {
             op::TRUE => self.debug_op_simple("OP_TRUE", idx),
             op::FALSE => self.debug_op_simple("OP_FALSE", idx),
             op::POP => self.debug_op_simple("OP_POP", idx),
+            op::GET_GLOBAL => self.debug_op_constant("OP_GET_GLOBAL", idx),
+            op::DEFINE_GLOBAL => self.debug_op_constant("OP_DEFINE_GLOBAL", idx),
+            op::SET_GLOBAL => self.debug_op_constant("OP_SET_GLOBAL", idx),
             op::EQUAL => self.debug_op_simple("OP_EQUAL", idx),
             op::NOT_EQUAL => self.debug_op_simple("OP_NOT_EQUAL", idx),
             op::GREATER => self.debug_op_simple("OP_GREATER", idx),

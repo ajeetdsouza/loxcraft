@@ -1,5 +1,5 @@
 use std::fmt::{self, Display, Formatter};
-use std::ops::{Deref, Not};
+use std::ops::Not;
 
 #[derive(Clone, Copy, Default)]
 pub enum Value {

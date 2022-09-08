@@ -2,6 +2,9 @@ use crate::chunk::Chunk;
 use crate::intern::Intern;
 use crate::op;
 use crate::value::{Object, ObjectType, Value};
+use hashbrown::HashMap;
+use rustc_hash::FxHasher;
+use std::hash::BuildHasherDefault;
 use std::hint;
 
 const FRAMES_MAX: usize = 64;
@@ -9,14 +12,14 @@ const STACK_MAX: usize = FRAMES_MAX * STACK_MAX_PER_FRAME;
 const STACK_MAX_PER_FRAME: usize = u8::MAX as usize + 1;
 
 pub struct VM {
+    pub globals: HashMap<*mut Object, Value, BuildHasherDefault<FxHasher>>,
     pub objects: Vec<*mut Object>,
 }
 
 impl VM {
     pub fn new() -> Self {
-        Self {
-            objects: Vec::with_capacity(256), // TODO: tune this later.
-        }
+        // TODO: tune these later.
+        Self { globals: HashMap::default(), objects: Vec::with_capacity(256) }
     }
 
     pub fn run(&mut self, chunk: &Chunk, intern: &mut Intern) {
@@ -35,11 +38,23 @@ impl VM {
             }};
         }
 
-        /// Reads a constant from the current [`Chunk`].
-        macro_rules! read_constant {
+        /// Reads a [`Value`] from the current [`Chunk`].
+        macro_rules! read_value {
             () => {{
                 let constant_idx = read_u8!() as usize;
                 *unsafe { chunk.constants.get_unchecked(constant_idx) }
+            }};
+        }
+
+        /// Reads an [`Object`] from the current [`Chunk`].
+        macro_rules! read_object {
+            () => {{
+                let constant_idx = read_u8!() as usize;
+                let constant = *unsafe { chunk.constants.get_unchecked(constant_idx) };
+                match constant {
+                    Value::Object(object) => object,
+                    _ => unsafe { hint::unreachable_unchecked() },
+                }
             }};
         }
 
@@ -63,11 +78,18 @@ impl VM {
             }};
         }
 
-        /// Pops a value from the stack.
+        /// Pops a [`Value`] from the stack.
         macro_rules! pop {
             () => {{
                 stack_top = unsafe { stack_top.sub(1) };
                 unsafe { *stack_top }
+            }};
+        }
+
+        /// Peeks at a [`Value`] from the stack.
+        macro_rules! peek {
+            () => {{
+                unsafe { stack_top.sub(1) }
             }};
         }
 
@@ -95,7 +117,7 @@ impl VM {
         loop {
             match read_u8!() {
                 op::CONSTANT => {
-                    let constant = read_constant!();
+                    let constant = read_value!();
                     push!(constant);
                 }
                 op::NIL => push!(Value::Nil),
@@ -103,6 +125,23 @@ impl VM {
                 op::FALSE => push!(false.into()),
                 op::POP => {
                     pop!();
+                }
+                op::GET_GLOBAL => {
+                    let name = read_object!();
+                    match self.globals.get(&name) {
+                        Some(value) => push!(*value),
+                        None => panic!(),
+                    }
+                }
+                op::DEFINE_GLOBAL => {
+                    let name = read_object!();
+                    let value = pop!();
+                    self.globals.insert(name, value);
+                }
+                op::SET_GLOBAL => {
+                    let name = read_object!();
+                    let value = peek!();
+                    self.globals.insert(name, unsafe { *value });
                 }
                 op::EQUAL => binary_op!(==),
                 op::NOT_EQUAL => binary_op!(!=),
@@ -125,7 +164,8 @@ impl VM {
                                     string.push_str(b);
                                     let (object, inserted) = intern.insert_string(string);
                                     if inserted {
-                                        self.objects.push(object);
+                                        // TODO: Add this back once we have a GC.
+                                        // self.objects.push(object);
                                     };
                                     push!(object.into());
                                 }
