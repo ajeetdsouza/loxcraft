@@ -135,20 +135,18 @@ pub struct ExprInfix {
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum OpInfix {
-    /// Short-circuiting logical OR.
-    LogicOr,
-    /// Short-circuiting logical AND.
-    LogicAnd,
-    Equal,
-    NotEqual,
-    Greater,
-    GreaterEqual,
-    Less,
-    LessEqual,
     Add,
     Subtract,
     Multiply,
     Divide,
+    Less,
+    LessEqual,
+    Greater,
+    GreaterEqual,
+    Equal,
+    NotEqual,
+    LogicAnd,
+    LogicOr,
 }
 
 impl Display for OpInfix {
