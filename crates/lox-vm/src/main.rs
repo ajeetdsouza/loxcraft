@@ -2,8 +2,6 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 
-use std::collections::HashSet;
-
 use crate::intern::Intern;
 
 mod chunk;
@@ -21,7 +19,7 @@ fn main() {
 
     let chunk = Compiler::compile(
         r#"
-        print "234"+"1234";
+        print "1234" == ("12"+"34");
     "#,
         &mut intern,
     );

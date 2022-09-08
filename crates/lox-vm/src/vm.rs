@@ -1,5 +1,5 @@
 use crate::chunk::Chunk;
-use crate::intern::{Intern, InternState};
+use crate::intern::Intern;
 use crate::op;
 use crate::value::{Object, ObjectType, Value};
 use std::hint;
@@ -120,14 +120,15 @@ impl VM {
                         (Value::Object(a), Value::Object(b)) => {
                             match unsafe { (&(*a).type_, &(*b).type_) } {
                                 (ObjectType::String(a), ObjectType::String(b)) => {
-                                    let (object, inserted) =
-                                        intern.insert_string(a.to_string() + b);
+                                    let mut string = String::with_capacity(a.len() + b.len());
+                                    string.push_str(a);
+                                    string.push_str(b);
+                                    let (object, inserted) = intern.insert_string(string);
                                     if inserted {
                                         self.objects.push(object);
                                     };
                                     push!(object.into());
                                 }
-                                _ => panic!(),
                             };
                         }
                         _ => panic!(),
@@ -156,12 +157,6 @@ impl VM {
                 _ => unsafe { hint::unreachable_unchecked() },
             }
         }
-    }
-
-    fn allocate(&mut self, object: Object) -> Value {
-        let object = Box::into_raw(Box::new(object));
-        self.objects.push(object);
-        object.into()
     }
 }
 

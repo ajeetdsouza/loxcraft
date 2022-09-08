@@ -62,7 +62,7 @@ impl PartialEq for Value {
             (Self::Nil, Self::Nil) => true,
             (Self::Boolean(a), Self::Boolean(b)) => a == b,
             (Self::Number(a), Self::Number(b)) => a == b,
-            (Self::Object(a), Self::Object(b)) => a == b || unsafe { &**a == &**b },
+            (Self::Object(a), Self::Object(b)) => a == b,
             _ => false,
         }
     }
@@ -84,14 +84,6 @@ impl Display for Object {
 impl From<&'static str> for Object {
     fn from(string: &'static str) -> Self {
         Self { is_marked: false, type_: ObjectType::String(string) }
-    }
-}
-
-impl PartialEq for Object {
-    fn eq(&self, other: &Self) -> bool {
-        match (&self.type_, &other.type_) {
-            (ObjectType::String(a), ObjectType::String(b)) => a.as_ptr() == b.as_ptr(),
-        }
     }
 }
 

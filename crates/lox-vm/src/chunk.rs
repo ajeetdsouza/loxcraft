@@ -1,5 +1,5 @@
 use crate::op;
-use crate::value::Value;
+use crate::value::{ObjectType, Value};
 
 #[derive(Default)]
 pub struct Chunk {
@@ -62,15 +62,5 @@ impl Chunk {
         let constant = &self.constants[constant_idx as usize];
         println!("{name:16} {constant_idx:>4} '{constant}'");
         idx + 2
-    }
-}
-
-impl Drop for Chunk {
-    fn drop(&mut self) {
-        for constant in &self.constants {
-            if let Value::Object(object) = constant {
-                let _ = unsafe { Box::from_raw(*object) };
-            }
-        }
     }
 }
