@@ -18,8 +18,11 @@ pub struct VM {
 
 impl VM {
     pub fn new() -> Self {
-        // TODO: tune these later.
-        Self { globals: HashMap::default(), objects: Vec::with_capacity(256) }
+        Self {
+            // TODO: tune these later.
+            globals: HashMap::with_capacity_and_hasher(256, Default::default()),
+            objects: Vec::with_capacity(256),
+        }
     }
 
     pub fn run(&mut self, chunk: &Chunk, intern: &mut Intern) {

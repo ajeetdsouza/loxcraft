@@ -2,8 +2,6 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 
-use crate::intern::Intern;
-
 mod chunk;
 mod compiler;
 mod intern;
@@ -13,6 +11,7 @@ mod vm;
 
 fn main() {
     use compiler::Compiler;
+    use intern::Intern;
     use vm::VM;
 
     let mut intern = Intern::default();
@@ -22,7 +21,7 @@ fn main() {
         var a = "foo";
         var b = "bar";
         print a + b;
-        print a == b;
+        print a + "bar" == "foo" + b;
     "#,
         &mut intern,
     );

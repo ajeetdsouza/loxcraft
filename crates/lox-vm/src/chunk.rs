@@ -12,9 +12,16 @@ impl Chunk {
         self.ops.push(byte);
     }
 
+    /// Writes a constant to the [`Chunk`] and returns its index. If an equal
+    /// [`Value`] is already present, then its index is returned instead.
     pub fn write_constant(&mut self, value: Value) -> u8 {
-        self.constants.push(value);
-        let idx = self.constants.len() - 1;
+        let idx = match self.constants.iter().position(|&constant| constant == value) {
+            Some(idx) => idx,
+            None => {
+                self.constants.push(value);
+                self.constants.len() - 1
+            }
+        };
         idx.try_into().expect("too many constants")
     }
 
