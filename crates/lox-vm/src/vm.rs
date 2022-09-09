@@ -2,6 +2,7 @@ use crate::chunk::Chunk;
 use crate::intern::Intern;
 use crate::op;
 use crate::value::{Object, ObjectType, Value};
+use hashbrown::hash_map::Entry;
 use hashbrown::HashMap;
 use rustc_hash::FxHasher;
 use std::hash::BuildHasherDefault;
@@ -144,7 +145,10 @@ impl VM {
                 op::SET_GLOBAL => {
                     let name = read_object!();
                     let value = peek!();
-                    self.globals.insert(name, unsafe { *value });
+                    match self.globals.entry(name) {
+                        Entry::Occupied(mut entry) => entry.insert(unsafe { *value }),
+                        Entry::Vacant(entry) => panic!(),
+                    };
                 }
                 op::EQUAL => binary_op!(==),
                 op::NOT_EQUAL => binary_op!(!=),
