@@ -33,7 +33,7 @@ impl Chunk {
         }
     }
 
-    fn debug_op(&self, idx: usize) -> usize {
+    pub fn debug_op(&self, idx: usize) -> usize {
         print!("{idx:04} ");
         match self.ops[idx] {
             op::CONSTANT => self.debug_op_constant("OP_CONSTANT", idx),
@@ -41,6 +41,8 @@ impl Chunk {
             op::TRUE => self.debug_op_simple("OP_TRUE", idx),
             op::FALSE => self.debug_op_simple("OP_FALSE", idx),
             op::POP => self.debug_op_simple("OP_POP", idx),
+            op::GET_LOCAL => self.debug_op_byte("OP_GET_LOCAL", idx),
+            op::SET_LOCAL => self.debug_op_byte("OP_SET_LOCAL", idx),
             op::GET_GLOBAL => self.debug_op_constant("OP_GET_GLOBAL", idx),
             op::DEFINE_GLOBAL => self.debug_op_constant("OP_DEFINE_GLOBAL", idx),
             op::SET_GLOBAL => self.debug_op_constant("OP_SET_GLOBAL", idx),
@@ -65,6 +67,12 @@ impl Chunk {
     fn debug_op_simple(&self, name: &str, idx: usize) -> usize {
         println!("{name}");
         idx + 1
+    }
+
+    fn debug_op_byte(&self, name: &str, idx: usize) -> usize {
+        let byte = self.ops[idx + 1];
+        println!("{name:16} {byte:>4}");
+        idx + 2
     }
 
     fn debug_op_constant(&self, name: &str, idx: usize) -> usize {

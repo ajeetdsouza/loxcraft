@@ -1,17 +1,21 @@
+use std::convert::TryInto;
+
 use crate::chunk::Chunk;
 use crate::intern::Intern;
 use crate::op;
 use crate::value::Value;
-use lox_syntax;
 use lox_syntax::ast::{Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Program, Stmt, StmtS};
 
+#[derive(Default)]
 pub struct Compiler {
     chunk: Chunk,
+    locals: Vec<Local>,
+    scope_depth: usize,
 }
 
 impl Compiler {
     pub fn compile(source: &str, intern: &mut Intern) -> Chunk {
-        let mut compiler = Compiler { chunk: Chunk::default() };
+        let mut compiler = Compiler::default();
         let (program, errors) = lox_syntax::parse(source);
         assert!(errors.is_empty());
         compiler.compile_program(&program, intern);
@@ -27,6 +31,13 @@ impl Compiler {
 
     fn compile_stmt(&mut self, (stmt, span): &StmtS, intern: &mut Intern) {
         match stmt {
+            Stmt::Block(block) => {
+                self.begin_scope();
+                for stmt in &block.stmts {
+                    self.compile_stmt(stmt, intern);
+                }
+                self.end_scope();
+            }
             Stmt::Expr(expr) => {
                 self.compile_expr(&expr.value, intern);
                 self.emit_u8(op::POP);
@@ -36,25 +47,29 @@ impl Compiler {
                 self.emit_u8(op::PRINT);
             }
             Stmt::Var(var) => {
-                match &var.value {
-                    Some(value) => self.compile_expr(value, intern),
-                    None => self.emit_u8(op::NIL),
+                let name = &var.var.name;
+                let value = var.value.as_ref().unwrap_or(&(Expr::Literal(ExprLiteral::Nil), 0..0));
+                if self.scope_depth == 0 {
+                    let (name, _) = intern.insert_str(name);
+                    self.compile_expr(value, intern);
+                    self.emit_u8(op::DEFINE_GLOBAL);
+                    self.emit_constant(name.into());
+                } else {
+                    self.declare_local(name);
+                    self.compile_expr(value, intern);
+                    self.define_local(name);
                 }
-                let (name, _) = intern.insert_str(&var.var.name);
-                self.emit_u8(op::DEFINE_GLOBAL);
-                self.emit_constant(name.into());
             }
             _ => unimplemented!(),
         }
     }
 
+    /// Compute an expression and push it onto the stack.
     fn compile_expr(&mut self, (expr, span): &ExprS, intern: &mut Intern) {
         match expr {
             Expr::Assign(assign) => {
-                let (name, _) = intern.insert_str(&assign.var.name);
                 self.compile_expr(&assign.value, intern);
-                self.emit_u8(op::SET_GLOBAL);
-                self.emit_constant(name.into());
+                self.set_variable(&assign.var.name, intern);
             }
             Expr::Infix(infix) => {
                 self.compile_expr(&infix.lt, intern);
@@ -95,12 +110,77 @@ impl Compiler {
                     OpPrefix::Not => self.emit_u8(op::NOT),
                 };
             }
-            Expr::Var(var) => {
-                let (name, _) = intern.insert_str(&var.var.name);
-                self.emit_u8(op::GET_GLOBAL);
-                self.emit_constant(name.into())
-            }
+            Expr::Var(var) => self.get_variable(&var.var.name, intern),
             _ => unimplemented!(),
+        }
+    }
+
+    fn get_variable(&mut self, name: &str, intern: &mut Intern) {
+        if let Some(local_idx) = self.resolve_local(name) {
+            self.emit_u8(op::GET_LOCAL);
+            self.emit_u8(local_idx);
+        } else {
+            let (name, _) = intern.insert_str(name);
+            self.emit_u8(op::GET_GLOBAL);
+            self.emit_constant(name.into());
+        }
+    }
+
+    fn set_variable(&mut self, name: &str, intern: &mut Intern) {
+        if let Some(local_idx) = self.resolve_local(name) {
+            self.emit_u8(op::SET_LOCAL);
+            self.emit_u8(local_idx);
+        } else {
+            let (name, _) = intern.insert_str(name);
+            self.emit_u8(op::SET_GLOBAL);
+            self.emit_constant(name.into());
+        }
+    }
+
+    fn declare_local(&mut self, name: &str) {
+        for local in self.locals.iter().rev() {
+            if local.depth < self.scope_depth {
+                break;
+            }
+            if local.name == name {
+                panic!("Variable with this name already declared in this scope.");
+            }
+        }
+
+        let local = Local { name: name.to_string(), depth: 0, is_initialized: false };
+        self.locals.push(local);
+        if self.locals.len() >= u8::MAX as usize {
+            panic!("Too many local variables in function.");
+        }
+    }
+
+    fn define_local(&mut self, name: &str) {
+        self.locals.last_mut().unwrap().is_initialized = true;
+    }
+
+    fn resolve_local(&self, name: &str) -> Option<u8> {
+        let (idx, local) = self.locals.iter().enumerate().rfind(|(_, local)| local.name == name)?;
+        if local.is_initialized {
+            Some(idx.try_into().unwrap())
+        } else {
+            panic!("cannot define variable in its own initializer");
+        }
+    }
+
+    fn begin_scope(&mut self) {
+        self.scope_depth += 1;
+    }
+
+    fn end_scope(&mut self) {
+        self.scope_depth -= 1;
+
+        // Remove all locals that are no longer in scope.
+        while let Some(local) = self.locals.last() {
+            if local.depth > self.scope_depth {
+                self.locals.pop();
+            } else {
+                break;
+            }
         }
     }
 
@@ -112,4 +192,10 @@ impl Compiler {
         let constant_idx = self.chunk.write_constant(value);
         self.emit_u8(constant_idx);
     }
+}
+
+struct Local {
+    name: String,
+    depth: usize,
+    is_initialized: bool,
 }

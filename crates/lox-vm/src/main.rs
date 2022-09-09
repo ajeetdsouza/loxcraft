@@ -18,15 +18,19 @@ fn main() {
 
     let chunk = Compiler::compile(
         r#"
-        var a = "foo";
-        var b = "bar";
-        print a + b;
-        print a + "bar" == "foo" + b;
+        {
+            var x = "hello";
+            x = "world";
+            print x;
+            // {
+            //     var a = x;
+            //     a = a + " world";
+            //     print a;
+            // }
+        }
     "#,
         &mut intern,
     );
-    chunk.debug("chunk");
-
     // let now = std::time::SystemTime::now();
 
     for _ in 0..1 {

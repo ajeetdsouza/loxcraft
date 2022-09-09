@@ -71,7 +71,8 @@ impl VM {
         //   `STACK_MAX = FRAMES_MAX * STACK_MAX_PER_FRAME` and we are
         //   guaranteed to never exceed this.
         let mut stack = [Value::default(); STACK_MAX];
-        let mut stack_top = stack.as_mut_ptr();
+        let stack = stack.as_mut_ptr();
+        let mut stack_top = stack;
 
         /// Pushes a value to the stack.
         macro_rules! push {
@@ -119,6 +120,11 @@ impl VM {
         }
 
         loop {
+            if cfg!(feature = "debug-trace") {
+                let idx = unsafe { ip.offset_from(chunk.ops.as_ptr()) };
+                chunk.debug_op(idx as usize);
+            }
+
             match read_u8!() {
                 op::CONSTANT => {
                     let constant = read_value!();
@@ -129,6 +135,17 @@ impl VM {
                 op::FALSE => push!(false.into()),
                 op::POP => {
                     pop!();
+                }
+                op::GET_LOCAL => {
+                    let stack_idx = read_u8!() as usize;
+                    let local = unsafe { *stack.add(stack_idx) };
+                    push!(local);
+                }
+                op::SET_LOCAL => {
+                    let stack_idx = read_u8!() as usize;
+                    let local = unsafe { stack.add(stack_idx) };
+                    let value = peek!();
+                    unsafe { *local = *value };
                 }
                 op::GET_GLOBAL => {
                     let name = read_object!();
@@ -202,6 +219,16 @@ impl VM {
                 }
                 op::RETURN => break,
                 _ => unsafe { hint::unreachable_unchecked() },
+            }
+
+            if cfg!(feature = "debug-trace") {
+                print!("     ");
+                let mut stack_ptr = stack;
+                while stack_ptr < stack_top {
+                    print!("[ {} ]", unsafe { *stack_ptr });
+                    stack_ptr = unsafe { stack_ptr.add(1) };
+                }
+                println!();
             }
         }
     }

@@ -1,7 +1,7 @@
 use std::fmt::{self, Display, Formatter};
 use std::ops::Not;
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub enum Value {
     #[default]
     Nil,
@@ -93,12 +93,12 @@ pub enum ObjectType {
 
 #[cfg(test)]
 mod tests {
-    use crate::value::Value;
-
+    use super::*;
     use std::mem;
 
     #[test]
-    fn size_of_value() {
+    fn sizes() {
         assert_eq!(mem::size_of::<Value>(), 16);
+        assert_eq!(mem::size_of::<*mut Object>(), 8);
     }
 }
