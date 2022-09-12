@@ -8,12 +8,13 @@ use std::str;
 
 #[test_resources("tests/lang/**/*.lox")]
 fn lox(path: &str) {
-    let source = fs::read_to_string(path).expect("could not read test file: {path}");
+    let source =
+        fs::read_to_string(path).unwrap_or_else(|_| format!("could not read test file: {path}"));
 
     let mut exp_output = String::new();
     for line in source.lines() {
         const OUT_COMMENT: &str = "// out: ";
-        if let Some(idx) = line.rfind(OUT_COMMENT) {
+        if let Some(idx) = line.find(OUT_COMMENT) {
             exp_output += &line[idx + OUT_COMMENT.len()..];
             exp_output += "\n";
         }

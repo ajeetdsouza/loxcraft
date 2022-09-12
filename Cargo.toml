@@ -42,8 +42,13 @@ tree-sitter-highlight = "0.20.1"
 tree-sitter-lox = { path = "crates/tree-sitter-lox", version = "*" }
 
 [dev-dependencies]
+criterion = { version = "0.4.0", default-features = false }
 pretty_assertions = "1.1.0"
 test-generator = "0.3.0"
+
+[[bench]]
+name = "lang"
+harness = false
 
 [profile.profiling]
 inherits = "release"
@@ -51,7 +56,7 @@ debug = true
 strip = false
 
 [profile.release]
-codegen-units = 1
+# codegen-units = 1
 debug = 0
 lto = true
 strip = true
