@@ -14,27 +14,14 @@ fn main() {
     use intern::Intern;
     use vm::VM;
 
+    let now = std::time::SystemTime::now();
     let mut intern = Intern::default();
-
     let chunk = Compiler::compile(
         r#"
-        {
-            var x = "hello";
-            x = "world";
-            print x;
-            // {
-            //     var a = x;
-            //     a = a + " world";
-            //     print a;
-            // }
-        }
+        while (true) {}
     "#,
         &mut intern,
     );
-    // let now = std::time::SystemTime::now();
-
-    for _ in 0..1 {
-        VM::new().run(&chunk, &mut intern);
-    }
-    // println!("elapsed: {}", now.elapsed().unwrap().as_millis());
+    VM::new().run(&chunk, &mut intern);
+    println!("elapsed: {}", now.elapsed().unwrap().as_millis());
 }

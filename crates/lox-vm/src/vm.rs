@@ -42,6 +42,15 @@ impl VM {
             }};
         }
 
+        /// Reads a 16-bit value from the current [`Chunk`].
+        macro_rules! read_u16 {
+            () => {{
+                let byte1 = read_u8!();
+                let byte2 = read_u8!();
+                u16::from_le_bytes([byte1, byte2])
+            }};
+        }
+
         /// Reads a [`Value`] from the current [`Chunk`].
         macro_rules! read_value {
             () => {{
@@ -114,7 +123,7 @@ impl VM {
                 let a = pop!();
                 match (a, b) {
                     (Value::Number(a), Value::Number(b)) => push!((a $op b).into()),
-                    _ => panic!("unsupported operand for type: {}", stringify!($op)),
+                    _ => panic!("unsupported operand {} for type: {a}, {b}", stringify!($op)),
                 };
             }};
         }
@@ -216,6 +225,21 @@ impl VM {
                 op::PRINT => {
                     let value = pop!();
                     println!("{}", value);
+                }
+                op::JUMP => {
+                    let offset = read_u16!() as usize;
+                    ip = unsafe { ip.add(offset) };
+                }
+                op::JUMP_IF_FALSE => {
+                    let offset = read_u16!() as usize;
+                    let value = peek!();
+                    if !(unsafe { *value }.bool()) {
+                        ip = unsafe { ip.add(offset) };
+                    }
+                }
+                op::LOOP => {
+                    let offset = read_u16!() as usize;
+                    ip = unsafe { ip.sub(offset) };
                 }
                 op::RETURN => break,
                 _ => unsafe { hint::unreachable_unchecked() },

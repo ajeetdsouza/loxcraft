@@ -59,6 +59,9 @@ impl Chunk {
             op::NOT => self.debug_op_simple("OP_NOT", idx),
             op::NEGATE => self.debug_op_simple("OP_NEGATE", idx),
             op::PRINT => self.debug_op_simple("OP_PRINT", idx),
+            op::JUMP => self.debug_op_jump("OP_JUMP", idx, true),
+            op::JUMP_IF_FALSE => self.debug_op_jump("OP_JUMP_IF_FALSE", idx, true),
+            op::LOOP => self.debug_op_jump("OP_LOOP", idx, false),
             op::RETURN => self.debug_op_simple("OP_RETURN", idx),
             byte => self.debug_op_simple(&format!("OP_UNKNOWN({byte:#X})"), idx),
         }
@@ -80,5 +83,14 @@ impl Chunk {
         let constant = &self.constants[constant_idx as usize];
         println!("{name:16} {constant_idx:>4} '{constant}'");
         idx + 2
+    }
+
+    fn debug_op_jump(&self, name: &str, idx: usize, is_forward: bool) -> usize {
+        let to_offset = u16::from_le_bytes([self.ops[idx + 1], self.ops[idx + 2]]);
+        let offset_sign = if is_forward { 1 } else { -1 };
+        // The +3 is to account for the 3 byte jump instruction.
+        let to_idx = (idx as isize) + (to_offset as isize) * offset_sign + 3;
+        println!("{name:16} {idx:>4} -> {to_idx}");
+        idx + 3
     }
 }
