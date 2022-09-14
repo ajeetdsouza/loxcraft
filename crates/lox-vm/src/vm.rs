@@ -254,7 +254,7 @@ impl VM {
                     match value {
                         Value::Number(number) => push!((-number).into()),
                         _ => bail!(TypeError::UnsupportedOperandPrefix {
-                            op: "+".to_string(),
+                            op: "-".to_string(),
                             rt_type: value.type_().to_string(),
                         }),
                     }

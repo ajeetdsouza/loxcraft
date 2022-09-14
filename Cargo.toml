@@ -23,6 +23,7 @@ exclude = ["crates/lox-wasm"]
 default = ["playground"]
 playground = ["dep:lox-playground"]
 profiling = ["lox-interpreter/profiling"]
+debug-trace = ["lox-vm/debug-trace"]
 
 [dependencies]
 anyhow = "1.0.52"

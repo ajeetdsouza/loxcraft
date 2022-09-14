@@ -16,8 +16,7 @@ pub fn is_complete(source: &str) -> bool {
     if let Err(e) = parser.parse(&mut errors, lexer) {
         errors.push(e);
     };
-    // !errors.iter().any(|e| matches!(e, ParseError::UnrecognizedEOF { .. }))
-    true
+    !errors.iter().any(|e| matches!(e, ParseError::UnrecognizedEOF { .. }))
 }
 
 pub fn parse(source: &str) -> Result<Program, Vec<ErrorS>> {

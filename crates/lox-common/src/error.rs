@@ -113,6 +113,8 @@ impl AsDiagnostic for NameError {
 pub enum OverflowError {
     #[error("jump body is too large")]
     JumpTooLarge,
+    #[error("cannot define more than 256 locals in a function")]
+    TooManyLocals,
     #[error("cannot define more than 256 constants in a function")]
     TooManyConstants,
 }
@@ -120,7 +122,9 @@ pub enum OverflowError {
 impl AsDiagnostic for OverflowError {
     fn as_diagnostic(&self, span: &Span) -> Diagnostic<()> {
         match self {
-            OverflowError::JumpTooLarge | OverflowError::TooManyConstants => Diagnostic::error()
+            OverflowError::JumpTooLarge
+            | OverflowError::TooManyLocals
+            | OverflowError::TooManyConstants => Diagnostic::error()
                 .with_code("OverflowError")
                 .with_message(self.to_string())
                 .with_labels(vec![Label::primary((), span.clone())]),

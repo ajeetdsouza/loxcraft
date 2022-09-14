@@ -21,9 +21,11 @@ impl Value {
     pub fn type_(&self) -> &'static str {
         match self {
             Self::Nil => "nil",
-            Self::Boolean(_) => "boolean",
+            Self::Boolean(_) => "bool",
             Self::Number(_) => "number",
-            Self::Object(_) => "object",
+            Self::Object(object) => match (unsafe { &**object }).type_ {
+                ObjectType::String(_) => "string",
+            },
         }
     }
 }

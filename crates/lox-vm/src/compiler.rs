@@ -4,7 +4,7 @@ use crate::chunk::Chunk;
 use crate::intern::Intern;
 use crate::op;
 use crate::value::Value;
-use lox_common::error::{ErrorS, OverflowError, Result};
+use lox_common::error::{ErrorS, NameError, OverflowError, Result};
 use lox_common::types::Span;
 use lox_syntax::ast::{Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Program, Stmt, StmtS};
 
@@ -40,7 +40,7 @@ impl Compiler {
                 for stmt in &block.stmts {
                     self.compile_stmt(stmt, intern)?;
                 }
-                self.end_scope();
+                self.end_scope(span);
             }
             Stmt::Expr(expr) => {
                 self.compile_expr(&expr.value, intern)?;
@@ -87,7 +87,7 @@ impl Compiler {
                     self.emit_u8(op::POP, span);
                 }
 
-                self.end_scope();
+                self.end_scope(span);
             }
             Stmt::If(if_) => {
                 self.compile_expr(&if_.cond, intern)?;
@@ -123,7 +123,7 @@ impl Compiler {
                     self.emit_u8(op::DEFINE_GLOBAL, span);
                     self.emit_constant(name.into(), span)?;
                 } else {
-                    self.declare_local(name);
+                    self.declare_local(name, span)?;
                     self.compile_expr(value, intern)?;
                     self.define_local();
                 }
@@ -261,7 +261,7 @@ impl Compiler {
     }
 
     fn get_variable(&mut self, name: &str, span: &Span, intern: &mut Intern) -> Result<()> {
-        if let Some(local_idx) = self.resolve_local(name) {
+        if let Some(local_idx) = self.resolve_local(name, span)? {
             self.emit_u8(op::GET_LOCAL, span);
             self.emit_u8(local_idx, span);
         } else {
@@ -273,7 +273,7 @@ impl Compiler {
     }
 
     fn set_variable(&mut self, name: &str, span: &Span, intern: &mut Intern) -> Result<()> {
-        if let Some(local_idx) = self.resolve_local(name) {
+        if let Some(local_idx) = self.resolve_local(name, span)? {
             self.emit_u8(op::SET_LOCAL, span);
             self.emit_u8(local_idx, span);
         } else {
@@ -284,33 +284,46 @@ impl Compiler {
         Ok(())
     }
 
-    fn declare_local(&mut self, name: &str) {
+    fn declare_local(&mut self, name: &str, span: &Span) -> Result<()> {
         for local in self.locals.iter().rev() {
             if local.depth < self.scope_depth {
                 break;
             }
             if local.name == name {
-                panic!("Variable with this name already declared in this scope.");
+                return Err((
+                    NameError::AlreadyDefined { name: name.to_string() }.into(),
+                    span.clone(),
+                ));
             }
         }
 
-        let local = Local { name: name.to_string(), depth: 0, is_initialized: false };
+        let local =
+            Local { name: name.to_string(), depth: self.scope_depth, is_initialized: false };
         self.locals.push(local);
-        if self.locals.len() >= u8::MAX as usize {
-            panic!("Too many local variables in function.");
-        }
+
+        Ok(())
     }
 
     fn define_local(&mut self) {
         self.locals.last_mut().unwrap().is_initialized = true;
     }
 
-    fn resolve_local(&self, name: &str) -> Option<u8> {
-        let (idx, local) = self.locals.iter().enumerate().rfind(|(_, local)| local.name == name)?;
-        if local.is_initialized {
-            Some(idx.try_into().unwrap())
-        } else {
-            panic!("cannot define variable in its own initializer");
+    fn resolve_local(&self, name: &str, span: &Span) -> Result<Option<u8>> {
+        match self.locals.iter().enumerate().rfind(|(_, local)| local.name == name) {
+            Some((idx, local)) => {
+                if local.is_initialized {
+                    let idx = idx
+                        .try_into()
+                        .map_err(|_| (OverflowError::TooManyLocals.into(), span.clone()))?;
+                    Ok(Some(idx))
+                } else {
+                    Err((
+                        NameError::AccessInsideInitializer { name: name.to_string() }.into(),
+                        span.clone(),
+                    ))
+                }
+            }
+            None => Ok(None),
         }
     }
 
@@ -361,13 +374,14 @@ impl Compiler {
         self.scope_depth += 1;
     }
 
-    fn end_scope(&mut self) {
+    fn end_scope(&mut self, span: &Span) {
         self.scope_depth -= 1;
 
         // Remove all locals that are no longer in scope.
         while let Some(local) = self.locals.last() {
             if local.depth > self.scope_depth {
                 self.locals.pop();
+                self.emit_u8(op::POP, span);
             } else {
                 break;
             }
@@ -385,6 +399,7 @@ impl Compiler {
     }
 }
 
+#[derive(Debug)]
 struct Local {
     name: String,
     depth: usize,
