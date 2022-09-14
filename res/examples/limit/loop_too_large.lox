@@ -1,5 +1,5 @@
 var a = 0;
-// out: Error at '}': Loop body too large.
+// out: OverflowError: jump body is too large
 while (false) {
   nil; nil; nil; nil; nil; nil; nil; nil; nil; nil; nil; nil; nil; nil; nil; nil;
   nil; nil; nil; nil; nil; nil; nil; nil; nil; nil; nil; nil; nil; nil; nil; nil;

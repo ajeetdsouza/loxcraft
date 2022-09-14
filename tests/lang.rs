@@ -1,4 +1,4 @@
-use lox_interpreter::Interpreter;
+use lox_vm::VM;
 use pretty_assertions::assert_eq;
 use test_generator::test_resources;
 
@@ -6,7 +6,7 @@ use std::fs;
 use std::io::Write;
 use std::str;
 
-#[test_resources("tests/lang/**/*.lox")]
+#[test_resources("res/examples/**/*.lox")]
 fn lox(path: &str) {
     let source =
         fs::read_to_string(path).unwrap_or_else(|_| format!("could not read test file: {path}"));
@@ -21,8 +21,8 @@ fn lox(path: &str) {
     }
 
     let mut got_output = Vec::new();
-    if let Err(e) = Interpreter::new(&mut got_output).run(&source) {
-        let (e, _) = e.first().expect("received empty Err");
+    if let Err(e) = VM::new().run(&source, &mut got_output) {
+        let (e, _) = e.first().expect("received empty error");
         writeln!(&mut got_output, "{}", e).expect("could not write to output");
     }
     let got_output = str::from_utf8(&got_output).expect("invalid UTF-8 in output");

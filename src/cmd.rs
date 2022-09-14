@@ -39,11 +39,12 @@ impl Cmd {
 pub fn repl() -> Result<()> {
     let mut vm = VM::new();
     let mut editor = repl::editor().context("could not start REPL")?;
+    let stdout = &mut io::stdout().lock();
 
     loop {
         match editor.read_line(&Prompt) {
             Ok(Signal::Success(line)) => {
-                if let Err(e) = vm.run(&line) {
+                if let Err(e) = vm.run(&line, stdout) {
                     report_err(&line, e);
                 }
             }
@@ -63,7 +64,8 @@ fn run(path: &str) -> Result<()> {
     let source =
         fs::read_to_string(&path).with_context(|| format!("could not read file: {}", path))?;
     let mut vm = VM::new();
-    if let Err(e) = vm.run(&source) {
+    let stdout = &mut io::stdout().lock();
+    if let Err(e) = vm.run(&source, stdout) {
         report_err(&source, e);
         bail!("program exited with errors")
     }

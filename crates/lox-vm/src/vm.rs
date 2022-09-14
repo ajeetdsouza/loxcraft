@@ -9,7 +9,7 @@ use lox_common::error::{ErrorS, IoError, NameError, Result, TypeError};
 use rustc_hash::FxHasher;
 use std::hash::BuildHasherDefault;
 use std::hint;
-use std::io::{self, Write};
+use std::io;
 
 const FRAMES_MAX: usize = 64;
 const STACK_MAX: usize = FRAMES_MAX * STACK_MAX_PER_FRAME;
@@ -31,18 +31,15 @@ impl VM {
         }
     }
 
-    pub fn run(&mut self, source: &str) -> Result<(), Vec<ErrorS>> {
+    pub fn run<W: io::Write>(&mut self, source: &str, stdout: &mut W) -> Result<(), Vec<ErrorS>> {
         let chunk = Compiler::compile(source, &mut self.intern)?;
-        if let Err(e) = self.run_chunk(&chunk) {
+        if let Err(e) = self.run_chunk(&chunk, stdout) {
             return Err(vec![e]);
         }
         Ok(())
     }
 
-    pub fn run_chunk(&mut self, chunk: &Chunk) -> Result<()> {
-        // Output stream. This is used for printing as well as debug logs.
-        let out = &mut io::stdout().lock();
-
+    pub fn run_chunk<W: io::Write>(&mut self, chunk: &Chunk, stdout: &mut W) -> Result<()> {
         // Instruction pointer for the current Chunk.
         // Accessing `ip` without bounds checking is safe, assuming that the
         // compiler always outputs correct code. The program stops execution
@@ -265,7 +262,7 @@ impl VM {
                 // TODO: parametrize output using `writeln!`.
                 op::PRINT => {
                     let value = pop!();
-                    if let Err(_) = writeln!(out, "{value}") {
+                    if let Err(_) = writeln!(stdout, "{value}") {
                         bail!(IoError::WriteError { file: "stdout".to_string() });
                     };
                 }
@@ -289,13 +286,13 @@ impl VM {
             }
 
             if cfg!(feature = "debug-trace") {
-                write!(out, "     ").unwrap();
+                write!(stdout, "     ").unwrap();
                 let mut stack_ptr = stack;
                 while stack_ptr < stack_top {
-                    write!(out, "[ {} ]", unsafe { *stack_ptr }).unwrap();
+                    write!(stdout, "[ {} ]", unsafe { *stack_ptr }).unwrap();
                     stack_ptr = unsafe { stack_ptr.add(1) };
                 }
-                writeln!(out).unwrap();
+                writeln!(stdout).unwrap();
             }
         }
         Ok(())

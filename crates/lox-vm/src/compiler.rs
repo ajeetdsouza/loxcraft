@@ -4,7 +4,7 @@ use crate::chunk::Chunk;
 use crate::intern::Intern;
 use crate::op;
 use crate::value::Value;
-use lox_common::error::{ErrorS, Result};
+use lox_common::error::{ErrorS, OverflowError, Result};
 use lox_common::types::Span;
 use lox_syntax::ast::{Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Program, Stmt, StmtS};
 
@@ -79,10 +79,10 @@ impl Compiler {
                 }
 
                 // Go to START.
-                self.emit_loop(loop_start, span);
+                self.emit_loop(loop_start, span)?;
                 // END:
                 if let Some(jump_to_end) = jump_to_end {
-                    self.patch_jump(jump_to_end);
+                    self.patch_jump(jump_to_end, span)?;
                     // Discard the condition.
                     self.emit_u8(op::POP, span);
                 }
@@ -101,14 +101,14 @@ impl Compiler {
                 let jump_to_end = self.emit_jump(op::JUMP, span);
 
                 // ELSE:
-                self.patch_jump(jump_to_else);
+                self.patch_jump(jump_to_else, span)?;
                 self.emit_u8(op::POP, span); // Discard the condition.
                 if let Some(else_) = &if_.else_ {
                     self.compile_stmt(&else_, intern)?;
                 }
 
                 // END:
-                self.patch_jump(jump_to_end);
+                self.patch_jump(jump_to_end, span)?;
             }
             Stmt::Print(print) => {
                 self.compile_expr(&print.value, intern)?;
@@ -141,10 +141,10 @@ impl Compiler {
                 // Evaluate the body of the loop.
                 self.compile_stmt(&while_.body, intern)?;
                 // Go to START.
-                self.emit_loop(loop_start, span);
+                self.emit_loop(loop_start, span)?;
 
                 // END:
-                self.patch_jump(jump_to_end);
+                self.patch_jump(jump_to_end, span)?;
                 // Discard the condition.
                 self.emit_u8(op::POP, span);
             }
@@ -212,7 +212,7 @@ impl Compiler {
 
                         // END:
                         // Short-circuit to the end.
-                        self.patch_jump(jump_to_end);
+                        self.patch_jump(jump_to_end, span)?;
                     }
                     OpInfix::LogicOr => {
                         // If the first expression is false, go to RIGHT_EXPR.
@@ -221,7 +221,7 @@ impl Compiler {
                         let jump_to_end = self.emit_jump(op::JUMP, span);
 
                         // RIGHT_EXPR:
-                        self.patch_jump(jump_to_right_expr);
+                        self.patch_jump(jump_to_right_expr, span)?;
                         // Discard the left value.
                         self.emit_u8(op::POP, span);
                         // Evaluate the right expression.
@@ -229,7 +229,7 @@ impl Compiler {
 
                         // END:
                         // Short-circuit to the end.
-                        self.patch_jump(jump_to_end);
+                        self.patch_jump(jump_to_end, span)?;
                     }
                 };
             }
@@ -328,28 +328,33 @@ impl Compiler {
 
     /// Takes the index of the jump offset to be patched as input, and patches
     /// it to point to the current instruction.
-    fn patch_jump(&mut self, offset_idx: usize) {
+    fn patch_jump(&mut self, offset_idx: usize, span: &Span) -> Result<()> {
         // The extra -2 is to account for the space taken by the offset.
         let offset = self.chunk.ops.len() - 2 - offset_idx;
-        let offset = offset.try_into().unwrap();
+        let offset =
+            offset.try_into().map_err(|_| (OverflowError::JumpTooLarge.into(), span.clone()))?;
         let offset = u16::to_le_bytes(offset);
         [self.chunk.ops[offset_idx], self.chunk.ops[offset_idx + 1]] = offset;
+        Ok(())
     }
 
     fn start_loop(&self) -> usize {
         self.chunk.ops.len()
     }
 
-    fn emit_loop(&mut self, start_idx: usize, span: &Span) {
+    fn emit_loop(&mut self, start_idx: usize, span: &Span) -> Result<()> {
         // The extra +3 is to account for the space taken by the instruction
         // and the offset.
         let offset = self.chunk.ops.len() + 3 - start_idx;
-        let offset = offset.try_into().unwrap();
+        let offset =
+            offset.try_into().map_err(|_| (OverflowError::JumpTooLarge.into(), span.clone()))?;
         let offset = u16::to_le_bytes(offset);
 
         self.emit_u8(op::LOOP, span);
         self.emit_u8(offset[0], span);
         self.emit_u8(offset[1], span);
+
+        Ok(())
     }
 
     fn begin_scope(&mut self) {
