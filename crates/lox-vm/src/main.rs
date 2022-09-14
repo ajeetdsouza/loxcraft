@@ -18,10 +18,10 @@ fn main() {
     let mut intern = Intern::default();
     let chunk = Compiler::compile(
         r#"
-        while (true) {}
+        var a = 1 + "asdf";
     "#,
         &mut intern,
     );
-    VM::new().run(&chunk, &mut intern);
+    VM::new().run(&chunk, &mut intern).unwrap();
     println!("elapsed: {}", now.elapsed().unwrap().as_millis());
 }

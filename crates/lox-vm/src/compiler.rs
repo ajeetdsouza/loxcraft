@@ -4,6 +4,8 @@ use crate::chunk::Chunk;
 use crate::intern::Intern;
 use crate::op;
 use crate::value::Value;
+use lox_common::error::Result;
+use lox_common::types::Span;
 use lox_syntax::ast::{Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Program, Stmt, StmtS};
 
 #[derive(Default)]
@@ -18,29 +20,30 @@ impl Compiler {
         let mut compiler = Compiler::default();
         let (program, errors) = lox_syntax::parse(source);
         assert!(errors.is_empty());
-        compiler.compile_program(&program, intern);
+        compiler.compile_program(&program, intern).unwrap();
         compiler.chunk
     }
 
-    fn compile_program(&mut self, program: &Program, intern: &mut Intern) {
+    fn compile_program(&mut self, program: &Program, intern: &mut Intern) -> Result<()> {
         for stmt in &program.stmts {
-            self.compile_stmt(stmt, intern);
+            self.compile_stmt(stmt, intern)?;
         }
-        self.emit_u8(op::RETURN);
+        self.emit_u8(op::RETURN, &(0..0));
+        Ok(())
     }
 
-    fn compile_stmt(&mut self, (stmt, span): &StmtS, intern: &mut Intern) {
+    fn compile_stmt(&mut self, (stmt, span): &StmtS, intern: &mut Intern) -> Result<()> {
         match stmt {
             Stmt::Block(block) => {
                 self.begin_scope();
                 for stmt in &block.stmts {
-                    self.compile_stmt(stmt, intern);
+                    self.compile_stmt(stmt, intern)?;
                 }
                 self.end_scope();
             }
             Stmt::Expr(expr) => {
-                self.compile_expr(&expr.value, intern);
-                self.emit_u8(op::POP);
+                self.compile_expr(&expr.value, intern)?;
+                self.emit_u8(op::POP, span);
             }
             Stmt::For(for_) => {
                 self.begin_scope();
@@ -48,7 +51,7 @@ impl Compiler {
                 // Evaluate init statement. This may be an expression, a variable
                 // assignment, or nothing at all.
                 if let Some(init) = &for_.init {
-                    self.compile_stmt(init, intern);
+                    self.compile_stmt(init, intern)?;
                 }
 
                 // START:
@@ -57,70 +60,70 @@ impl Compiler {
                 // Evaluate the condition, if it exists.
                 let mut jump_to_end = None;
                 if let Some(cond) = &for_.cond {
-                    self.compile_expr(cond, intern);
+                    self.compile_expr(cond, intern)?;
                     // If the condition is false, go to END.
-                    jump_to_end = Some(self.emit_jump(op::JUMP_IF_FALSE));
+                    jump_to_end = Some(self.emit_jump(op::JUMP_IF_FALSE, span));
                     // Discard the condition.
-                    self.emit_u8(op::POP);
+                    self.emit_u8(op::POP, span);
                 }
 
                 // Evaluate the body.
-                self.compile_stmt(&for_.body, intern);
+                self.compile_stmt(&for_.body, intern)?;
 
                 // Evaluate the increment expression, if it exists.
                 if let Some(incr) = &for_.incr {
-                    self.compile_expr(incr, intern);
+                    self.compile_expr(incr, intern)?;
                     // Discard the result of the expression.
-                    self.emit_u8(op::POP);
+                    self.emit_u8(op::POP, span);
                 }
 
                 // Go to START.
-                self.emit_loop(loop_start);
+                self.emit_loop(loop_start, span);
                 // END:
                 if let Some(jump_to_end) = jump_to_end {
                     self.patch_jump(jump_to_end);
                     // Discard the condition.
-                    self.emit_u8(op::POP);
+                    self.emit_u8(op::POP, span);
                 }
 
                 self.end_scope();
             }
             Stmt::If(if_) => {
-                self.compile_expr(&if_.cond, intern);
+                self.compile_expr(&if_.cond, intern)?;
                 // If the condition is false, go to ELSE.
-                let jump_to_else = self.emit_jump(op::JUMP_IF_FALSE);
+                let jump_to_else = self.emit_jump(op::JUMP_IF_FALSE, span);
                 // Discard the condition.
-                self.emit_u8(op::POP);
+                self.emit_u8(op::POP, span);
                 // Evaluate the if branch.
-                self.compile_stmt(&if_.then, intern);
+                self.compile_stmt(&if_.then, intern)?;
                 // Go to END.
-                let jump_to_end = self.emit_jump(op::JUMP);
+                let jump_to_end = self.emit_jump(op::JUMP, span);
 
                 // ELSE:
                 self.patch_jump(jump_to_else);
-                self.emit_u8(op::POP); // Discard the condition.
+                self.emit_u8(op::POP, span); // Discard the condition.
                 if let Some(else_) = &if_.else_ {
-                    self.compile_stmt(&else_, intern);
+                    self.compile_stmt(&else_, intern)?;
                 }
 
                 // END:
                 self.patch_jump(jump_to_end);
             }
             Stmt::Print(print) => {
-                self.compile_expr(&print.value, intern);
-                self.emit_u8(op::PRINT);
+                self.compile_expr(&print.value, intern)?;
+                self.emit_u8(op::PRINT, span);
             }
             Stmt::Var(var) => {
                 let name = &var.var.name;
                 let value = var.value.as_ref().unwrap_or(&(Expr::Literal(ExprLiteral::Nil), 0..0));
                 if self.scope_depth == 0 {
                     let (name, _) = intern.insert_str(name);
-                    self.compile_expr(value, intern);
-                    self.emit_u8(op::DEFINE_GLOBAL);
-                    self.emit_constant(name.into());
+                    self.compile_expr(value, intern)?;
+                    self.emit_u8(op::DEFINE_GLOBAL, span);
+                    self.emit_constant(name.into(), span)?;
                 } else {
                     self.declare_local(name);
-                    self.compile_expr(value, intern);
+                    self.compile_expr(value, intern)?;
                     self.define_local(name);
                 }
             }
@@ -129,81 +132,82 @@ impl Compiler {
                 let loop_start = self.start_loop();
 
                 // Evaluate condition.
-                self.compile_expr(&while_.cond, intern);
+                self.compile_expr(&while_.cond, intern)?;
                 // If the condition is false, go to END.
-                let jump_to_end = self.emit_jump(op::JUMP_IF_FALSE);
+                let jump_to_end = self.emit_jump(op::JUMP_IF_FALSE, span);
                 // Discard the condition.
-                self.emit_u8(op::POP);
+                self.emit_u8(op::POP, span);
                 // Evaluate the body of the loop.
-                self.compile_stmt(&while_.body, intern);
+                self.compile_stmt(&while_.body, intern)?;
                 // Go to START.
-                self.emit_loop(loop_start);
+                self.emit_loop(loop_start, span);
 
                 // END:
                 self.patch_jump(jump_to_end);
                 // Discard the condition.
-                self.emit_u8(op::POP);
+                self.emit_u8(op::POP, span);
             }
             _ => unimplemented!(),
         }
+        Ok(())
     }
 
     /// Compute an expression and push it onto the stack.
-    fn compile_expr(&mut self, (expr, span): &ExprS, intern: &mut Intern) {
+    fn compile_expr(&mut self, (expr, span): &ExprS, intern: &mut Intern) -> Result<()> {
         match expr {
             Expr::Assign(assign) => {
-                self.compile_expr(&assign.value, intern);
-                self.set_variable(&assign.var.name, intern);
+                self.compile_expr(&assign.value, intern)?;
+                self.set_variable(&assign.var.name, span, intern)?;
             }
             Expr::Infix(infix) => {
-                self.compile_expr(&infix.lt, intern);
+                self.compile_expr(&infix.lt, intern)?;
                 match infix.op {
                     OpInfix::Add => {
-                        self.compile_expr(&infix.rt, intern);
-                        self.emit_u8(op::ADD);
+                        self.compile_expr(&infix.rt, intern)?;
+                        self.emit_u8(op::ADD, span);
                     }
                     OpInfix::Subtract => {
-                        self.compile_expr(&infix.rt, intern);
-                        self.emit_u8(op::SUBTRACT);
+                        self.compile_expr(&infix.rt, intern)?;
+                        self.emit_u8(op::SUBTRACT, span);
                     }
                     OpInfix::Multiply => {
-                        self.compile_expr(&infix.rt, intern);
-                        self.emit_u8(op::MULTIPLY);
+                        self.compile_expr(&infix.rt, intern)?;
+                        self.emit_u8(op::MULTIPLY, span);
                     }
                     OpInfix::Divide => {
-                        self.compile_expr(&infix.rt, intern);
-                        self.emit_u8(op::DIVIDE);
+                        self.compile_expr(&infix.rt, intern)?;
+                        self.emit_u8(op::DIVIDE, span);
                     }
                     OpInfix::Less => {
-                        self.compile_expr(&infix.rt, intern);
-                        self.emit_u8(op::LESS);
+                        self.compile_expr(&infix.rt, intern)?;
+                        self.emit_u8(op::LESS, span);
                     }
                     OpInfix::LessEqual => {
-                        self.compile_expr(&infix.rt, intern);
-                        self.emit_u8(op::LESS_EQUAL);
+                        self.compile_expr(&infix.rt, intern)?;
+                        self.emit_u8(op::LESS_EQUAL, span);
                     }
                     OpInfix::Greater => {
-                        self.compile_expr(&infix.rt, intern);
-                        self.emit_u8(op::GREATER);
+                        self.compile_expr(&infix.rt, intern)?;
+                        self.emit_u8(op::GREATER, span);
                     }
                     OpInfix::GreaterEqual => {
-                        self.compile_expr(&infix.rt, intern);
-                        self.emit_u8(op::GREATER_EQUAL);
+                        self.compile_expr(&infix.rt, intern)?;
+                        self.emit_u8(op::GREATER_EQUAL, span);
                     }
                     OpInfix::Equal => {
-                        self.compile_expr(&infix.rt, intern);
-                        self.emit_u8(op::EQUAL);
+                        self.compile_expr(&infix.rt, intern)?;
+                        self.emit_u8(op::EQUAL, span);
                     }
                     OpInfix::NotEqual => {
-                        self.compile_expr(&infix.rt, intern);
-                        self.emit_u8(op::NOT_EQUAL);
+                        self.compile_expr(&infix.rt, intern)?;
+                        self.emit_u8(op::NOT_EQUAL, span);
                     }
                     OpInfix::LogicAnd => {
                         // If the first expression is false, go to END.
-                        let jump_to_end = self.emit_jump(op::JUMP_IF_FALSE);
+                        let jump_to_end = self.emit_jump(op::JUMP_IF_FALSE, span);
                         // Otherwise, evaluate the right expression.
-                        self.emit_u8(op::POP);
-                        self.compile_expr(&infix.rt, intern);
+                        self.emit_u8(op::POP, span);
+                        self.compile_expr(&infix.rt, intern)?;
 
                         // END:
                         // Short-circuit to the end.
@@ -211,16 +215,16 @@ impl Compiler {
                     }
                     OpInfix::LogicOr => {
                         // If the first expression is false, go to RIGHT_EXPR.
-                        let jump_to_right_expr = self.emit_jump(op::JUMP_IF_FALSE);
+                        let jump_to_right_expr = self.emit_jump(op::JUMP_IF_FALSE, span);
                         // Otherwise, go to END.
-                        let jump_to_end = self.emit_jump(op::JUMP);
+                        let jump_to_end = self.emit_jump(op::JUMP, span);
 
                         // RIGHT_EXPR:
                         self.patch_jump(jump_to_right_expr);
                         // Discard the left value.
-                        self.emit_u8(op::POP);
+                        self.emit_u8(op::POP, span);
                         // Evaluate the right expression.
-                        self.compile_expr(&infix.rt, intern);
+                        self.compile_expr(&infix.rt, intern)?;
 
                         // END:
                         // Short-circuit to the end.
@@ -239,41 +243,44 @@ impl Compiler {
                         object.into()
                     }
                 };
-                self.emit_u8(op::CONSTANT);
-                self.emit_constant(value);
+                self.emit_u8(op::CONSTANT, span);
+                self.emit_constant(value, span)?;
             }
             Expr::Prefix(prefix) => {
-                self.compile_expr(&prefix.rt, intern);
+                self.compile_expr(&prefix.rt, intern)?;
                 match prefix.op {
-                    OpPrefix::Negate => self.emit_u8(op::NEGATE),
-                    OpPrefix::Not => self.emit_u8(op::NOT),
+                    OpPrefix::Negate => self.emit_u8(op::NEGATE, span),
+                    OpPrefix::Not => self.emit_u8(op::NOT, span),
                 };
             }
-            Expr::Var(var) => self.get_variable(&var.var.name, intern),
+            Expr::Var(var) => self.get_variable(&var.var.name, span, intern)?,
             _ => unimplemented!(),
         }
+        Ok(())
     }
 
-    fn get_variable(&mut self, name: &str, intern: &mut Intern) {
+    fn get_variable(&mut self, name: &str, span: &Span, intern: &mut Intern) -> Result<()> {
         if let Some(local_idx) = self.resolve_local(name) {
-            self.emit_u8(op::GET_LOCAL);
-            self.emit_u8(local_idx);
+            self.emit_u8(op::GET_LOCAL, span);
+            self.emit_u8(local_idx, span);
         } else {
             let (name, _) = intern.insert_str(name);
-            self.emit_u8(op::GET_GLOBAL);
-            self.emit_constant(name.into());
+            self.emit_u8(op::GET_GLOBAL, span);
+            self.emit_constant(name.into(), span)?;
         }
+        Ok(())
     }
 
-    fn set_variable(&mut self, name: &str, intern: &mut Intern) {
+    fn set_variable(&mut self, name: &str, span: &Span, intern: &mut Intern) -> Result<()> {
         if let Some(local_idx) = self.resolve_local(name) {
-            self.emit_u8(op::SET_LOCAL);
-            self.emit_u8(local_idx);
+            self.emit_u8(op::SET_LOCAL, span);
+            self.emit_u8(local_idx, span);
         } else {
             let (name, _) = intern.insert_str(name);
-            self.emit_u8(op::SET_GLOBAL);
-            self.emit_constant(name.into());
+            self.emit_u8(op::SET_GLOBAL, span);
+            self.emit_constant(name.into(), span)?;
         }
+        Ok(())
     }
 
     fn declare_local(&mut self, name: &str) {
@@ -311,10 +318,10 @@ impl Compiler {
     /// to the correct value.
     ///
     /// It returns the index of the offset which is to be patched.
-    fn emit_jump(&mut self, opcode: u8) -> usize {
-        self.emit_u8(opcode);
-        self.emit_u8(0xFF);
-        self.emit_u8(0xFF);
+    fn emit_jump(&mut self, opcode: u8, span: &Span) -> usize {
+        self.emit_u8(opcode, span);
+        self.emit_u8(0xFF, span);
+        self.emit_u8(0xFF, span);
         self.chunk.ops.len() - 2
     }
 
@@ -332,16 +339,16 @@ impl Compiler {
         self.chunk.ops.len()
     }
 
-    fn emit_loop(&mut self, start_idx: usize) {
+    fn emit_loop(&mut self, start_idx: usize, span: &Span) {
         // The extra +3 is to account for the space taken by the instruction
         // and the offset.
         let offset = self.chunk.ops.len() + 3 - start_idx;
         let offset = offset.try_into().unwrap();
         let offset = u16::to_le_bytes(offset);
 
-        self.emit_u8(op::LOOP);
-        self.emit_u8(offset[0]);
-        self.emit_u8(offset[1]);
+        self.emit_u8(op::LOOP, span);
+        self.emit_u8(offset[0], span);
+        self.emit_u8(offset[1], span);
     }
 
     fn begin_scope(&mut self) {
@@ -361,13 +368,14 @@ impl Compiler {
         }
     }
 
-    fn emit_u8(&mut self, byte: u8) {
-        self.chunk.write_u8(byte);
+    fn emit_u8(&mut self, byte: u8, span: &Span) {
+        self.chunk.write_u8(byte, span);
     }
 
-    fn emit_constant(&mut self, value: Value) {
-        let constant_idx = self.chunk.write_constant(value);
-        self.emit_u8(constant_idx);
+    fn emit_constant(&mut self, value: Value, span: &Span) -> Result<()> {
+        let constant_idx = self.chunk.write_constant(value, span)?;
+        self.emit_u8(constant_idx, span);
+        Ok(())
     }
 }
 

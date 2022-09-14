@@ -1289,6 +1289,7 @@ version = "0.1.0"
 dependencies = [
  "hashbrown",
  "iota",
+ "lox-common",
  "lox-syntax",
  "rustc-hash",
 ]

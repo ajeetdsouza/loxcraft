@@ -10,6 +10,7 @@ hashbrown = { version = "0.12.3", features = [
     "inline-more",
 ], default-features = false }
 iota = "0.2.2"
+lox-common = { path = "../lox-common" }
 lox-syntax = { path = "../lox-syntax" }
 rustc-hash = "1.1.0"
 

@@ -17,6 +17,15 @@ impl Value {
             _ => true,
         }
     }
+
+    pub fn type_(&self) -> &'static str {
+        match self {
+            Self::Nil => "nil",
+            Self::Boolean(_) => "boolean",
+            Self::Number(_) => "number",
+            Self::Object(_) => "object",
+        }
+    }
 }
 
 impl Display for Value {

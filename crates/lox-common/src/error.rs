@@ -17,6 +17,8 @@ pub enum Error {
     IoError(IoError),
     #[error("NameError: {0}")]
     NameError(NameError),
+    #[error("OverflowError: {0}")]
+    OverflowError(OverflowError),
     #[error("SyntaxError: {0}")]
     SyntaxError(SyntaxError),
     #[error("TypeError: {0}")]
@@ -29,11 +31,26 @@ impl AsDiagnostic for Error {
             Error::AttributeError(e) => e.as_diagnostic(span),
             Error::IoError(e) => e.as_diagnostic(span),
             Error::NameError(e) => e.as_diagnostic(span),
+            Error::OverflowError(e) => e.as_diagnostic(span),
             Error::SyntaxError(e) => e.as_diagnostic(span),
             Error::TypeError(e) => e.as_diagnostic(span),
         }
     }
 }
+
+macro_rules! impl_from {
+    ($($error:tt),*) => {
+        $(
+            impl From<$error> for Error {
+                fn from(e: $error) -> Self {
+                    Error::$error(e)
+                }
+            }
+        )*
+    };
+}
+
+impl_from!(AttributeError, IoError, NameError, OverflowError, SyntaxError, TypeError);
 
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum AttributeError {
@@ -86,6 +103,23 @@ impl AsDiagnostic for NameError {
             | NameError::AlreadyDefined { .. }
             | NameError::NotDefined { .. } => Diagnostic::error()
                 .with_code("NameError")
+                .with_message(self.to_string())
+                .with_labels(vec![Label::primary((), span.clone())]),
+        }
+    }
+}
+
+#[derive(Debug, Error, Eq, PartialEq)]
+pub enum OverflowError {
+    #[error("cannot define more than 256 constants in a function")]
+    TooManyConstants,
+}
+
+impl AsDiagnostic for OverflowError {
+    fn as_diagnostic(&self, span: &Span) -> Diagnostic<()> {
+        match self {
+            OverflowError::TooManyConstants => Diagnostic::error()
+                .with_code("OverflowError")
                 .with_message(self.to_string())
                 .with_labels(vec![Label::primary((), span.clone())]),
         }

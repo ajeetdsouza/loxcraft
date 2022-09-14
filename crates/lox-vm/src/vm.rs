@@ -4,9 +4,11 @@ use crate::op;
 use crate::value::{Object, ObjectType, Value};
 use hashbrown::hash_map::Entry;
 use hashbrown::HashMap;
+use lox_common::error::{IoError, NameError, Result, TypeError};
 use rustc_hash::FxHasher;
 use std::hash::BuildHasherDefault;
 use std::hint;
+use std::io::{self, Write};
 
 const FRAMES_MAX: usize = 64;
 const STACK_MAX: usize = FRAMES_MAX * STACK_MAX_PER_FRAME;
@@ -26,7 +28,10 @@ impl VM {
         }
     }
 
-    pub fn run(&mut self, chunk: &Chunk, intern: &mut Intern) {
+    pub fn run(&mut self, chunk: &Chunk, intern: &mut Intern) -> Result<()> {
+        // Output stream. This is used for printing as well as debug logs.
+        let out = &mut io::stdout().lock();
+
         // Instruction pointer for the current Chunk.
         // Accessing `ip` without bounds checking is safe, assuming that the
         // compiler always outputs correct code. The program stops execution
@@ -83,6 +88,14 @@ impl VM {
         let stack = stack.as_mut_ptr();
         let mut stack_top = stack;
 
+        macro_rules! bail {
+            ($error:expr) => {{
+                let idx = unsafe { ip.offset_from(chunk.ops.as_ptr()) } as usize;
+                let span = &chunk.spans[idx];
+                return Err(($error.into(), span.clone()));
+            }};
+        }
+
         /// Pushes a value to the stack.
         macro_rules! push {
             ($value:expr) => {{
@@ -123,7 +136,11 @@ impl VM {
                 let a = pop!();
                 match (a, b) {
                     (Value::Number(a), Value::Number(b)) => push!((a $op b).into()),
-                    _ => panic!("unsupported operand {} for type: {a}, {b}", stringify!($op)),
+                    _ => bail!(TypeError::UnsupportedOperandInfix {
+                        op: stringify!($op).to_string(),
+                        lt_type: a.type_().to_string(),
+                        rt_type: b.type_().to_string(),
+                    }),
                 };
             }};
         }
@@ -160,7 +177,9 @@ impl VM {
                     let name = read_object!();
                     match self.globals.get(&name) {
                         Some(value) => push!(*value),
-                        None => panic!(),
+                        None => {
+                            bail!(NameError::NotDefined { name: intern.get_string(name).unwrap() })
+                        }
                     }
                 }
                 op::DEFINE_GLOBAL => {
@@ -173,7 +192,9 @@ impl VM {
                     let value = peek!();
                     match self.globals.entry(name) {
                         Entry::Occupied(mut entry) => entry.insert(unsafe { *value }),
-                        Entry::Vacant(entry) => panic!(),
+                        Entry::Vacant(entry) => {
+                            bail!(NameError::NotDefined { name: intern.get_string(name).unwrap() })
+                        }
                     };
                 }
                 op::EQUAL => binary_op!(==),
@@ -191,10 +212,8 @@ impl VM {
                         (Value::Number(a), Value::Number(b)) => push!((a + b).into()),
                         (Value::Object(a), Value::Object(b)) => {
                             match unsafe { (&(*a).type_, &(*b).type_) } {
-                                (ObjectType::String(a), ObjectType::String(b)) => {
-                                    let mut string = String::with_capacity(a.len() + b.len());
-                                    string.push_str(a);
-                                    string.push_str(b);
+                                (&ObjectType::String(a), &ObjectType::String(b)) => {
+                                    let string = [a, b].concat();
                                     let (object, inserted) = intern.insert_string(string);
                                     if inserted {
                                         // TODO: Add this back once we have a GC.
@@ -204,7 +223,11 @@ impl VM {
                                 }
                             };
                         }
-                        _ => panic!(),
+                        _ => bail!(TypeError::UnsupportedOperandInfix {
+                            op: "+".to_string(),
+                            lt_type: a.type_().to_string(),
+                            rt_type: b.type_().to_string(),
+                        }),
                     }
                 }
                 op::SUBTRACT => binary_op_number!(-),
@@ -218,13 +241,18 @@ impl VM {
                     let value = pop!();
                     match value {
                         Value::Number(number) => push!((-number).into()),
-                        _ => panic!(),
+                        _ => bail!(TypeError::UnsupportedOperandPrefix {
+                            op: "+".to_string(),
+                            rt_type: value.type_().to_string(),
+                        }),
                     }
                 }
                 // TODO: parametrize output using `writeln!`.
                 op::PRINT => {
                     let value = pop!();
-                    println!("{}", value);
+                    if let Err(_) = writeln!(out, "{value}") {
+                        bail!(IoError::WriteError { file: "stdout".to_string() });
+                    };
                 }
                 op::JUMP => {
                     let offset = read_u16!() as usize;
@@ -246,15 +274,16 @@ impl VM {
             }
 
             if cfg!(feature = "debug-trace") {
-                print!("     ");
+                write!(out, "     ").unwrap();
                 let mut stack_ptr = stack;
                 while stack_ptr < stack_top {
-                    print!("[ {} ]", unsafe { *stack_ptr });
+                    write!(out, "[ {} ]", unsafe { *stack_ptr }).unwrap();
                     stack_ptr = unsafe { stack_ptr.add(1) };
                 }
-                println!();
+                writeln!(out).unwrap();
             }
         }
+        Ok(())
     }
 }
 

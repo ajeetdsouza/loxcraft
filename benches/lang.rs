@@ -14,10 +14,5 @@ pub fn lang(c: &mut Criterion) {
     }
 }
 
-fn run_interpreter(source: &str) {
-    let errors = Interpreter::new(&mut io::stdout().lock()).run(source);
-    assert_eq!(errors, Vec::new());
-}
-
 criterion_group!(benches, lang);
 criterion_main!(benches);
