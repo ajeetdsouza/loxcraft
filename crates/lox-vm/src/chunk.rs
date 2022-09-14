@@ -4,7 +4,7 @@ use lox_common::error::{OverflowError, Result};
 use lox_common::types::Span;
 use std::ops::Index;
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Chunk {
     pub ops: Vec<u8>,
     pub constants: Vec<Value>,

@@ -1,8 +1,7 @@
-use crate::chunk::Chunk;
 use crate::compiler::Compiler;
 use crate::intern::Intern;
 use crate::op;
-use crate::value::{Object, ObjectType, Value};
+use crate::value::{Function, Object, ObjectExt, ObjectType, Value};
 use hashbrown::hash_map::Entry;
 use hashbrown::HashMap;
 use lox_common::error::{ErrorS, IoError, NameError, Result, TypeError};
@@ -32,19 +31,26 @@ impl VM {
     }
 
     pub fn run<W: io::Write>(&mut self, source: &str, stdout: &mut W) -> Result<(), Vec<ErrorS>> {
-        let chunk = Compiler::compile(source, &mut self.intern)?;
-        if let Err(e) = self.run_chunk(&chunk, stdout) {
+        let function = Compiler::compile(source, &mut self.intern)?;
+        let ip = function.chunk.ops.as_ptr();
+
+        let mut stack: [Value; STACK_MAX] = [Default::default(); STACK_MAX];
+        let stack = stack.as_mut_ptr();
+
+        let mut frame = CallFrame { function, ip, slots: stack };
+
+        if let Err(e) = self.run_frame(&mut frame, stdout) {
             return Err(vec![e]);
         }
         Ok(())
     }
 
-    pub fn run_chunk<W: io::Write>(&mut self, chunk: &Chunk, stdout: &mut W) -> Result<()> {
+    pub fn run_frame<W: io::Write>(&mut self, frame: &mut CallFrame, stdout: &mut W) -> Result<()> {
         // Instruction pointer for the current Chunk.
         // Accessing `ip` without bounds checking is safe, assuming that the
         // compiler always outputs correct code. The program stops execution
         // when it reaches `op::RETURN`.
-        let mut ip = chunk.ops.as_ptr();
+        let mut ip = frame.ip;
 
         /// Reads an instruction / byte from the current [`Chunk`].
         macro_rules! read_u8 {
@@ -68,7 +74,7 @@ impl VM {
         macro_rules! read_value {
             () => {{
                 let constant_idx = read_u8!() as usize;
-                *unsafe { chunk.constants.get_unchecked(constant_idx) }
+                *unsafe { frame.function.chunk.constants.get_unchecked(constant_idx) }
             }};
         }
 
@@ -76,7 +82,8 @@ impl VM {
         macro_rules! read_object {
             () => {{
                 let constant_idx = read_u8!() as usize;
-                let constant = *unsafe { chunk.constants.get_unchecked(constant_idx) };
+                let constant =
+                    *unsafe { frame.function.chunk.constants.get_unchecked(constant_idx) };
                 match constant {
                     Value::Object(object) => object,
                     _ => unsafe { hint::unreachable_unchecked() },
@@ -92,14 +99,13 @@ impl VM {
         // - Thus, we can statically allocate a stack of size
         //   `STACK_MAX = FRAMES_MAX * STACK_MAX_PER_FRAME` and we are
         //   guaranteed to never exceed this.
-        let mut stack = [Value::default(); STACK_MAX];
-        let stack = stack.as_mut_ptr();
+        let stack = frame.slots;
         let mut stack_top = stack;
 
         macro_rules! bail {
             ($error:expr) => {{
-                let idx = unsafe { ip.offset_from(chunk.ops.as_ptr()) } as usize;
-                let span = &chunk.spans[idx];
+                let idx = unsafe { ip.offset_from(frame.function.chunk.ops.as_ptr()) } as usize;
+                let span = &frame.function.chunk.spans[idx];
                 return Err(($error.into(), span.clone()));
             }};
         }
@@ -155,8 +161,8 @@ impl VM {
 
         loop {
             if cfg!(feature = "debug-trace") {
-                let idx = unsafe { ip.offset_from(chunk.ops.as_ptr()) };
-                chunk.debug_op(idx as usize);
+                let idx = unsafe { ip.offset_from(frame.function.chunk.ops.as_ptr()) };
+                frame.function.chunk.debug_op(idx as usize);
             }
 
             match read_u8!() {
@@ -186,9 +192,7 @@ impl VM {
                     match self.globals.get(&name) {
                         Some(value) => push!(*value),
                         None => {
-                            bail!(NameError::NotDefined {
-                                name: self.intern.get_string(name).unwrap()
-                            })
+                            bail!(NameError::NotDefined { name: name.to_str().to_string() })
                         }
                     }
                 }
@@ -203,9 +207,7 @@ impl VM {
                     match self.globals.entry(name) {
                         Entry::Occupied(mut entry) => entry.insert(unsafe { *value }),
                         Entry::Vacant(_) => {
-                            bail!(NameError::NotDefined {
-                                name: self.intern.get_string(name).unwrap()
-                            })
+                            bail!(NameError::NotDefined { name: name.to_str().to_string() })
                         }
                     };
                 }
@@ -221,9 +223,9 @@ impl VM {
                     let b = pop!();
                     let a = pop!();
                     match (a, b) {
-                        (Value::Number(a), Value::Number(b)) => push!((a + b).into()),
-                        (Value::Object(a), Value::Object(b)) => {
-                            match unsafe { (&(*a).type_, &(*b).type_) } {
+                        (Value::Number(n1), Value::Number(n2)) => push!((n1 + n2).into()),
+                        (Value::Object(o1), Value::Object(o2)) => {
+                            match unsafe { (&(*o1).type_, &(*o2).type_) } {
                                 (&ObjectType::String(a), &ObjectType::String(b)) => {
                                     let string = [a, b].concat();
                                     let (object, inserted) = self.intern.insert_string(string);
@@ -233,6 +235,11 @@ impl VM {
                                     };
                                     push!(object.into());
                                 }
+                                _ => bail!(TypeError::UnsupportedOperandInfix {
+                                    op: "+".to_string(),
+                                    lt_type: a.type_().to_string(),
+                                    rt_type: b.type_().to_string(),
+                                }),
                             };
                         }
                         _ => bail!(TypeError::UnsupportedOperandInfix {
@@ -295,6 +302,8 @@ impl VM {
                 writeln!(stdout).unwrap();
             }
         }
+
+        frame.ip = ip;
         Ok(())
     }
 }
@@ -307,4 +316,10 @@ impl Drop for VM {
             }
         }
     }
+}
+
+pub struct CallFrame {
+    function: Function,
+    ip: *const u8,
+    slots: *mut Value,
 }

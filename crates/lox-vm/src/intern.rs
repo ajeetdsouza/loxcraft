@@ -13,11 +13,6 @@ pub struct Intern {
 }
 
 impl Intern {
-    /// This is a slow operation, so avoid using it in hot paths.
-    pub fn get_string(&self, str: *mut Object) -> Option<String> {
-        self.strings.iter().find(|(_, v)| *v == &str).map(|(k, _)| k.clone())
-    }
-
     pub fn insert_str(&mut self, str: &str) -> (*mut Object, bool) {
         match self.strings.raw_entry_mut().from_key(str) {
             RawEntryMut::Occupied(entry) => (*entry.get(), false),

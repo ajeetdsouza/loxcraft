@@ -1,36 +1,42 @@
-use std::convert::TryInto;
-
 use crate::chunk::Chunk;
 use crate::intern::Intern;
 use crate::op;
-use crate::value::Value;
+use crate::value::{Function, Object, ObjectExt, Value};
 use lox_common::error::{ErrorS, NameError, OverflowError, Result};
 use lox_common::types::Span;
-use lox_syntax::ast::{Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Program, Stmt, StmtS};
+use lox_syntax::ast::{Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Stmt, StmtS};
+use std::convert::TryInto;
+use std::mem;
 
-#[derive(Default)]
+#[derive(Debug)]
 pub struct Compiler {
-    chunk: Chunk,
-    locals: Vec<Local>,
+    ctx: CompilerCtx,
     scope_depth: usize,
 }
 
 impl Compiler {
-    pub fn compile(source: &str, intern: &mut Intern) -> Result<Chunk, Vec<ErrorS>> {
-        let mut compiler = Compiler::default();
-        let program = lox_syntax::parse(source)?;
-        if let Err(e) = compiler.compile_program(&program, intern) {
-            return Err(vec![e]);
+    /// Creates a compiler for a new script.
+    pub fn new(intern: &mut Intern) -> Self {
+        let (name, _) = intern.insert_str("");
+        Self {
+            ctx: CompilerCtx {
+                function: Function { name, arity: 0, chunk: Chunk::default() },
+                type_: FunctionType::Script,
+                locals: Vec::new(),
+                parent: None,
+            },
+            scope_depth: 0,
         }
-        Ok(compiler.chunk)
     }
 
-    fn compile_program(&mut self, program: &Program, intern: &mut Intern) -> Result<()> {
+    pub fn compile(source: &str, intern: &mut Intern) -> Result<Function, Vec<ErrorS>> {
+        let mut compiler = Self::new(intern);
+        let program = lox_syntax::parse(source)?;
         for stmt in &program.stmts {
-            self.compile_stmt(stmt, intern)?;
+            compiler.compile_stmt(stmt, intern).map_err(|e| vec![e])?;
         }
-        self.emit_u8(op::RETURN, &(0..0));
-        Ok(())
+        compiler.emit_u8(op::RETURN, &(0..0));
+        Ok(compiler.ctx.function)
     }
 
     fn compile_stmt(&mut self, (stmt, span): &StmtS, intern: &mut Intern) -> Result<()> {
@@ -88,6 +94,53 @@ impl Compiler {
                 }
 
                 self.end_scope(span);
+            }
+            Stmt::Fun(fun) => {
+                let (name, _) = intern.insert_str(&fun.name);
+                let arity = fun
+                    .params
+                    .len()
+                    .try_into()
+                    .map_err(|_| (OverflowError::TooManyParams.into(), span.clone()))?;
+
+                let ctx = CompilerCtx {
+                    function: Function { name, arity, chunk: Chunk::default() },
+                    type_: FunctionType::Function,
+                    locals: Vec::new(),
+                    parent: None,
+                };
+                self.begin_ctx(ctx);
+
+                self.declare_local(&fun.name, span)?;
+                self.define_local();
+                for param in &fun.params {
+                    self.declare_local(param, span)?;
+                    self.define_local();
+                }
+
+                for stmt in &fun.body.stmts {
+                    self.compile_stmt(stmt, intern)?;
+                }
+
+                // Implicit return at the end of the function.
+                if self.ctx.function.chunk.ops.last() != Some(&op::RETURN) {
+                    self.emit_u8(op::NIL, span);
+                    self.emit_u8(op::RETURN, span);
+                }
+
+                let function = self.end_ctx();
+                let object: Object = function.into();
+                let value: Value = Box::into_raw(Box::new(object)).into();
+                self.emit_u8(op::CONSTANT, span);
+                self.emit_constant(value, span)?;
+
+                if self.scope_depth == 0 {
+                    self.emit_u8(op::DEFINE_GLOBAL, span);
+                    self.emit_constant(name.into(), span)?;
+                } else {
+                    self.declare_local(&fun.name, span)?;
+                    self.define_local();
+                }
             }
             Stmt::If(if_) => {
                 self.compile_expr(&if_.cond, intern)?;
@@ -260,6 +313,19 @@ impl Compiler {
         Ok(())
     }
 
+    /// Pushes the current ctx to parent and assigns it to the given ctx.
+    fn begin_ctx(&mut self, ctx: CompilerCtx) {
+        let ctx = mem::replace(&mut self.ctx, ctx);
+        self.ctx.parent = Some(Box::new(ctx));
+    }
+
+    /// Pops the current ctx and extracts a [`Function`] from it.
+    fn end_ctx(&mut self) -> Function {
+        let parent = self.ctx.parent.take().expect("tried to end context in a script");
+        let ctx = mem::replace(&mut self.ctx, *parent);
+        ctx.function
+    }
+
     fn get_variable(&mut self, name: &str, span: &Span, intern: &mut Intern) -> Result<()> {
         if let Some(local_idx) = self.resolve_local(name, span)? {
             self.emit_u8(op::GET_LOCAL, span);
@@ -285,7 +351,7 @@ impl Compiler {
     }
 
     fn declare_local(&mut self, name: &str, span: &Span) -> Result<()> {
-        for local in self.locals.iter().rev() {
+        for local in self.ctx.locals.iter().rev() {
             if local.depth < self.scope_depth {
                 break;
             }
@@ -299,17 +365,17 @@ impl Compiler {
 
         let local =
             Local { name: name.to_string(), depth: self.scope_depth, is_initialized: false };
-        self.locals.push(local);
+        self.ctx.locals.push(local);
 
         Ok(())
     }
 
     fn define_local(&mut self) {
-        self.locals.last_mut().unwrap().is_initialized = true;
+        self.ctx.locals.last_mut().unwrap().is_initialized = true;
     }
 
     fn resolve_local(&self, name: &str, span: &Span) -> Result<Option<u8>> {
-        match self.locals.iter().enumerate().rfind(|(_, local)| local.name == name) {
+        match self.ctx.locals.iter().enumerate().rfind(|(_, local)| local.name == name) {
             Some((idx, local)) => {
                 if local.is_initialized {
                     let idx = idx
@@ -336,29 +402,30 @@ impl Compiler {
         self.emit_u8(opcode, span);
         self.emit_u8(0xFF, span);
         self.emit_u8(0xFF, span);
-        self.chunk.ops.len() - 2
+        self.ctx.function.chunk.ops.len() - 2
     }
 
     /// Takes the index of the jump offset to be patched as input, and patches
     /// it to point to the current instruction.
     fn patch_jump(&mut self, offset_idx: usize, span: &Span) -> Result<()> {
         // The extra -2 is to account for the space taken by the offset.
-        let offset = self.chunk.ops.len() - 2 - offset_idx;
+        let offset = self.ctx.function.chunk.ops.len() - 2 - offset_idx;
         let offset =
             offset.try_into().map_err(|_| (OverflowError::JumpTooLarge.into(), span.clone()))?;
         let offset = u16::to_le_bytes(offset);
-        [self.chunk.ops[offset_idx], self.chunk.ops[offset_idx + 1]] = offset;
+        [self.ctx.function.chunk.ops[offset_idx], self.ctx.function.chunk.ops[offset_idx + 1]] =
+            offset;
         Ok(())
     }
 
     fn start_loop(&self) -> usize {
-        self.chunk.ops.len()
+        self.ctx.function.chunk.ops.len()
     }
 
     fn emit_loop(&mut self, start_idx: usize, span: &Span) -> Result<()> {
         // The extra +3 is to account for the space taken by the instruction
         // and the offset.
-        let offset = self.chunk.ops.len() + 3 - start_idx;
+        let offset = self.ctx.function.chunk.ops.len() + 3 - start_idx;
         let offset =
             offset.try_into().map_err(|_| (OverflowError::JumpTooLarge.into(), span.clone()))?;
         let offset = u16::to_le_bytes(offset);
@@ -378,9 +445,9 @@ impl Compiler {
         self.scope_depth -= 1;
 
         // Remove all locals that are no longer in scope.
-        while let Some(local) = self.locals.last() {
+        while let Some(local) = self.ctx.locals.last() {
             if local.depth > self.scope_depth {
-                self.locals.pop();
+                self.ctx.locals.pop();
                 self.emit_u8(op::POP, span);
             } else {
                 break;
@@ -389,19 +456,39 @@ impl Compiler {
     }
 
     fn emit_u8(&mut self, byte: u8, span: &Span) {
-        self.chunk.write_u8(byte, span);
+        self.ctx.function.chunk.write_u8(byte, span);
     }
 
     fn emit_constant(&mut self, value: Value, span: &Span) -> Result<()> {
-        let constant_idx = self.chunk.write_constant(value, span)?;
+        let constant_idx = self.ctx.function.chunk.write_constant(value, span)?;
         self.emit_u8(constant_idx, span);
         Ok(())
     }
 }
 
 #[derive(Debug)]
+pub struct CompilerCtx {
+    function: Function,
+    type_: FunctionType,
+    locals: Vec<Local>,
+    parent: Option<Box<CompilerCtx>>,
+}
+
+#[derive(Debug, Default)]
 struct Local {
+    /// The name of the variable.
     name: String,
+    /// The scope depth of the variable, i.e. the number of nested scopes that
+    /// surround it. This starts at 1, because global scopes don't have local
+    /// variables.
     depth: usize,
     is_initialized: bool,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+enum FunctionType {
+    /// A function that has been defined in code.
+    Function,
+    /// The global-level function that is called when the program starts.
+    Script,
 }

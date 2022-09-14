@@ -60,12 +60,10 @@ pub enum AttributeError {
 
 impl AsDiagnostic for AttributeError {
     fn as_diagnostic(&self, span: &Span) -> Diagnostic<()> {
-        match self {
-            AttributeError::NoSuchAttribute { .. } => Diagnostic::error()
-                .with_code("AttributeError")
-                .with_message(self.to_string())
-                .with_labels(vec![Label::primary((), span.clone())]),
-        }
+        Diagnostic::error()
+            .with_code("AttributeError")
+            .with_message(self.to_string())
+            .with_labels(vec![Label::primary((), span.clone())])
     }
 }
 
@@ -77,12 +75,10 @@ pub enum IoError {
 
 impl AsDiagnostic for IoError {
     fn as_diagnostic(&self, span: &Span) -> Diagnostic<()> {
-        match self {
-            IoError::WriteError { .. } => Diagnostic::error()
-                .with_code("IOError")
-                .with_message(self.to_string())
-                .with_labels(vec![Label::primary((), span.clone())]),
-        }
+        Diagnostic::error()
+            .with_code("IOError")
+            .with_message(self.to_string())
+            .with_labels(vec![Label::primary((), span.clone())])
     }
 }
 
@@ -98,14 +94,10 @@ pub enum NameError {
 
 impl AsDiagnostic for NameError {
     fn as_diagnostic(&self, span: &Span) -> Diagnostic<()> {
-        match self {
-            NameError::AccessInsideInitializer { .. }
-            | NameError::AlreadyDefined { .. }
-            | NameError::NotDefined { .. } => Diagnostic::error()
-                .with_code("NameError")
-                .with_message(self.to_string())
-                .with_labels(vec![Label::primary((), span.clone())]),
-        }
+        Diagnostic::error()
+            .with_code("NameError")
+            .with_message(self.to_string())
+            .with_labels(vec![Label::primary((), span.clone())])
     }
 }
 
@@ -113,22 +105,20 @@ impl AsDiagnostic for NameError {
 pub enum OverflowError {
     #[error("jump body is too large")]
     JumpTooLarge,
-    #[error("cannot define more than 256 locals in a function")]
-    TooManyLocals,
     #[error("cannot define more than 256 constants in a function")]
     TooManyConstants,
+    #[error("cannot define more than 256 locals in a function")]
+    TooManyLocals,
+    #[error("cannot define more than 256 params in a function")]
+    TooManyParams,
 }
 
 impl AsDiagnostic for OverflowError {
     fn as_diagnostic(&self, span: &Span) -> Diagnostic<()> {
-        match self {
-            OverflowError::JumpTooLarge
-            | OverflowError::TooManyLocals
-            | OverflowError::TooManyConstants => Diagnostic::error()
-                .with_code("OverflowError")
-                .with_message(self.to_string())
-                .with_labels(vec![Label::primary((), span.clone())]),
-        }
+        Diagnostic::error()
+            .with_code("OverflowError")
+            .with_message(self.to_string())
+            .with_labels(vec![Label::primary((), span.clone())])
     }
 }
 
@@ -152,22 +142,18 @@ pub enum SyntaxError {
 
 impl AsDiagnostic for SyntaxError {
     fn as_diagnostic(&self, span: &Span) -> Diagnostic<()> {
+        let mut diagnostic = Diagnostic::error()
+            .with_code("SyntaxError")
+            .with_message(self.to_string())
+            .with_labels(vec![Label::primary((), span.clone())]);
         match self {
-            SyntaxError::ExtraToken { .. }
-            | SyntaxError::InvalidToken
-            | SyntaxError::ReturnOutsideFunction
-            | SyntaxError::UnexpectedInput { .. }
-            | SyntaxError::UnterminatedString => Diagnostic::error()
-                .with_code("SyntaxError")
-                .with_message(self.to_string())
-                .with_labels(vec![Label::primary((), span.clone())]),
-            SyntaxError::UnrecognizedEOF { expected }
-            | SyntaxError::UnrecognizedToken { expected, .. } => Diagnostic::error()
-                .with_code("SyntaxError")
-                .with_message(self.to_string())
-                .with_labels(vec![Label::primary((), span.clone())])
-                .with_notes(vec![format!("expected: {}", one_of(expected))]),
-        }
+            SyntaxError::UnrecognizedEOF { expected, .. }
+            | SyntaxError::UnrecognizedToken { expected, .. } => {
+                diagnostic = diagnostic.with_notes(vec![format!("expected: {}", one_of(expected))]);
+            }
+            _ => {}
+        };
+        diagnostic
     }
 }
 
@@ -189,17 +175,10 @@ pub enum TypeError {
 
 impl AsDiagnostic for TypeError {
     fn as_diagnostic(&self, span: &Span) -> Diagnostic<()> {
-        match self {
-            TypeError::ArityMismatch { .. }
-            | TypeError::InitInvalidReturnType { .. }
-            | TypeError::NotCallable { .. }
-            | TypeError::SuperclassInvalidType { .. }
-            | TypeError::UnsupportedOperandPrefix { .. }
-            | TypeError::UnsupportedOperandInfix { .. } => Diagnostic::error()
-                .with_code("TypeError")
-                .with_message(self.to_string())
-                .with_labels(vec![Label::primary((), span.clone())]),
-        }
+        Diagnostic::error()
+            .with_code("TypeError")
+            .with_message(self.to_string())
+            .with_labels(vec![Label::primary((), span.clone())])
     }
 }
 

@@ -1,4 +1,6 @@
+use crate::chunk::Chunk;
 use std::fmt::{self, Display, Formatter};
+use std::hint;
 use std::ops::Not;
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -24,6 +26,7 @@ impl Value {
             Self::Boolean(_) => "bool",
             Self::Number(_) => "number",
             Self::Object(object) => match (unsafe { &**object }).type_ {
+                ObjectType::Function(_) => "function",
                 ObjectType::String(_) => "string",
             },
         }
@@ -87,8 +90,18 @@ pub struct Object {
 impl Display for Object {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match &self.type_ {
+            ObjectType::Function(function) => match function.name.to_str() {
+                "" => write!(f, "<script>"),
+                name => write!(f, "<function {name}>"),
+            },
             ObjectType::String(string) => write!(f, "{string}"),
         }
+    }
+}
+
+impl From<Function> for Object {
+    fn from(function: Function) -> Self {
+        Self { is_marked: false, type_: ObjectType::Function(function) }
     }
 }
 
@@ -99,7 +112,30 @@ impl From<&'static str> for Object {
 }
 
 pub enum ObjectType {
+    Function(Function),
     String(&'static str),
+}
+
+#[derive(Debug)]
+pub struct Function {
+    pub name: *mut Object,
+    pub arity: u8,
+    pub chunk: Chunk,
+}
+
+pub trait ObjectExt {
+    fn to_str(&self) -> &'static str;
+}
+
+impl ObjectExt for *mut Object {
+    /// This must only be called when the underlying Object is a String. On any
+    /// other Object type, this is undefined behavior.
+    fn to_str(&self) -> &'static str {
+        match unsafe { &(**self).type_ } {
+            ObjectType::String(string) => string,
+            _ => unsafe { hint::unreachable_unchecked() },
+        }
+    }
 }
 
 #[cfg(test)]
