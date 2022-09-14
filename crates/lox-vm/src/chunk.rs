@@ -1,6 +1,6 @@
 use crate::op;
 use crate::value::Value;
-use lox_common::error::{Error, OverflowError, Result};
+use lox_common::error::{OverflowError, Result};
 use lox_common::types::Span;
 use std::ops::Index;
 

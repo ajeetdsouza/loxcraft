@@ -1,10 +1,11 @@
 use crate::chunk::Chunk;
+use crate::compiler::Compiler;
 use crate::intern::Intern;
 use crate::op;
 use crate::value::{Object, ObjectType, Value};
 use hashbrown::hash_map::Entry;
 use hashbrown::HashMap;
-use lox_common::error::{IoError, NameError, Result, TypeError};
+use lox_common::error::{ErrorS, IoError, NameError, Result, TypeError};
 use rustc_hash::FxHasher;
 use std::hash::BuildHasherDefault;
 use std::hint;
@@ -17,6 +18,7 @@ const STACK_MAX_PER_FRAME: usize = u8::MAX as usize + 1;
 pub struct VM {
     pub globals: HashMap<*mut Object, Value, BuildHasherDefault<FxHasher>>,
     pub objects: Vec<*mut Object>,
+    pub intern: Intern,
 }
 
 impl VM {
@@ -25,10 +27,19 @@ impl VM {
             // TODO: tune these later.
             globals: HashMap::with_capacity_and_hasher(256, Default::default()),
             objects: Vec::with_capacity(256),
+            intern: Intern::default(),
         }
     }
 
-    pub fn run(&mut self, chunk: &Chunk, intern: &mut Intern) -> Result<()> {
+    pub fn run(&mut self, source: &str) -> Result<(), Vec<ErrorS>> {
+        let chunk = Compiler::compile(source, &mut self.intern)?;
+        if let Err(e) = self.run_chunk(&chunk) {
+            return Err(vec![e]);
+        }
+        Ok(())
+    }
+
+    pub fn run_chunk(&mut self, chunk: &Chunk) -> Result<()> {
         // Output stream. This is used for printing as well as debug logs.
         let out = &mut io::stdout().lock();
 
@@ -178,7 +189,9 @@ impl VM {
                     match self.globals.get(&name) {
                         Some(value) => push!(*value),
                         None => {
-                            bail!(NameError::NotDefined { name: intern.get_string(name).unwrap() })
+                            bail!(NameError::NotDefined {
+                                name: self.intern.get_string(name).unwrap()
+                            })
                         }
                     }
                 }
@@ -192,8 +205,10 @@ impl VM {
                     let value = peek!();
                     match self.globals.entry(name) {
                         Entry::Occupied(mut entry) => entry.insert(unsafe { *value }),
-                        Entry::Vacant(entry) => {
-                            bail!(NameError::NotDefined { name: intern.get_string(name).unwrap() })
+                        Entry::Vacant(_) => {
+                            bail!(NameError::NotDefined {
+                                name: self.intern.get_string(name).unwrap()
+                            })
                         }
                     };
                 }
@@ -214,7 +229,7 @@ impl VM {
                             match unsafe { (&(*a).type_, &(*b).type_) } {
                                 (&ObjectType::String(a), &ObjectType::String(b)) => {
                                     let string = [a, b].concat();
-                                    let (object, inserted) = intern.insert_string(string);
+                                    let (object, inserted) = self.intern.insert_string(string);
                                     if inserted {
                                         // TODO: Add this back once we have a GC.
                                         // self.objects.push(object);

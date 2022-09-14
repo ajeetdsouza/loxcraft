@@ -1215,6 +1215,7 @@ dependencies = [
  "lox-lsp",
  "lox-playground",
  "lox-syntax",
+ "lox-vm",
  "mimalloc",
  "nu-ansi-term",
  "pretty_assertions",

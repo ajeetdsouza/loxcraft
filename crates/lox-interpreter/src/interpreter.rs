@@ -22,14 +22,11 @@ impl<'stdout> Interpreter<'stdout> {
         Self { globals, stdout, return_: None }
     }
 
-    pub fn run(&mut self, source: &str) -> Vec<ErrorS> {
-        let (mut program, errors) = lox_syntax::parse(source);
-        if !errors.is_empty() {
-            return errors;
-        }
+    pub fn run(&mut self, source: &str) -> Result<(), Vec<ErrorS>> {
+        let mut program = lox_syntax::parse(source)?;
         let errors = crate::resolve(&mut program);
         if !errors.is_empty() {
-            return errors;
+            return Err(errors);
         }
 
         #[cfg(feature = "profile")]
@@ -38,7 +35,7 @@ impl<'stdout> Interpreter<'stdout> {
             .build()
             .expect("could not start profiler");
         if let Err(e) = self.run_program(&program) {
-            return vec![e];
+            return Err(vec![e]);
         }
         #[cfg(feature = "profile")]
         {
@@ -52,7 +49,7 @@ impl<'stdout> Interpreter<'stdout> {
             report.flamegraph(&mut flamegraph).unwrap();
         }
 
-        Vec::new()
+        Ok(())
     }
 
     pub fn run_program(&mut self, program: &Program) -> Result<()> {

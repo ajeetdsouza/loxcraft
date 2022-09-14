@@ -20,7 +20,7 @@ pub fn is_complete(source: &str) -> bool {
     true
 }
 
-pub fn parse(source: &str) -> (Program, Vec<ErrorS>) {
+pub fn parse(source: &str) -> Result<Program, Vec<ErrorS>> {
     let lexer = Lexer::new(source);
     let parser = Parser::new();
     let mut errors = Vec::new();
@@ -55,5 +55,9 @@ pub fn parse(source: &str) -> (Program, Vec<ErrorS>) {
         ParseError::User { error } => error,
     }));
 
-    (program, errors)
+    if errors.is_empty() {
+        Ok(program)
+    } else {
+        Err(errors)
+    }
 }

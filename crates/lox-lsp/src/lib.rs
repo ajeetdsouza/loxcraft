@@ -19,8 +19,10 @@ impl Backend {
     }
 
     pub async fn publish_diagnostics(&self, source: &str, uri: Url, version: Option<i32>) {
-        let (mut program, mut errors) = lox_syntax::parse(source);
-        errors.extend(lox_interpreter::resolve(&mut program));
+        let errors = match lox_syntax::parse(source) {
+            Ok(mut program) => lox_interpreter::resolve(&mut program),
+            Err(e) => e,
+        };
         let diagnostics = report_err(source, &errors);
         self.client.publish_diagnostics(uri, diagnostics, version).await;
     }

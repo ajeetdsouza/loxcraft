@@ -34,6 +34,7 @@ lox-lsp = { path = "crates/lox-lsp" }
 lox-interpreter = { path = "crates/lox-interpreter" }
 lox-playground = { path = "crates/lox-playground", optional = true }
 lox-syntax = { path = "crates/lox-syntax" }
+lox-vm = { path = "crates/lox-vm" }
 mimalloc = { version = "0.1.27", default-features = false }
 nu-ansi-term = "0.46.0"
 reedline = "0.10.0"

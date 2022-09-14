@@ -6,7 +6,7 @@ use codespan_reporting::term;
 use termcolor::WriteColor;
 use thiserror::Error;
 
-pub type Result<T, E = Error> = std::result::Result<T, (E, Span)>;
+pub type Result<T, E = ErrorS> = std::result::Result<T, E>;
 pub type ErrorS = Spanned<Error>;
 
 #[derive(Debug, Error, Eq, PartialEq)]

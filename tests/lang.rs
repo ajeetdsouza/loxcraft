@@ -21,9 +21,9 @@ fn lox(path: &str) {
     }
 
     let mut got_output = Vec::new();
-    let errors = Interpreter::new(&mut got_output).run(&source);
-    if let Some((e, _)) = errors.first() {
-        writeln!(&mut got_output, "{e}").expect("could not write to output");
+    if let Err(e) = Interpreter::new(&mut got_output).run(&source) {
+        let (e, _) = e.first().expect("received empty Err");
+        writeln!(&mut got_output, "{}", e).expect("could not write to output");
     }
     let got_output = str::from_utf8(&got_output).expect("invalid UTF-8 in output");
     assert_eq!(exp_output, got_output);

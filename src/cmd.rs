@@ -3,7 +3,7 @@ use crate::repl::{self, Prompt};
 use anyhow::{bail, Context, Result};
 use clap::Parser as Clap;
 use lox_common::error::ErrorS;
-use lox_interpreter::Interpreter;
+use lox_vm::VM;
 use reedline::Signal;
 
 use std::fs;
@@ -37,16 +37,14 @@ impl Cmd {
 }
 
 pub fn repl() -> Result<()> {
-    let stdout = &mut io::stdout().lock();
-    let mut interpreter = Interpreter::new(stdout);
+    let mut vm = VM::new();
     let mut editor = repl::editor().context("could not start REPL")?;
 
     loop {
         match editor.read_line(&Prompt) {
             Ok(Signal::Success(line)) => {
-                let errors = interpreter.run(&line);
-                if !errors.is_empty() {
-                    report_err(&line, errors);
+                if let Err(e) = vm.run(&line) {
+                    report_err(&line, e);
                 }
             }
             Ok(Signal::CtrlC) => eprintln!("^C"),
@@ -64,11 +62,9 @@ pub fn repl() -> Result<()> {
 fn run(path: &str) -> Result<()> {
     let source =
         fs::read_to_string(&path).with_context(|| format!("could not read file: {}", path))?;
-    let stdout = &mut io::stdout().lock();
-    let mut interpreter = Interpreter::new(stdout);
-    let errors = interpreter.run(&source);
-    if !errors.is_empty() {
-        report_err(&source, errors);
+    let mut vm = VM::new();
+    if let Err(e) = vm.run(&source) {
+        report_err(&source, e);
         bail!("program exited with errors")
     }
     Ok(())

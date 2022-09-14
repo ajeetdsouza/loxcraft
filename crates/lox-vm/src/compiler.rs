@@ -4,7 +4,7 @@ use crate::chunk::Chunk;
 use crate::intern::Intern;
 use crate::op;
 use crate::value::Value;
-use lox_common::error::Result;
+use lox_common::error::{ErrorS, Result};
 use lox_common::types::Span;
 use lox_syntax::ast::{Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Program, Stmt, StmtS};
 
@@ -16,12 +16,13 @@ pub struct Compiler {
 }
 
 impl Compiler {
-    pub fn compile(source: &str, intern: &mut Intern) -> Chunk {
+    pub fn compile(source: &str, intern: &mut Intern) -> Result<Chunk, Vec<ErrorS>> {
         let mut compiler = Compiler::default();
-        let (program, errors) = lox_syntax::parse(source);
-        assert!(errors.is_empty());
-        compiler.compile_program(&program, intern).unwrap();
-        compiler.chunk
+        let program = lox_syntax::parse(source)?;
+        if let Err(e) = compiler.compile_program(&program, intern) {
+            return Err(vec![e]);
+        }
+        Ok(compiler.chunk)
     }
 
     fn compile_program(&mut self, program: &Program, intern: &mut Intern) -> Result<()> {
@@ -124,7 +125,7 @@ impl Compiler {
                 } else {
                     self.declare_local(name);
                     self.compile_expr(value, intern)?;
-                    self.define_local(name);
+                    self.define_local();
                 }
             }
             Stmt::While(while_) => {
@@ -300,7 +301,7 @@ impl Compiler {
         }
     }
 
-    fn define_local(&mut self, name: &str) {
+    fn define_local(&mut self) {
         self.locals.last_mut().unwrap().is_initialized = true;
     }
 
