@@ -131,7 +131,7 @@ impl Compiler {
                 let function = self.end_ctx();
                 let object: Object = function.into();
                 let value: Value = Box::into_raw(Box::new(object)).into();
-                self.emit_u8(op::CONSTANT, span);
+                self.emit_u8(op::CLOSURE, span);
                 self.emit_constant(value, span)?;
 
                 if self.ctx.scope_depth == 0 {

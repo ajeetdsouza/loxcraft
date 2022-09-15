@@ -10,7 +10,7 @@ use rustc_hash::FxHasher;
 use crate::compiler::Compiler;
 use crate::intern::Intern;
 use crate::op;
-use crate::value::{Function, Native, Object, ObjectExt, ObjectType, Value};
+use crate::value::{Closure, Function, Native, Object, ObjectExt, ObjectType, Value};
 
 const FRAMES_MAX: usize = 64;
 const STACK_MAX: usize = FRAMES_MAX * STACK_MAX_PER_FRAME;
@@ -36,13 +36,13 @@ impl VM {
 
     pub fn run<W: io::Write>(&mut self, source: &str, stdout: &mut W) -> Result<(), Vec<ErrorS>> {
         let function = Compiler::compile(source, &mut self.intern)?;
-        if let Err(e) = self.run_function(&function, stdout) {
+        if let Err(e) = self.run_function(function, stdout) {
             return Err(vec![e]);
         }
         Ok(())
     }
 
-    pub fn run_function<W: io::Write>(&mut self, function: &Function, stdout: &mut W) -> Result<()> {
+    pub fn run_function<W: io::Write>(&mut self, function: Function, stdout: &mut W) -> Result<()> {
         // Accessing `stack` without bounds checking is safe because:
         // - Each frame can store a theoretical maximum of `STACK_MAX_PER_FRAME` values on the stack.
         // - The frame count can never exceed `MAX_FRAMES`, otherwise we throw a stack overflow error.
@@ -52,14 +52,17 @@ impl VM {
         let stack = stack.as_mut_ptr();
         let mut stack_top = stack;
 
+        let ip = function.chunk.ops.as_ptr();
+        let closure = &Closure { function: &mut function.into() as _ };
+
         let mut frames: Vec<CallFrame> = Vec::with_capacity(256);
         let mut frame = CallFrame {
-            function,
+            closure,
             // Instruction pointer for the current Chunk.
             // Accessing `ip` without bounds checking is safe, assuming that the
             // compiler always outputs correct code. The program stops execution
             // when it reaches `op::RETURN`.
-            ip: function.chunk.ops.as_ptr(),
+            ip,
             stack,
         };
 
@@ -111,14 +114,15 @@ impl VM {
         macro_rules! read_value {
             () => {{
                 let constant_idx = read_u8!() as usize;
-                *unsafe { frame.function.chunk.constants.get_unchecked(constant_idx) }
+                *unsafe { frame.closure.function.as_function().chunk.constants.get_unchecked(constant_idx) }
             }};
         }
         /// Reads an [`Object`] from the current [`Chunk`].
         macro_rules! read_object {
             () => {{
                 let constant_idx = read_u8!() as usize;
-                let constant = *unsafe { frame.function.chunk.constants.get_unchecked(constant_idx) };
+                let constant =
+                    *unsafe { frame.closure.function.as_function().chunk.constants.get_unchecked(constant_idx) };
                 match constant {
                     Value::Object(object) => object,
                     _ => unsafe { hint::unreachable_unchecked() },
@@ -128,16 +132,17 @@ impl VM {
 
         macro_rules! bail {
             ($error:expr) => {{
-                let idx = unsafe { frame.ip.offset_from(frame.function.chunk.ops.as_ptr()) } as usize;
-                let span = &frame.function.chunk.spans[idx];
+                let idx =
+                    unsafe { frame.ip.offset_from(frame.closure.function.as_function().chunk.ops.as_ptr()) } as usize;
+                let span = &frame.closure.function.as_function().chunk.spans[idx];
                 return Err(($error.into(), span.clone()));
             }};
         }
 
         loop {
             if cfg!(feature = "debug-trace") {
-                let idx = unsafe { frame.ip.offset_from(frame.function.chunk.ops.as_ptr()) };
-                frame.function.chunk.debug_op(idx as usize);
+                let idx = unsafe { frame.ip.offset_from(frame.closure.function.as_function().chunk.ops.as_ptr()) };
+                frame.closure.function.as_function().chunk.debug_op(idx as usize);
             }
 
             /// Binary operator that acts on any [`Value`].
@@ -291,7 +296,8 @@ impl VM {
                     let callee = unsafe { *peek!(arg_count as usize) };
                     match callee {
                         Value::Object(object) => match object.type_() {
-                            ObjectType::Function(function) => {
+                            ObjectType::Closure(closure) => {
+                                let function = closure.function.as_function();
                                 if arg_count != function.arity {
                                     bail!(TypeError::ArityMismatch {
                                         name: function.name.as_str().to_string(),
@@ -305,7 +311,7 @@ impl VM {
                                 }
                                 frames.push(frame);
                                 frame = CallFrame {
-                                    function,
+                                    closure,
                                     ip: function.chunk.ops.as_ptr(),
                                     stack: peek!(arg_count as usize),
                                 };
@@ -338,6 +344,12 @@ impl VM {
                         }
                     }
                 }
+                op::CLOSURE => {
+                    let function = read_object!();
+                    let closure = Closure { function };
+                    let value = self.allocate(closure.into());
+                    push!(value);
+                }
                 op::RETURN => {
                     let value = pop!();
                     match frames.pop() {
@@ -366,6 +378,12 @@ impl VM {
         debug_assert!(frame.stack == stack_top);
         Ok(())
     }
+
+    fn allocate(&mut self, object: Object) -> Value {
+        let object = Box::into_raw(Box::new(object));
+        self.objects.push(object);
+        object.into()
+    }
 }
 
 impl Drop for VM {
@@ -379,7 +397,7 @@ impl Drop for VM {
 }
 
 pub struct CallFrame<'a> {
-    function: &'a Function,
+    closure: &'a Closure,
     ip: *const u8,
     stack: *mut Value,
 }
