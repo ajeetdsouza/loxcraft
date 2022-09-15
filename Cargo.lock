@@ -1207,7 +1207,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "criterion",
  "dirs",
  "human-panic",
  "lox-common",
@@ -1218,10 +1217,8 @@ dependencies = [
  "lox-vm",
  "mimalloc",
  "nu-ansi-term",
- "pretty_assertions",
  "reedline",
  "termcolor",
- "test-generator",
  "tree-sitter-highlight",
  "tree-sitter-lox",
 ]
@@ -1288,11 +1285,14 @@ dependencies = [
 name = "lox-vm"
 version = "0.1.0"
 dependencies = [
+ "criterion",
  "hashbrown",
  "iota",
  "lox-common",
  "lox-syntax",
+ "pretty_assertions",
  "rustc-hash",
+ "test-generator",
 ]
 
 [[package]]

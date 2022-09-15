@@ -4,19 +4,19 @@ mod function;
 mod instance;
 mod native;
 
-use crate::env::Env;
-use crate::Interpreter;
+use std::fmt::{self, Debug, Display, Formatter};
+
 pub use callable::Callable;
 pub use class::Class;
 pub use function::Function;
-pub use instance::Instance;
-pub use native::Native;
-
 use gc::{Finalize, Trace};
+pub use instance::Instance;
 use lox_common::error::{AttributeError, Error, Result, TypeError};
 use lox_common::types::Span;
+pub use native::Native;
 
-use std::fmt::{self, Debug, Display, Formatter};
+use crate::env::Env;
+use crate::Interpreter;
 
 #[derive(Clone, Debug, Finalize, Trace)]
 pub enum Object {
@@ -57,7 +57,7 @@ impl Object {
                         name: name.to_string(),
                     }),
                     span.clone(),
-                ))
+                ));
             }
         };
 
@@ -67,10 +67,7 @@ impl Object {
 
         instance.class().method(name, self.clone()).ok_or_else(|| {
             (
-                Error::AttributeError(AttributeError::NoSuchAttribute {
-                    type_: self.type_(),
-                    name: name.to_string(),
-                }),
+                Error::AttributeError(AttributeError::NoSuchAttribute { type_: self.type_(), name: name.to_string() }),
                 span.clone(),
             )
         })
@@ -83,30 +80,18 @@ impl Object {
                 Ok(())
             }
             _ => Err((
-                Error::AttributeError(AttributeError::NoSuchAttribute {
-                    type_: self.type_(),
-                    name: name.to_string(),
-                }),
+                Error::AttributeError(AttributeError::NoSuchAttribute { type_: self.type_(), name: name.to_string() }),
                 span.clone(),
             )),
         }
     }
 
-    pub fn call(
-        &self,
-        interpreter: &mut Interpreter,
-        env: &mut Env,
-        args: Vec<Object>,
-        span: &Span,
-    ) -> Result<Object> {
+    pub fn call(&self, interpreter: &mut Interpreter, env: &mut Env, args: Vec<Object>, span: &Span) -> Result<Object> {
         match &self {
             Object::Class(class) => class.call(interpreter, env, args, span),
             Object::Function(function) => function.call(interpreter, env, args, span),
             Object::Native(native) => native.call(interpreter, env, args, span),
-            object => Err((
-                Error::TypeError(TypeError::NotCallable { type_: object.type_() }),
-                span.clone(),
-            )),
+            object => Err((Error::TypeError(TypeError::NotCallable { type_: object.type_() }), span.clone())),
         }
     }
 }

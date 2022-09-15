@@ -11,12 +11,7 @@ fn main() {
     println!("cargo:rerun-if-changed=ui/package.json");
 
     let ui_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("ui");
-    if !Command::new("npm")
-        .arg("ci")
-        .current_dir(&ui_dir)
-        .status()
-        .map_or(false, |status| status.success())
-    {
+    if !Command::new("npm").arg("ci").current_dir(&ui_dir).status().map_or(false, |status| status.success()) {
         panic!("`npm ci` exited with an error");
     }
     if !Command::new("npm")

@@ -1,4 +1,5 @@
-use crate::repl::{self, Prompt};
+use std::fs;
+use std::io::{self, Write};
 
 use anyhow::{bail, Context, Result};
 use clap::Parser as Clap;
@@ -6,8 +7,7 @@ use lox_common::error::ErrorS;
 use lox_vm::VM;
 use reedline::Signal;
 
-use std::fs;
-use std::io::{self, Write};
+use crate::repl::{self, Prompt};
 
 #[derive(Clap, Debug)]
 #[clap(about, author, disable_help_subcommand = true, propagate_version = true, version)]
@@ -61,8 +61,7 @@ pub fn repl() -> Result<()> {
 }
 
 fn run(path: &str) -> Result<()> {
-    let source =
-        fs::read_to_string(&path).with_context(|| format!("could not read file: {}", path))?;
+    let source = fs::read_to_string(&path).with_context(|| format!("could not read file: {}", path))?;
     let mut vm = VM::new();
     let stdout = &mut io::stdout().lock();
     if let Err(e) = vm.run(&source, stdout) {

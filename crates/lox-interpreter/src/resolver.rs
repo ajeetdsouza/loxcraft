@@ -134,9 +134,7 @@ impl Resolver {
                 if let Some(scope) = self.scopes.last() {
                     if scope.get(&var.var.name) == Some(&false) {
                         self.errors.push((
-                            Error::NameError(NameError::AccessInsideInitializer {
-                                name: var.var.name.clone(),
-                            }),
+                            Error::NameError(NameError::AccessInsideInitializer { name: var.var.name.clone() }),
                             span.clone(),
                         ));
                     }
@@ -165,10 +163,7 @@ impl Resolver {
     fn declare(&mut self, name: &str, span: &Span) {
         if let Some(scope) = self.scopes.last_mut() {
             if scope.contains_key(name) {
-                self.errors.push((
-                    Error::NameError(NameError::AlreadyDefined { name: name.to_string() }),
-                    span.clone(),
-                ))
+                self.errors.push((Error::NameError(NameError::AlreadyDefined { name: name.to_string() }), span.clone()))
             }
             scope.insert(name.to_string(), false);
         }

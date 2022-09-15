@@ -4,10 +4,10 @@
 // TODO: This grammar does not handle field access (foo.bar).
 // This is missing from ExprAssign and ExprCall (possibly others).
 
-use crate::{ast, lexer};
-
 use lalrpop_util::ParseError;
 use lox_common::error::ErrorS;
+
+use crate::{ast, lexer};
 
 grammar<'err>(
     errors: &'err mut Vec<ParseError<usize, lexer::Token, ErrorS>>

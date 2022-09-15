@@ -1,13 +1,11 @@
 use anyhow::{Context, Result};
 use lox_common::error::ErrorS;
 use lox_common::types::Span;
-use tower_lsp::jsonrpc;
 use tower_lsp::lsp_types::{
-    Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams, DidOpenTextDocumentParams,
-    InitializeParams, InitializeResult, Position, Range, ServerCapabilities, ServerInfo,
-    TextDocumentSyncKind, Url,
+    Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams, DidOpenTextDocumentParams, InitializeParams,
+    InitializeResult, Position, Range, ServerCapabilities, ServerInfo, TextDocumentSyncKind, Url,
 };
-use tower_lsp::{Client, LanguageServer, LspService, Server};
+use tower_lsp::{jsonrpc, Client, LanguageServer, LspService, Server};
 
 struct Backend {
     client: Client,

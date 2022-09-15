@@ -3,7 +3,7 @@
 	"scripts": {
 		"start": "npx parcel serve --open --port 3000",
 		"build": "npm run build:wasm && npx rimraf dist/ && npx parcel build --no-source-maps",
-		"build:wasm": "cd ../../lox-wasm && wasm-pack build --out-dir pkg --release --target web"
+		"build:wasm": "cd ../../lox-wasm && wasm-pack build --out-dir pkg --release --target web -- --color=always"
 	},
 	"dependencies": {
 		"@fontsource/ubuntu-mono": "^4.5.9",

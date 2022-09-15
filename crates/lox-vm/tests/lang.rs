@@ -1,16 +1,15 @@
+use std::io::Write;
+use std::path::Path;
+use std::{fs, str};
+
 use lox_vm::VM;
 use pretty_assertions::assert_eq;
 use test_generator::test_resources;
 
-use std::fs;
-use std::io::Write;
-use std::str;
-
-#[test_resources("res/examples/**/*.lox")]
+#[test_resources("./res/examples/**/*.lox")]
 fn lox(path: &str) {
-    let source =
-        fs::read_to_string(path).unwrap_or_else(|_| format!("could not read test file: {path}"));
-
+    let path = Path::new("../..").join(path);
+    let source = fs::read_to_string(path).unwrap();
     let mut exp_output = String::new();
     for line in source.lines() {
         const OUT_COMMENT: &str = "// out: ";

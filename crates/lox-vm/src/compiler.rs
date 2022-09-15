@@ -1,17 +1,18 @@
+use std::convert::TryInto;
+use std::mem;
+
+use lox_common::error::{ErrorS, NameError, OverflowError, Result, SyntaxError};
+use lox_common::types::Span;
+use lox_syntax::ast::{Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Stmt, StmtS};
+
 use crate::chunk::Chunk;
 use crate::intern::Intern;
 use crate::op;
-use crate::value::{Function, Object, ObjectExt, Value};
-use lox_common::error::{ErrorS, NameError, OverflowError, Result};
-use lox_common::types::Span;
-use lox_syntax::ast::{Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Stmt, StmtS};
-use std::convert::TryInto;
-use std::mem;
+use crate::value::{Function, Object, Value};
 
 #[derive(Debug)]
 pub struct Compiler {
     ctx: CompilerCtx,
-    scope_depth: usize,
 }
 
 impl Compiler {
@@ -22,10 +23,10 @@ impl Compiler {
             ctx: CompilerCtx {
                 function: Function { name, arity: 0, chunk: Chunk::default() },
                 type_: FunctionType::Script,
-                locals: Vec::new(),
+                locals: Vec::new(), // vec![Default::default()],
                 parent: None,
+                scope_depth: 0,
             },
-            scope_depth: 0,
         }
     }
 
@@ -35,6 +36,7 @@ impl Compiler {
         for stmt in &program.stmts {
             compiler.compile_stmt(stmt, intern).map_err(|e| vec![e])?;
         }
+        compiler.emit_u8(op::NIL, &(0..0));
         compiler.emit_u8(op::RETURN, &(0..0));
         Ok(compiler.ctx.function)
     }
@@ -97,17 +99,15 @@ impl Compiler {
             }
             Stmt::Fun(fun) => {
                 let (name, _) = intern.insert_str(&fun.name);
-                let arity = fun
-                    .params
-                    .len()
-                    .try_into()
-                    .map_err(|_| (OverflowError::TooManyParams.into(), span.clone()))?;
+                let arity =
+                    fun.params.len().try_into().map_err(|_| (OverflowError::TooManyParams.into(), span.clone()))?;
 
                 let ctx = CompilerCtx {
                     function: Function { name, arity, chunk: Chunk::default() },
                     type_: FunctionType::Function,
-                    locals: Vec::new(),
+                    locals: Vec::new(), // vec![Default::default()],
                     parent: None,
+                    scope_depth: self.ctx.scope_depth + 1,
                 };
                 self.begin_ctx(ctx);
 
@@ -134,7 +134,7 @@ impl Compiler {
                 self.emit_u8(op::CONSTANT, span);
                 self.emit_constant(value, span)?;
 
-                if self.scope_depth == 0 {
+                if self.ctx.scope_depth == 0 {
                     self.emit_u8(op::DEFINE_GLOBAL, span);
                     self.emit_constant(name.into(), span)?;
                 } else {
@@ -167,17 +167,33 @@ impl Compiler {
                 self.compile_expr(&print.value, intern)?;
                 self.emit_u8(op::PRINT, span);
             }
+            Stmt::Return(return_) => {
+                if self.ctx.type_ == FunctionType::Script {
+                    return Err((SyntaxError::ReturnOutsideFunction.into(), span.clone()));
+                }
+
+                match &return_.value {
+                    Some(value) => self.compile_expr(value, intern)?,
+                    None => self.emit_u8(op::NIL, span),
+                };
+                self.emit_u8(op::RETURN, span);
+            }
             Stmt::Var(var) => {
                 let name = &var.var.name;
-                let value = var.value.as_ref().unwrap_or(&(Expr::Literal(ExprLiteral::Nil), 0..0));
-                if self.scope_depth == 0 {
+                if self.ctx.scope_depth == 0 {
                     let (name, _) = intern.insert_str(name);
-                    self.compile_expr(value, intern)?;
+                    match &var.value {
+                        Some(value) => self.compile_expr(value, intern)?,
+                        None => self.emit_u8(op::NIL, span),
+                    }
                     self.emit_u8(op::DEFINE_GLOBAL, span);
                     self.emit_constant(name.into(), span)?;
                 } else {
                     self.declare_local(name, span)?;
-                    self.compile_expr(value, intern)?;
+                    match &var.value {
+                        Some(value) => self.compile_expr(value, intern)?,
+                        None => self.emit_u8(op::NIL, span),
+                    }
                     self.define_local();
                 }
             }
@@ -212,6 +228,18 @@ impl Compiler {
             Expr::Assign(assign) => {
                 self.compile_expr(&assign.value, intern)?;
                 self.set_variable(&assign.var.name, span, intern)?;
+            }
+            Expr::Call(call) => {
+                let arg_count =
+                    call.args.len().try_into().map_err(|_| (OverflowError::TooManyArgs.into(), span.clone()))?;
+
+                self.compile_expr(&call.callee, intern)?;
+                for arg in &call.args {
+                    self.compile_expr(arg, intern)?;
+                }
+
+                self.emit_u8(op::CALL, span);
+                self.emit_u8(arg_count, span);
             }
             Expr::Infix(infix) => {
                 self.compile_expr(&infix.lt, intern)?;
@@ -286,20 +314,23 @@ impl Compiler {
                     }
                 };
             }
-            Expr::Literal(literal) => {
-                let value = match literal {
-                    ExprLiteral::Bool(bool) => (*bool).into(),
-                    ExprLiteral::Nil => Value::Nil,
-                    ExprLiteral::Number(number) => (*number).into(),
-                    ExprLiteral::String(string) => {
-                        let (object, _) = intern.insert_str(string);
-                        unsafe { (*object).is_marked = true };
-                        object.into()
-                    }
-                };
-                self.emit_u8(op::CONSTANT, span);
-                self.emit_constant(value, span)?;
-            }
+            Expr::Literal(literal) => match literal {
+                ExprLiteral::Bool(true) => self.emit_u8(op::TRUE, span),
+                ExprLiteral::Bool(false) => self.emit_u8(op::FALSE, span),
+                ExprLiteral::Nil => self.emit_u8(op::NIL, span),
+                ExprLiteral::Number(number) => {
+                    let value = (*number).into();
+                    self.emit_u8(op::CONSTANT, span);
+                    self.emit_constant(value, span)?;
+                }
+                ExprLiteral::String(string) => {
+                    let (object, _) = intern.insert_str(string);
+                    unsafe { (*object).is_marked = true };
+                    let value = object.into();
+                    self.emit_u8(op::CONSTANT, span);
+                    self.emit_constant(value, span)?;
+                }
+            },
             Expr::Prefix(prefix) => {
                 self.compile_expr(&prefix.rt, intern)?;
                 match prefix.op {
@@ -352,21 +383,20 @@ impl Compiler {
 
     fn declare_local(&mut self, name: &str, span: &Span) -> Result<()> {
         for local in self.ctx.locals.iter().rev() {
-            if local.depth < self.scope_depth {
+            if local.depth < self.ctx.scope_depth {
                 break;
             }
             if local.name == name {
-                return Err((
-                    NameError::AlreadyDefined { name: name.to_string() }.into(),
-                    span.clone(),
-                ));
+                return Err((NameError::AlreadyDefined { name: name.to_string() }.into(), span.clone()));
             }
         }
 
-        let local =
-            Local { name: name.to_string(), depth: self.scope_depth, is_initialized: false };
+        let local = Local { name: name.to_string(), depth: self.ctx.scope_depth, is_initialized: false };
         self.ctx.locals.push(local);
 
+        if self.ctx.locals.len() > u8::MAX as usize {
+            return Err((OverflowError::TooManyLocals.into(), span.clone()));
+        }
         Ok(())
     }
 
@@ -378,15 +408,9 @@ impl Compiler {
         match self.ctx.locals.iter().enumerate().rfind(|(_, local)| local.name == name) {
             Some((idx, local)) => {
                 if local.is_initialized {
-                    let idx = idx
-                        .try_into()
-                        .map_err(|_| (OverflowError::TooManyLocals.into(), span.clone()))?;
-                    Ok(Some(idx))
+                    Ok(Some(idx as u8))
                 } else {
-                    Err((
-                        NameError::AccessInsideInitializer { name: name.to_string() }.into(),
-                        span.clone(),
-                    ))
+                    Err((NameError::AccessInsideInitializer { name: name.to_string() }.into(), span.clone()))
                 }
             }
             None => Ok(None),
@@ -410,11 +434,9 @@ impl Compiler {
     fn patch_jump(&mut self, offset_idx: usize, span: &Span) -> Result<()> {
         // The extra -2 is to account for the space taken by the offset.
         let offset = self.ctx.function.chunk.ops.len() - 2 - offset_idx;
-        let offset =
-            offset.try_into().map_err(|_| (OverflowError::JumpTooLarge.into(), span.clone()))?;
+        let offset = offset.try_into().map_err(|_| (OverflowError::JumpTooLarge.into(), span.clone()))?;
         let offset = u16::to_le_bytes(offset);
-        [self.ctx.function.chunk.ops[offset_idx], self.ctx.function.chunk.ops[offset_idx + 1]] =
-            offset;
+        [self.ctx.function.chunk.ops[offset_idx], self.ctx.function.chunk.ops[offset_idx + 1]] = offset;
         Ok(())
     }
 
@@ -426,8 +448,7 @@ impl Compiler {
         // The extra +3 is to account for the space taken by the instruction
         // and the offset.
         let offset = self.ctx.function.chunk.ops.len() + 3 - start_idx;
-        let offset =
-            offset.try_into().map_err(|_| (OverflowError::JumpTooLarge.into(), span.clone()))?;
+        let offset = offset.try_into().map_err(|_| (OverflowError::JumpTooLarge.into(), span.clone()))?;
         let offset = u16::to_le_bytes(offset);
 
         self.emit_u8(op::LOOP, span);
@@ -438,15 +459,15 @@ impl Compiler {
     }
 
     fn begin_scope(&mut self) {
-        self.scope_depth += 1;
+        self.ctx.scope_depth += 1;
     }
 
     fn end_scope(&mut self, span: &Span) {
-        self.scope_depth -= 1;
+        self.ctx.scope_depth -= 1;
 
         // Remove all locals that are no longer in scope.
         while let Some(local) = self.ctx.locals.last() {
-            if local.depth > self.scope_depth {
+            if local.depth > self.ctx.scope_depth {
                 self.ctx.locals.pop();
                 self.emit_u8(op::POP, span);
             } else {
@@ -472,6 +493,7 @@ pub struct CompilerCtx {
     type_: FunctionType,
     locals: Vec<Local>,
     parent: Option<Box<CompilerCtx>>,
+    scope_depth: usize,
 }
 
 #[derive(Debug, Default)]

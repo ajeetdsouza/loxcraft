@@ -1,5 +1,5 @@
 // 256 parameters.
-// out: SyntaxError: can't have more than 255 parameters (found 256)
+// out: OverflowError: cannot define more than 256 parameters in a function
 fun f(
     a1,
     a2,

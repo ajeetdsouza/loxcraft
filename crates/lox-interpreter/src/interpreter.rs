@@ -1,13 +1,11 @@
-use crate::env::Env;
-use crate::object::{Callable, Class, Function, Native, Object};
+use std::io::Write;
 
-use lox_common::error::{
-    AttributeError, Error, ErrorS, IoError, NameError, Result, SyntaxError, TypeError,
-};
+use lox_common::error::{AttributeError, Error, ErrorS, IoError, NameError, Result, SyntaxError, TypeError};
 use lox_common::types::Span;
 use lox_syntax::ast::{Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Program, Stmt, StmtS, Var};
 
-use std::io::Write;
+use crate::env::Env;
+use crate::object::{Callable, Class, Function, Native, Object};
 
 pub struct Interpreter<'stdout> {
     globals: Env,
@@ -30,17 +28,15 @@ impl<'stdout> Interpreter<'stdout> {
         }
 
         #[cfg(feature = "profile")]
-        let guard = pprof::ProfilerGuardBuilder::default()
-            .frequency(10000)
-            .build()
-            .expect("could not start profiler");
+        let guard = pprof::ProfilerGuardBuilder::default().frequency(10000).build().expect("could not start profiler");
         if let Err(e) = self.run_program(&program) {
             return Err(vec![e]);
         }
         #[cfg(feature = "profile")]
         {
-            use pprof::protos::Message;
             use std::fs::File;
+
+            use pprof::protos::Message;
 
             let report = guard.report().build().expect("profiler could not generate report");
             let mut profile = File::create("profile.pb").unwrap();
@@ -77,11 +73,9 @@ impl<'stdout> Interpreter<'stdout> {
                             Object::Class(class) => Some(class.clone()),
                             object => {
                                 return Err((
-                                    Error::TypeError(TypeError::SuperclassInvalidType {
-                                        type_: object.type_(),
-                                    }),
+                                    Error::TypeError(TypeError::SuperclassInvalidType { type_: object.type_() }),
                                     span.clone(),
-                                ))
+                                ));
                             }
                         }
                     }
@@ -123,12 +117,8 @@ impl<'stdout> Interpreter<'stdout> {
             }
             Stmt::Print(print) => {
                 let value = self.run_expr(env, &print.value)?;
-                writeln!(self.stdout, "{}", value).map_err(|_| {
-                    (
-                        Error::IoError(IoError::WriteError { file: "stdout".to_string() }),
-                        span.clone(),
-                    )
-                })?;
+                writeln!(self.stdout, "{}", value)
+                    .map_err(|_| (Error::IoError(IoError::WriteError { file: "stdout".to_string() }), span.clone()))?;
             }
             Stmt::Return(return_) => {
                 let object = match &return_.value {
@@ -164,11 +154,7 @@ impl<'stdout> Interpreter<'stdout> {
                 Ok(value)
             }
             Expr::Call(call) => {
-                let args = call
-                    .args
-                    .iter()
-                    .map(|arg| self.run_expr(env, arg))
-                    .collect::<Result<Vec<_>>>()?;
+                let args = call.args.iter().map(|arg| self.run_expr(env, arg)).collect::<Result<Vec<_>>>()?;
                 let callee = self.run_expr(env, &call.callee)?;
                 callee.call(self, env, args, span)
             }
@@ -197,33 +183,17 @@ impl<'stdout> Interpreter<'stdout> {
                     op => {
                         let rt = rt()?;
                         match (op, &lt, &rt) {
-                            (OpInfix::Add, Object::Number(a), Object::Number(b)) => {
-                                Ok(Object::Number(a + b))
-                            }
+                            (OpInfix::Add, Object::Number(a), Object::Number(b)) => Ok(Object::Number(a + b)),
                             (OpInfix::Add, Object::String(a), Object::String(b)) => {
                                 Ok(Object::String(a.to_string() + b))
                             }
-                            (OpInfix::Subtract, Object::Number(a), Object::Number(b)) => {
-                                Ok(Object::Number(a - b))
-                            }
-                            (OpInfix::Multiply, Object::Number(a), Object::Number(b)) => {
-                                Ok(Object::Number(a * b))
-                            }
-                            (OpInfix::Divide, Object::Number(a), Object::Number(b)) => {
-                                Ok(Object::Number(a / b))
-                            }
-                            (OpInfix::Less, Object::Number(a), Object::Number(b)) => {
-                                Ok(Object::Bool(a < b))
-                            }
-                            (OpInfix::LessEqual, Object::Number(a), Object::Number(b)) => {
-                                Ok(Object::Bool(a <= b))
-                            }
-                            (OpInfix::Greater, Object::Number(a), Object::Number(b)) => {
-                                Ok(Object::Bool(a > b))
-                            }
-                            (OpInfix::GreaterEqual, Object::Number(a), Object::Number(b)) => {
-                                Ok(Object::Bool(a >= b))
-                            }
+                            (OpInfix::Subtract, Object::Number(a), Object::Number(b)) => Ok(Object::Number(a - b)),
+                            (OpInfix::Multiply, Object::Number(a), Object::Number(b)) => Ok(Object::Number(a * b)),
+                            (OpInfix::Divide, Object::Number(a), Object::Number(b)) => Ok(Object::Number(a / b)),
+                            (OpInfix::Less, Object::Number(a), Object::Number(b)) => Ok(Object::Bool(a < b)),
+                            (OpInfix::LessEqual, Object::Number(a), Object::Number(b)) => Ok(Object::Bool(a <= b)),
+                            (OpInfix::Greater, Object::Number(a), Object::Number(b)) => Ok(Object::Bool(a > b)),
+                            (OpInfix::GreaterEqual, Object::Number(a), Object::Number(b)) => Ok(Object::Bool(a >= b)),
                             (OpInfix::Equal, a, b) => Ok(Object::Bool(a == b)),
                             (OpInfix::NotEqual, a, b) => Ok(Object::Bool(a != b)),
                             (op, a, b) => Err((
@@ -268,18 +238,14 @@ impl<'stdout> Interpreter<'stdout> {
             }
             Expr::Super(super_) => {
                 let depth = super_.super_.depth.ok_or_else(|| {
-                    (
-                        Error::NameError(NameError::NotDefined { name: "super".to_string() }),
-                        span.clone(),
-                    )
+                    (Error::NameError(NameError::NotDefined { name: "super".to_string() }), span.clone())
                 })?;
                 let class = env.get_at("super", depth);
                 let class = match &class {
                     Some(Object::Class(class)) => class,
-                    Some(object) => unreachable!(
-                        r#"expected "super" of type "class", found "{}" instead"#,
-                        object.type_()
-                    ),
+                    Some(object) => {
+                        unreachable!(r#"expected "super" of type "class", found "{}" instead"#, object.type_())
+                    }
                     None => unreachable!(r#""super" was resolved but could not be found"#),
                 };
                 let this = env
@@ -301,32 +267,27 @@ impl<'stdout> Interpreter<'stdout> {
 
     fn get_var(&self, env: &Env, var: &Var, span: &Span) -> Result<Object> {
         match var.depth {
-            Some(depth) => Ok(env.get_at(&var.name, depth).unwrap_or_else(|| {
-                unreachable!("variable was resolved but could not be found: {:?}", &var.name)
-            })),
-            None => self.globals.get(&var.name).ok_or_else(|| {
-                (
-                    Error::NameError(NameError::NotDefined { name: var.name.to_string() }),
-                    span.clone(),
-                )
-            }),
+            Some(depth) => Ok(env
+                .get_at(&var.name, depth)
+                .unwrap_or_else(|| unreachable!("variable was resolved but could not be found: {:?}", &var.name))),
+            None => self
+                .globals
+                .get(&var.name)
+                .ok_or_else(|| (Error::NameError(NameError::NotDefined { name: var.name.to_string() }), span.clone())),
         }
     }
 
     fn set_var(&mut self, env: &mut Env, var: &Var, value: Object, span: &Span) -> Result<()> {
         match var.depth {
             Some(depth) => {
-                env.set_at(&var.name, value, depth).unwrap_or_else(|_| {
-                    unreachable!("variable was resolved but could not be found: {:?}", &var.name)
-                });
+                env.set_at(&var.name, value, depth)
+                    .unwrap_or_else(|_| unreachable!("variable was resolved but could not be found: {:?}", &var.name));
                 Ok(())
             }
-            None => self.globals.set(&var.name, value).map_err(|_| {
-                (
-                    Error::NameError(NameError::NotDefined { name: var.name.to_string() }),
-                    span.clone(),
-                )
-            }),
+            None => self
+                .globals
+                .set(&var.name, value)
+                .map_err(|_| (Error::NameError(NameError::NotDefined { name: var.name.to_string() }), span.clone())),
         }
     }
 

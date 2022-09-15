@@ -1,6 +1,5 @@
-use crate::env::Env;
-use crate::object::{Callable, Function, Instance, Object};
-use crate::Interpreter;
+use std::fmt::{self, Display, Formatter};
+use std::ops::Deref;
 
 use gc::{Finalize, Gc, Trace};
 use lox_common::error::Result;
@@ -8,8 +7,9 @@ use lox_common::types::Span;
 use lox_syntax::ast::StmtClass;
 use rustc_hash::FxHashMap;
 
-use std::fmt::{self, Display, Formatter};
-use std::ops::Deref;
+use crate::env::Env;
+use crate::object::{Callable, Function, Instance, Object};
+use crate::Interpreter;
 
 #[derive(Clone, Debug, Finalize, Trace)]
 pub struct Class(Gc<ClassImpl>);
@@ -22,10 +22,7 @@ impl Class {
                 env = Env::with_parent(&env);
                 env.insert_unchecked("super", super_.clone().into());
             };
-            decl.methods
-                .iter()
-                .map(|(decl, _)| (decl.name.to_string(), Function::new(decl, &env)))
-                .collect()
+            decl.methods.iter().map(|(decl, _)| (decl.name.to_string(), Function::new(decl, &env))).collect()
         };
 
         let class = ClassImpl { decl: decl.clone(), super_, methods };

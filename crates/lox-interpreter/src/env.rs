@@ -1,9 +1,9 @@
-use crate::object::Object;
+use std::ops::Deref;
 
 use gc::{Finalize, Gc, GcCell, Trace};
 use rustc_hash::FxHashMap;
 
-use std::ops::Deref;
+use crate::object::Object;
 
 #[derive(Clone, Debug, Default, Finalize, Trace)]
 pub struct Env(Gc<GcCell<EnvImpl>>);

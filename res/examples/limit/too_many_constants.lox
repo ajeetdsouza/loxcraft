@@ -32,6 +32,6 @@ fun f() {
   240; 241; 242; 243; 244; 245; 246; 247;
   248; 249; 250; 251; 252; 253; 254; 255;
 
-  // out: Error at '"oops"': Too many constants in one chunk.
+  // out: OverflowError: cannot define more than 256 constants in a function
   "oops";
 }

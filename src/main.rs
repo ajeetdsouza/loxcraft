@@ -1,11 +1,11 @@
 mod cmd;
 mod repl;
 
-use crate::cmd::Cmd;
-
 use anyhow::Result;
 use clap::Parser;
 use mimalloc::MiMalloc;
+
+use crate::cmd::Cmd;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;

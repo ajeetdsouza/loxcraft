@@ -3,12 +3,10 @@ mod interpreter;
 mod object;
 mod resolver;
 
-use resolver::Resolver;
-
+pub use interpreter::Interpreter;
 use lox_common::error::ErrorS;
 use lox_syntax::ast::Program;
-
-pub use interpreter::Interpreter;
+use resolver::Resolver;
 
 pub fn resolve(program: &mut Program) -> Vec<ErrorS> {
     Resolver::default().resolve(program)

@@ -1,10 +1,10 @@
-use crate::types::{Span, Spanned};
-
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;
 use termcolor::WriteColor;
 use thiserror::Error;
+
+use crate::types::{Span, Spanned};
 
 pub type Result<T, E = ErrorS> = std::result::Result<T, E>;
 pub type ErrorS = Spanned<Error>;
@@ -105,11 +105,15 @@ impl AsDiagnostic for NameError {
 pub enum OverflowError {
     #[error("jump body is too large")]
     JumpTooLarge,
+    #[error("stack overflow")]
+    StackOverflow,
+    #[error("cannot use more than 256 arguments in a function")]
+    TooManyArgs,
     #[error("cannot define more than 256 constants in a function")]
     TooManyConstants,
-    #[error("cannot define more than 256 locals in a function")]
+    #[error("cannot define more than 256 local variables in a function")]
     TooManyLocals,
-    #[error("cannot define more than 256 params in a function")]
+    #[error("cannot define more than 256 parameters in a function")]
     TooManyParams,
 }
 
@@ -147,8 +151,7 @@ impl AsDiagnostic for SyntaxError {
             .with_message(self.to_string())
             .with_labels(vec![Label::primary((), span.clone())]);
         match self {
-            SyntaxError::UnrecognizedEOF { expected, .. }
-            | SyntaxError::UnrecognizedToken { expected, .. } => {
+            SyntaxError::UnrecognizedEOF { expected, .. } | SyntaxError::UnrecognizedToken { expected, .. } => {
                 diagnostic = diagnostic.with_notes(vec![format!("expected: {}", one_of(expected))]);
             }
             _ => {}
@@ -160,7 +163,7 @@ impl AsDiagnostic for SyntaxError {
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum TypeError {
     #[error("{name}() takes {exp_args} arguments but {got_args} were given")]
-    ArityMismatch { name: String, exp_args: usize, got_args: usize },
+    ArityMismatch { name: String, exp_args: u8, got_args: u8 },
     #[error("init() should use an empty return, not {type_:?}")]
     InitInvalidReturnType { type_: String },
     #[error("{type_:?} object is not callable")]

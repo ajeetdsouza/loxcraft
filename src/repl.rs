@@ -1,21 +1,17 @@
+use std::borrow::Cow;
+
 use anyhow::{Context, Result};
 use nu_ansi_term::{Color, Style};
 use reedline::{
-    EditCommand, Emacs, FileBackedHistory, KeyCode, KeyModifiers, PromptEditMode,
-    PromptHistorySearch, Reedline, ReedlineEvent, StyledText, ValidationResult,
+    EditCommand, Emacs, FileBackedHistory, KeyCode, KeyModifiers, PromptEditMode, PromptHistorySearch, Reedline,
+    ReedlineEvent, StyledText, ValidationResult,
 };
 use tree_sitter_highlight::{self, HighlightConfiguration, HighlightEvent};
 use tree_sitter_lox::{self, HIGHLIGHTS_QUERY};
 
-use std::borrow::Cow;
-
 pub fn editor() -> Result<Reedline> {
     let mut keybindings = reedline::default_emacs_keybindings();
-    keybindings.add_binding(
-        KeyModifiers::ALT,
-        KeyCode::Enter,
-        ReedlineEvent::Edit(vec![EditCommand::InsertNewline]),
-    );
+    keybindings.add_binding(KeyModifiers::ALT, KeyCode::Enter, ReedlineEvent::Edit(vec![EditCommand::InsertNewline]));
 
     let highlighter = Box::new(Highlighter::new()?);
 
@@ -81,9 +77,8 @@ struct Highlighter {
 impl Highlighter {
     pub fn new() -> Result<Self> {
         let highlight_names = PALETTE.iter().map(|item| item.name).collect::<Vec<_>>();
-        let mut config =
-            HighlightConfiguration::new(tree_sitter_lox::language(), HIGHLIGHTS_QUERY, "", "")
-                .context("failed to create highlight configuration")?;
+        let mut config = HighlightConfiguration::new(tree_sitter_lox::language(), HIGHLIGHTS_QUERY, "", "")
+            .context("failed to create highlight configuration")?;
         config.configure(&highlight_names);
         Ok(Self { config })
     }
@@ -94,8 +89,7 @@ impl reedline::Highlighter for Highlighter {
         let mut output = StyledText::new();
 
         let mut highlighter = tree_sitter_highlight::Highlighter::new();
-        let highlights = match highlighter.highlight(&self.config, line.as_bytes(), None, |_| None)
-        {
+        let highlights = match highlighter.highlight(&self.config, line.as_bytes(), None, |_| None) {
             Ok(highlights) => highlights,
             Err(_) => {
                 let style = Style::new().fg(PALETTE[0].fg);
@@ -138,11 +132,7 @@ struct Validator;
 
 impl reedline::Validator for Validator {
     fn validate(&self, line: &str) -> ValidationResult {
-        if lox_syntax::is_complete(line) {
-            ValidationResult::Complete
-        } else {
-            ValidationResult::Incomplete
-        }
+        if lox_syntax::is_complete(line) { ValidationResult::Complete } else { ValidationResult::Incomplete }
     }
 }
 

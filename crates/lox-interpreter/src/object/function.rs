@@ -1,14 +1,14 @@
-use crate::env::Env;
-use crate::object::{Callable, Object};
-use crate::Interpreter;
+use std::fmt::{self, Display, Formatter};
+use std::ops::Deref;
 
 use gc::{Finalize, Gc, Trace};
 use lox_common::error::{Error, Result, SyntaxError, TypeError};
 use lox_common::types::Span;
 use lox_syntax::ast::{Spanned, Stmt, StmtFun};
 
-use std::fmt::{self, Display, Formatter};
-use std::ops::Deref;
+use crate::env::Env;
+use crate::object::{Callable, Object};
+use crate::Interpreter;
 
 #[derive(Clone, Debug, Finalize, Trace)]
 pub struct Function(Gc<FunctionImpl>);
@@ -64,13 +64,12 @@ impl Callable for Function {
                     let object = interpreter.return_.take();
                     return if self.is_init() {
                         match object {
-                            None => Ok(self.env.get("this").unwrap_or_else(|| {
-                                unreachable!(r#""this" not present inside "init" function"#,)
-                            })),
+                            None => Ok(self
+                                .env
+                                .get("this")
+                                .unwrap_or_else(|| unreachable!(r#""this" not present inside "init" function"#,))),
                             Some(object) => Err((
-                                Error::TypeError(TypeError::InitInvalidReturnType {
-                                    type_: object.type_(),
-                                }),
+                                Error::TypeError(TypeError::InitInvalidReturnType { type_: object.type_() }),
                                 span.clone(),
                             )),
                         }
@@ -82,9 +81,7 @@ impl Callable for Function {
             }
         }
         Ok(if self.is_init() {
-            self.env
-                .get("this")
-                .unwrap_or_else(|| unreachable!(r#""this" not present inside "init" function"#))
+            self.env.get("this").unwrap_or_else(|| unreachable!(r#""this" not present inside "init" function"#))
         } else {
             Object::Nil
         })

@@ -1,13 +1,13 @@
-use crate::env::Env;
-use crate::object::{Callable, Object};
-use crate::Interpreter;
+use std::fmt::{self, Display, Formatter};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use gc::{Finalize, Trace};
 use lox_common::error::Result;
 use lox_common::types::Span;
 
-use std::fmt::{self, Display, Formatter};
-use std::time::{SystemTime, UNIX_EPOCH};
+use crate::env::Env;
+use crate::object::{Callable, Object};
+use crate::Interpreter;
 
 #[derive(Clone, Debug, Eq, Finalize, Trace, PartialEq)]
 pub enum Native {

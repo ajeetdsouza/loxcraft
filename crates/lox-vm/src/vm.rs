@@ -1,14 +1,16 @@
+use std::hash::BuildHasherDefault;
+use std::time::{SystemTime, UNIX_EPOCH};
+use std::{hint, io};
+
+use hashbrown::hash_map::Entry;
+use hashbrown::HashMap;
+use lox_common::error::{ErrorS, IoError, NameError, OverflowError, Result, TypeError};
+use rustc_hash::FxHasher;
+
 use crate::compiler::Compiler;
 use crate::intern::Intern;
 use crate::op;
-use crate::value::{Function, Object, ObjectExt, ObjectType, Value};
-use hashbrown::hash_map::Entry;
-use hashbrown::HashMap;
-use lox_common::error::{ErrorS, IoError, NameError, Result, TypeError};
-use rustc_hash::FxHasher;
-use std::hash::BuildHasherDefault;
-use std::hint;
-use std::io;
+use crate::value::{Function, Native, Object, ObjectExt, ObjectType, Value};
 
 const FRAMES_MAX: usize = 64;
 const STACK_MAX: usize = FRAMES_MAX * STACK_MAX_PER_FRAME;
@@ -22,36 +24,32 @@ pub struct VM {
 
 impl VM {
     pub fn new() -> Self {
-        Self {
-            // TODO: tune these later.
-            globals: HashMap::with_capacity_and_hasher(256, Default::default()),
-            objects: Vec::with_capacity(256),
-            intern: Intern::default(),
-        }
+        // TODO: tune these later.
+        let mut globals = HashMap::with_capacity_and_hasher(256, Default::default());
+        let mut intern = Intern::default();
+
+        let (clock, _) = intern.insert_str("clock");
+        globals.insert(clock, Native::Clock.into());
+
+        Self { globals, objects: Vec::with_capacity(256), intern }
     }
 
     pub fn run<W: io::Write>(&mut self, source: &str, stdout: &mut W) -> Result<(), Vec<ErrorS>> {
         let function = Compiler::compile(source, &mut self.intern)?;
-        let ip = function.chunk.ops.as_ptr();
-
-        let mut stack: [Value; STACK_MAX] = [Default::default(); STACK_MAX];
-        let stack = stack.as_mut_ptr();
-
-        let mut frame = CallFrame { function, ip, slots: stack };
-
-        if let Err(e) = self.run_frame(&mut frame, stdout) {
+        if let Err(e) = self.run_function(&function, stdout) {
             return Err(vec![e]);
         }
         Ok(())
     }
 
-    pub fn run_frame<W: io::Write>(&mut self, frame: &mut CallFrame, stdout: &mut W) -> Result<()> {
+    pub fn run_function<W: io::Write>(&mut self, mut function: &Function, stdout: &mut W) -> Result<()> {
+        let mut frames: Vec<CallFrame> = Vec::with_capacity(256);
+
         // Instruction pointer for the current Chunk.
         // Accessing `ip` without bounds checking is safe, assuming that the
         // compiler always outputs correct code. The program stops execution
         // when it reaches `op::RETURN`.
-        let mut ip = frame.ip;
-
+        let mut ip = function.chunk.ops.as_ptr();
         /// Reads an instruction / byte from the current [`Chunk`].
         macro_rules! read_u8 {
             () => {{
@@ -60,7 +58,6 @@ impl VM {
                 byte
             }};
         }
-
         /// Reads a 16-bit value from the current [`Chunk`].
         macro_rules! read_u16 {
             () => {{
@@ -70,46 +67,14 @@ impl VM {
             }};
         }
 
-        /// Reads a [`Value`] from the current [`Chunk`].
-        macro_rules! read_value {
-            () => {{
-                let constant_idx = read_u8!() as usize;
-                *unsafe { frame.function.chunk.constants.get_unchecked(constant_idx) }
-            }};
-        }
-
-        /// Reads an [`Object`] from the current [`Chunk`].
-        macro_rules! read_object {
-            () => {{
-                let constant_idx = read_u8!() as usize;
-                let constant =
-                    *unsafe { frame.function.chunk.constants.get_unchecked(constant_idx) };
-                match constant {
-                    Value::Object(object) => object,
-                    _ => unsafe { hint::unreachable_unchecked() },
-                }
-            }};
-        }
-
         // Accessing `stack` without bounds checking is safe because:
-        // - Each frame can store a theoretical maximum of `STACK_MAX_PER_FRAME`
-        //   values on the stack.
-        // - The frame count can never exceed `MAX_FRAMES`, otherwise we throw a
-        //   stack overflow error.
-        // - Thus, we can statically allocate a stack of size
-        //   `STACK_MAX = FRAMES_MAX * STACK_MAX_PER_FRAME` and we are
-        //   guaranteed to never exceed this.
-        let stack = frame.slots;
+        // - Each frame can store a theoretical maximum of `STACK_MAX_PER_FRAME` values on the stack.
+        // - The frame count can never exceed `MAX_FRAMES`, otherwise we throw a stack overflow error.
+        // - Thus, we can statically allocate a stack of size `STACK_MAX = FRAMES_MAX * STACK_MAX_PER_FRAME`
+        //   and we are guaranteed to never exceed this.
+        let mut stack: [Value; STACK_MAX] = [Default::default(); STACK_MAX];
+        let mut stack = stack.as_mut_ptr();
         let mut stack_top = stack;
-
-        macro_rules! bail {
-            ($error:expr) => {{
-                let idx = unsafe { ip.offset_from(frame.function.chunk.ops.as_ptr()) } as usize;
-                let span = &frame.function.chunk.spans[idx];
-                return Err(($error.into(), span.clone()));
-            }};
-        }
-
         /// Pushes a value to the stack.
         macro_rules! push {
             ($value:expr) => {{
@@ -118,52 +83,81 @@ impl VM {
                 stack_top = unsafe { stack_top.add(1) };
             }};
         }
-
         /// Pops a [`Value`] from the stack.
         macro_rules! pop {
             () => {{
                 stack_top = unsafe { stack_top.sub(1) };
+                debug_assert!(stack_top >= stack);
                 unsafe { *stack_top }
             }};
         }
-
         /// Peeks at a [`Value`] from the stack.
         macro_rules! peek {
+            () => {{ unsafe { stack_top.sub(1) } }};
+            ($n:expr) => {{
+                #[allow(unused_unsafe)]
+                unsafe {
+                    stack_top.sub(($n) + 1)
+                }
+            }};
+        }
+
+        /// Reads a [`Value`] from the current [`Chunk`].
+        macro_rules! read_value {
             () => {{
-                unsafe { stack_top.sub(1) }
+                let constant_idx = read_u8!() as usize;
+                *unsafe { function.chunk.constants.get_unchecked(constant_idx) }
+            }};
+        }
+        /// Reads an [`Object`] from the current [`Chunk`].
+        macro_rules! read_object {
+            () => {{
+                let constant_idx = read_u8!() as usize;
+                let constant = *unsafe { function.chunk.constants.get_unchecked(constant_idx) };
+                match constant {
+                    Value::Object(object) => object,
+                    _ => unsafe { hint::unreachable_unchecked() },
+                }
             }};
         }
 
-        /// Binary operator that acts on any [`Value`].
-        macro_rules! binary_op {
-            ($op:tt) => {{
-                let b = pop!();
-                let a = pop!();
-                push!((a $op b).into());
-            }};
-        }
-
-        /// Binary operator that only acts on [`Value::Number`].
-        macro_rules! binary_op_number {
-            ($op:tt) => {{
-                let b = pop!();
-                let a = pop!();
-                match (a, b) {
-                    (Value::Number(a), Value::Number(b)) => push!((a $op b).into()),
-                    _ => bail!(TypeError::UnsupportedOperandInfix {
-                        op: stringify!($op).to_string(),
-                        lt_type: a.type_().to_string(),
-                        rt_type: b.type_().to_string(),
-                    }),
-                };
+        macro_rules! bail {
+            ($error:expr) => {{
+                let idx = unsafe { ip.offset_from(function.chunk.ops.as_ptr()) } as usize;
+                let span = &function.chunk.spans[idx];
+                return Err(($error.into(), span.clone()));
             }};
         }
 
         loop {
             if cfg!(feature = "debug-trace") {
-                let idx = unsafe { ip.offset_from(frame.function.chunk.ops.as_ptr()) };
-                frame.function.chunk.debug_op(idx as usize);
+                let idx = unsafe { ip.offset_from(function.chunk.ops.as_ptr()) };
+                function.chunk.debug_op(idx as usize);
             }
+
+            /// Binary operator that acts on any [`Value`].
+            macro_rules! binary_op {
+                    ($op:tt) => {{
+                        let b = pop!();
+                        let a = pop!();
+                        push!((a $op b).into());
+                    }};
+                }
+            /// Binary operator that only acts on [`Value::Number`].
+            macro_rules! binary_op_number {
+                    ($op:tt) => {{
+                        let b = pop!();
+                        let a = pop!();
+                        match (a, b) {
+                            (Value::Number(a), Value::Number(b)) => push!((a $op b).into()),
+                            _ => bail!(TypeError::UnsupportedOperandInfix {
+                                op: stringify!($op).to_string(),
+                                lt_type: a.type_().to_string(),
+                                rt_type: b.type_().to_string(),
+                            }),
+                        };
+                    }};
+                }
 
             match read_u8!() {
                 op::CONSTANT => {
@@ -288,22 +282,87 @@ impl VM {
                     let offset = read_u16!() as usize;
                     ip = unsafe { ip.sub(offset) };
                 }
-                op::RETURN => break,
+                op::CALL => {
+                    let arg_count = read_u8!();
+                    let callee = unsafe { *peek!(arg_count as usize) };
+                    match callee {
+                        Value::Object(object) => match unsafe { &(*object).type_ } {
+                            ObjectType::Function(callee) => {
+                                if arg_count != callee.arity {
+                                    bail!(TypeError::ArityMismatch {
+                                        name: callee.name.to_str().to_string(),
+                                        exp_args: callee.arity,
+                                        got_args: arg_count,
+                                    });
+                                }
+
+                                frames.push(CallFrame { function, ip, stack });
+                                if frames.len() > FRAMES_MAX {
+                                    bail!(OverflowError::StackOverflow);
+                                }
+
+                                function = callee;
+                                ip = function.chunk.ops.as_ptr();
+                                stack = peek!(arg_count as usize);
+                            }
+                            _ => {
+                                bail!(TypeError::NotCallable { type_: callee.type_().to_string() })
+                            }
+                        },
+                        Value::Native(native) => {
+                            let value = match native {
+                                Native::Clock => {
+                                    if arg_count != 0 {
+                                        bail!(TypeError::ArityMismatch {
+                                            name: "clock".to_string(),
+                                            exp_args: 0,
+                                            got_args: arg_count,
+                                        });
+                                    }
+                                    SystemTime::now()
+                                        .duration_since(UNIX_EPOCH)
+                                        .unwrap_or_default()
+                                        .as_secs_f64()
+                                        .into()
+                                }
+                            };
+                            push!(value);
+                        }
+                        _ => {
+                            bail!(TypeError::NotCallable { type_: callee.type_().to_string() })
+                        }
+                    }
+                }
+                op::RETURN => {
+                    let value = pop!();
+                    match frames.pop() {
+                        Some(frame) => {
+                            stack_top = stack;
+
+                            function = frame.function;
+                            ip = frame.ip;
+                            stack = frame.stack;
+
+                            push!(value);
+                        }
+                        None => break,
+                    };
+                }
                 _ => unsafe { hint::unreachable_unchecked() },
             }
 
             if cfg!(feature = "debug-trace") {
-                write!(stdout, "     ").unwrap();
+                eprint!("     ");
                 let mut stack_ptr = stack;
                 while stack_ptr < stack_top {
-                    write!(stdout, "[ {} ]", unsafe { *stack_ptr }).unwrap();
+                    eprint!("[ {} ]", unsafe { *stack_ptr });
                     stack_ptr = unsafe { stack_ptr.add(1) };
                 }
-                writeln!(stdout).unwrap();
+                eprintln!();
             }
         }
 
-        frame.ip = ip;
+        debug_assert!(stack == stack_top);
         Ok(())
     }
 }
@@ -318,8 +377,8 @@ impl Drop for VM {
     }
 }
 
-pub struct CallFrame {
-    function: Function,
+pub struct CallFrame<'a> {
+    function: &'a Function,
     ip: *const u8,
-    slots: *mut Value,
+    stack: *mut Value,
 }

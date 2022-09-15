@@ -1,13 +1,15 @@
-use crate::chunk::Chunk;
 use std::fmt::{self, Display, Formatter};
 use std::hint;
 use std::ops::Not;
+
+use crate::chunk::Chunk;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub enum Value {
     #[default]
     Nil,
     Boolean(bool),
+    Native(Native),
     Number(f64),
     Object(*mut Object),
 }
@@ -24,6 +26,7 @@ impl Value {
         match self {
             Self::Nil => "nil",
             Self::Boolean(_) => "bool",
+            Self::Native(_) => "native",
             Self::Number(_) => "number",
             Self::Object(object) => match (unsafe { &**object }).type_ {
                 ObjectType::Function(_) => "function",
@@ -38,6 +41,12 @@ impl Display for Value {
         match self {
             Self::Nil => write!(f, "nil"),
             Self::Boolean(boolean) => write!(f, "{boolean}"),
+            Self::Native(native) => {
+                let name = match native {
+                    Native::Clock => "clock",
+                };
+                write!(f, "<native {}>", name)
+            }
             Self::Number(number) => write!(f, "{number}"),
             Self::Object(object) => write!(f, "{}", unsafe { &**object }),
         }
@@ -53,6 +62,12 @@ impl From<bool> for Value {
 impl From<f64> for Value {
     fn from(number: f64) -> Self {
         Self::Number(number)
+    }
+}
+
+impl From<Native> for Value {
+    fn from(native: Native) -> Self {
+        Self::Native(native)
     }
 }
 
@@ -80,6 +95,11 @@ impl PartialEq for Value {
             _ => false,
         }
     }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum Native {
+    Clock,
 }
 
 pub struct Object {
@@ -140,8 +160,9 @@ impl ObjectExt for *mut Object {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::mem;
+
+    use super::*;
 
     #[test]
     fn sizes() {

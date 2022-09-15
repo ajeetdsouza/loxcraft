@@ -1,7 +1,7 @@
 fun foo() {}
 {
   var a = 1;
-  // out: SyntaxError: can't have more than 255 arguments (found 256)
+  // out: OverflowError: cannot use more than 256 arguments in a function
   foo(
      a, // 1
      a, // 2

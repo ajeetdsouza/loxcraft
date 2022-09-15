@@ -1,19 +1,16 @@
 use std::fmt::{self, Display, Formatter};
 
-use crate::object::{Callable, Class, Object};
-
 use gc::{Finalize, Gc, GcCell, Trace};
 use rustc_hash::FxHashMap;
+
+use crate::object::{Callable, Class, Object};
 
 #[derive(Clone, Debug, Finalize, Trace)]
 pub struct Instance(Gc<GcCell<InstanceImpl>>);
 
 impl Instance {
     pub fn new(class: &Class) -> Self {
-        Self(Gc::new(GcCell::new(InstanceImpl {
-            class: class.clone(),
-            fields: FxHashMap::default(),
-        })))
+        Self(Gc::new(GcCell::new(InstanceImpl { class: class.clone(), fields: FxHashMap::default() })))
     }
 
     pub fn class(&self) -> Class {

@@ -1,11 +1,12 @@
+use std::path::Path;
+
 use anyhow::{Context, Result};
 use http::header::{CONTENT_ENCODING, CONTENT_TYPE};
 use http::HeaderValue;
 use rust_embed::RustEmbed;
+use warp::path::Tail;
 use warp::reply::Response;
-use warp::{path::Tail, Filter, Rejection, Reply};
-
-use std::path::Path;
+use warp::{Filter, Rejection, Reply};
 
 #[derive(RustEmbed)]
 #[folder = "ui/dist/"]
@@ -25,8 +26,7 @@ pub fn serve(port: u16) -> Result<()> {
 }
 
 async fn serve_async(port: u16) {
-    let routes =
-        warp::path::end().and_then(serve_index).or(warp::path::tail().and_then(serve_asset));
+    let routes = warp::path::end().and_then(serve_index).or(warp::path::tail().and_then(serve_asset));
     let url = format!("http://127.0.0.1:{port}");
     eprintln!("Running playground on {url}");
     if let Err(e) = webbrowser::open(&url) {

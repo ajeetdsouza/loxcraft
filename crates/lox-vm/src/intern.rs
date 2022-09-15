@@ -1,9 +1,11 @@
-use crate::value::Object;
+use std::hash::BuildHasherDefault;
+use std::mem;
+
 use hashbrown::hash_map::{Entry, RawEntryMut};
 use hashbrown::HashMap;
 use rustc_hash::FxHasher;
-use std::hash::BuildHasherDefault;
-use std::mem;
+
+use crate::value::Object;
 
 /// Any interned string will immediately be invalidated once [`Intern`] is
 /// dropped.

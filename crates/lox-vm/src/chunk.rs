@@ -1,8 +1,10 @@
-use crate::op;
-use crate::value::Value;
+use std::ops::Index;
+
 use lox_common::error::{OverflowError, Result};
 use lox_common::types::Span;
-use std::ops::Index;
+
+use crate::op;
+use crate::value::{ObjectType, Value};
 
 #[derive(Debug, Default)]
 pub struct Chunk {
@@ -31,7 +33,7 @@ impl Chunk {
     }
 
     pub fn debug(&self, name: &str) {
-        println!("== {name} ==");
+        eprintln!("== {name} ==");
         let mut idx = 0;
         while idx < self.ops.len() {
             idx = self.debug_op(idx);
@@ -39,7 +41,7 @@ impl Chunk {
     }
 
     pub fn debug_op(&self, idx: usize) -> usize {
-        print!("{idx:04} ");
+        eprint!("{idx:04} ");
         match self.ops[idx] {
             op::CONSTANT => self.debug_op_constant("OP_CONSTANT", idx),
             op::NIL => self.debug_op_simple("OP_NIL", idx),
@@ -68,25 +70,26 @@ impl Chunk {
             op::JUMP_IF_FALSE => self.debug_op_jump("OP_JUMP_IF_FALSE", idx, true),
             op::LOOP => self.debug_op_jump("OP_LOOP", idx, false),
             op::RETURN => self.debug_op_simple("OP_RETURN", idx),
+            op::CALL => self.debug_op_byte("OP_CALL", idx),
             byte => self.debug_op_simple(&format!("OP_UNKNOWN({byte:#X})"), idx),
         }
     }
 
     fn debug_op_simple(&self, name: &str, idx: usize) -> usize {
-        println!("{name}");
+        eprintln!("{name}");
         idx + 1
     }
 
     fn debug_op_byte(&self, name: &str, idx: usize) -> usize {
         let byte = self.ops[idx + 1];
-        println!("{name:16} {byte:>4}");
+        eprintln!("{name:16} {byte:>4}");
         idx + 2
     }
 
     fn debug_op_constant(&self, name: &str, idx: usize) -> usize {
         let constant_idx = self.ops[idx + 1];
         let constant = &self.constants[constant_idx as usize];
-        println!("{name:16} {constant_idx:>4} '{constant}'");
+        eprintln!("{name:16} {constant_idx:>4} '{constant}'");
         idx + 2
     }
 
@@ -95,8 +98,23 @@ impl Chunk {
         let offset_sign = if is_forward { 1 } else { -1 };
         // The +3 is to account for the 3 byte jump instruction.
         let to_idx = (idx as isize) + (to_offset as isize) * offset_sign + 3;
-        println!("{name:16} {idx:>4} -> {to_idx}");
+        eprintln!("{name:16} {idx:>4} -> {to_idx}");
         idx + 3
+    }
+}
+
+impl Drop for Chunk {
+    fn drop(&mut self) {
+        for &constant in &self.constants {
+            if let Value::Object(object) = constant {
+                match unsafe { &(*object).type_ } {
+                    ObjectType::String(_) => {}
+                    _ => {
+                        let _ = unsafe { Box::from_raw(object) };
+                    }
+                }
+            }
+        }
     }
 }
 
