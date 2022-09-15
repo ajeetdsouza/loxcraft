@@ -42,19 +42,32 @@ impl VM {
         Ok(())
     }
 
-    pub fn run_function<W: io::Write>(&mut self, mut function: &Function, stdout: &mut W) -> Result<()> {
-        let mut frames: Vec<CallFrame> = Vec::with_capacity(256);
+    pub fn run_function<W: io::Write>(&mut self, function: &Function, stdout: &mut W) -> Result<()> {
+        // Accessing `stack` without bounds checking is safe because:
+        // - Each frame can store a theoretical maximum of `STACK_MAX_PER_FRAME` values on the stack.
+        // - The frame count can never exceed `MAX_FRAMES`, otherwise we throw a stack overflow error.
+        // - Thus, we can statically allocate a stack of size `STACK_MAX = FRAMES_MAX * STACK_MAX_PER_FRAME`
+        //   and we are guaranteed to never exceed this.
+        let mut stack: [Value; STACK_MAX] = [Default::default(); STACK_MAX];
+        let stack = stack.as_mut_ptr();
+        let mut stack_top = stack;
 
-        // Instruction pointer for the current Chunk.
-        // Accessing `ip` without bounds checking is safe, assuming that the
-        // compiler always outputs correct code. The program stops execution
-        // when it reaches `op::RETURN`.
-        let mut ip = function.chunk.ops.as_ptr();
+        let mut frames: Vec<CallFrame> = Vec::with_capacity(256);
+        let mut frame = CallFrame {
+            function,
+            // Instruction pointer for the current Chunk.
+            // Accessing `ip` without bounds checking is safe, assuming that the
+            // compiler always outputs correct code. The program stops execution
+            // when it reaches `op::RETURN`.
+            ip: function.chunk.ops.as_ptr(),
+            stack,
+        };
+
         /// Reads an instruction / byte from the current [`Chunk`].
         macro_rules! read_u8 {
             () => {{
-                let byte = unsafe { *ip };
-                ip = unsafe { ip.add(1) };
+                let byte = unsafe { *frame.ip };
+                frame.ip = unsafe { frame.ip.add(1) };
                 byte
             }};
         }
@@ -67,14 +80,6 @@ impl VM {
             }};
         }
 
-        // Accessing `stack` without bounds checking is safe because:
-        // - Each frame can store a theoretical maximum of `STACK_MAX_PER_FRAME` values on the stack.
-        // - The frame count can never exceed `MAX_FRAMES`, otherwise we throw a stack overflow error.
-        // - Thus, we can statically allocate a stack of size `STACK_MAX = FRAMES_MAX * STACK_MAX_PER_FRAME`
-        //   and we are guaranteed to never exceed this.
-        let mut stack: [Value; STACK_MAX] = [Default::default(); STACK_MAX];
-        let mut stack = stack.as_mut_ptr();
-        let mut stack_top = stack;
         /// Pushes a value to the stack.
         macro_rules! push {
             ($value:expr) => {{
@@ -87,7 +92,7 @@ impl VM {
         macro_rules! pop {
             () => {{
                 stack_top = unsafe { stack_top.sub(1) };
-                debug_assert!(stack_top >= stack);
+                debug_assert!(stack_top >= frame.stack);
                 unsafe { *stack_top }
             }};
         }
@@ -97,7 +102,7 @@ impl VM {
             ($n:expr) => {{
                 #[allow(unused_unsafe)]
                 unsafe {
-                    stack_top.sub(($n) + 1)
+                    stack_top.sub($n + 1)
                 }
             }};
         }
@@ -106,14 +111,14 @@ impl VM {
         macro_rules! read_value {
             () => {{
                 let constant_idx = read_u8!() as usize;
-                *unsafe { function.chunk.constants.get_unchecked(constant_idx) }
+                *unsafe { frame.function.chunk.constants.get_unchecked(constant_idx) }
             }};
         }
         /// Reads an [`Object`] from the current [`Chunk`].
         macro_rules! read_object {
             () => {{
                 let constant_idx = read_u8!() as usize;
-                let constant = *unsafe { function.chunk.constants.get_unchecked(constant_idx) };
+                let constant = *unsafe { frame.function.chunk.constants.get_unchecked(constant_idx) };
                 match constant {
                     Value::Object(object) => object,
                     _ => unsafe { hint::unreachable_unchecked() },
@@ -123,16 +128,16 @@ impl VM {
 
         macro_rules! bail {
             ($error:expr) => {{
-                let idx = unsafe { ip.offset_from(function.chunk.ops.as_ptr()) } as usize;
-                let span = &function.chunk.spans[idx];
+                let idx = unsafe { frame.ip.offset_from(frame.function.chunk.ops.as_ptr()) } as usize;
+                let span = &frame.function.chunk.spans[idx];
                 return Err(($error.into(), span.clone()));
             }};
         }
 
         loop {
             if cfg!(feature = "debug-trace") {
-                let idx = unsafe { ip.offset_from(function.chunk.ops.as_ptr()) };
-                function.chunk.debug_op(idx as usize);
+                let idx = unsafe { frame.ip.offset_from(frame.function.chunk.ops.as_ptr()) };
+                frame.function.chunk.debug_op(idx as usize);
             }
 
             /// Binary operator that acts on any [`Value`].
@@ -172,12 +177,12 @@ impl VM {
                 }
                 op::GET_LOCAL => {
                     let stack_idx = read_u8!() as usize;
-                    let local = unsafe { *stack.add(stack_idx) };
+                    let local = unsafe { *frame.stack.add(stack_idx) };
                     push!(local);
                 }
                 op::SET_LOCAL => {
                     let stack_idx = read_u8!() as usize;
-                    let local = unsafe { stack.add(stack_idx) };
+                    let local = unsafe { frame.stack.add(stack_idx) };
                     let value = peek!();
                     unsafe { *local = *value };
                 }
@@ -186,7 +191,7 @@ impl VM {
                     match self.globals.get(&name) {
                         Some(value) => push!(*value),
                         None => {
-                            bail!(NameError::NotDefined { name: name.to_str().to_string() })
+                            bail!(NameError::NotDefined { name: name.as_str().to_string() })
                         }
                     }
                 }
@@ -201,7 +206,7 @@ impl VM {
                     match self.globals.entry(name) {
                         Entry::Occupied(mut entry) => entry.insert(unsafe { *value }),
                         Entry::Vacant(_) => {
-                            bail!(NameError::NotDefined { name: name.to_str().to_string() })
+                            bail!(NameError::NotDefined { name: name.as_str().to_string() })
                         }
                     };
                 }
@@ -219,7 +224,7 @@ impl VM {
                     match (a, b) {
                         (Value::Number(n1), Value::Number(n2)) => push!((n1 + n2).into()),
                         (Value::Object(o1), Value::Object(o2)) => {
-                            match unsafe { (&(*o1).type_, &(*o2).type_) } {
+                            match (o1.type_(), o2.type_()) {
                                 (&ObjectType::String(a), &ObjectType::String(b)) => {
                                     let string = [a, b].concat();
                                     let (object, inserted) = self.intern.insert_string(string);
@@ -260,7 +265,6 @@ impl VM {
                         }),
                     }
                 }
-                // TODO: parametrize output using `writeln!`.
                 op::PRINT => {
                     let value = pop!();
                     if let Err(_) = writeln!(stdout, "{value}") {
@@ -269,41 +273,42 @@ impl VM {
                 }
                 op::JUMP => {
                     let offset = read_u16!() as usize;
-                    ip = unsafe { ip.add(offset) };
+                    frame.ip = unsafe { frame.ip.add(offset) };
                 }
                 op::JUMP_IF_FALSE => {
                     let offset = read_u16!() as usize;
                     let value = peek!();
                     if !(unsafe { *value }.bool()) {
-                        ip = unsafe { ip.add(offset) };
+                        frame.ip = unsafe { frame.ip.add(offset) };
                     }
                 }
                 op::LOOP => {
                     let offset = read_u16!() as usize;
-                    ip = unsafe { ip.sub(offset) };
+                    frame.ip = unsafe { frame.ip.sub(offset) };
                 }
                 op::CALL => {
                     let arg_count = read_u8!();
                     let callee = unsafe { *peek!(arg_count as usize) };
                     match callee {
-                        Value::Object(object) => match unsafe { &(*object).type_ } {
-                            ObjectType::Function(callee) => {
-                                if arg_count != callee.arity {
+                        Value::Object(object) => match object.type_() {
+                            ObjectType::Function(function) => {
+                                if arg_count != function.arity {
                                     bail!(TypeError::ArityMismatch {
-                                        name: callee.name.to_str().to_string(),
-                                        exp_args: callee.arity,
+                                        name: function.name.as_str().to_string(),
+                                        exp_args: function.arity,
                                         got_args: arg_count,
                                     });
                                 }
 
-                                frames.push(CallFrame { function, ip, stack });
-                                if frames.len() > FRAMES_MAX {
+                                if frames.len() >= FRAMES_MAX {
                                     bail!(OverflowError::StackOverflow);
                                 }
-
-                                function = callee;
-                                ip = function.chunk.ops.as_ptr();
-                                stack = peek!(arg_count as usize);
+                                frames.push(frame);
+                                frame = CallFrame {
+                                    function,
+                                    ip: function.chunk.ops.as_ptr(),
+                                    stack: peek!(arg_count as usize),
+                                };
                             }
                             _ => {
                                 bail!(TypeError::NotCallable { type_: callee.type_().to_string() })
@@ -336,13 +341,9 @@ impl VM {
                 op::RETURN => {
                     let value = pop!();
                     match frames.pop() {
-                        Some(frame) => {
-                            stack_top = stack;
-
-                            function = frame.function;
-                            ip = frame.ip;
-                            stack = frame.stack;
-
+                        Some(prev_frame) => {
+                            stack_top = frame.stack;
+                            frame = prev_frame;
                             push!(value);
                         }
                         None => break,
@@ -353,7 +354,7 @@ impl VM {
 
             if cfg!(feature = "debug-trace") {
                 eprint!("     ");
-                let mut stack_ptr = stack;
+                let mut stack_ptr = frame.stack;
                 while stack_ptr < stack_top {
                     eprint!("[ {} ]", unsafe { *stack_ptr });
                     stack_ptr = unsafe { stack_ptr.add(1) };
@@ -362,7 +363,7 @@ impl VM {
             }
         }
 
-        debug_assert!(stack == stack_top);
+        debug_assert!(frame.stack == stack_top);
         Ok(())
     }
 }

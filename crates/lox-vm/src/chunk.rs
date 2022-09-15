@@ -4,7 +4,7 @@ use lox_common::error::{OverflowError, Result};
 use lox_common::types::Span;
 
 use crate::op;
-use crate::value::{ObjectType, Value};
+use crate::value::Value;
 
 #[derive(Debug, Default)]
 pub struct Chunk {
@@ -71,6 +71,7 @@ impl Chunk {
             op::LOOP => self.debug_op_jump("OP_LOOP", idx, false),
             op::RETURN => self.debug_op_simple("OP_RETURN", idx),
             op::CALL => self.debug_op_byte("OP_CALL", idx),
+            op::CLOSURE => self.debug_op_simple("OP_CLOSURE", idx),
             byte => self.debug_op_simple(&format!("OP_UNKNOWN({byte:#X})"), idx),
         }
     }
@@ -100,21 +101,6 @@ impl Chunk {
         let to_idx = (idx as isize) + (to_offset as isize) * offset_sign + 3;
         eprintln!("{name:16} {idx:>4} -> {to_idx}");
         idx + 3
-    }
-}
-
-impl Drop for Chunk {
-    fn drop(&mut self) {
-        for &constant in &self.constants {
-            if let Value::Object(object) = constant {
-                match unsafe { &(*object).type_ } {
-                    ObjectType::String(_) => {}
-                    _ => {
-                        let _ = unsafe { Box::from_raw(object) };
-                    }
-                }
-            }
-        }
     }
 }
 
