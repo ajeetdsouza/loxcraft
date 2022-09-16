@@ -42,7 +42,10 @@ pub fn repl() -> Result<()> {
     let stdout = &mut io::stdout().lock();
 
     loop {
-        match editor.read_line(&Prompt) {
+        let line = editor.read_line(&Prompt);
+        editor.sync_history().unwrap();
+
+        match line {
             Ok(Signal::Success(line)) => {
                 if let Err(e) = vm.run(&line, stdout) {
                     report_err(&line, e);

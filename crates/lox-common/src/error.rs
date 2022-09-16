@@ -38,7 +38,7 @@ impl AsDiagnostic for Error {
     }
 }
 
-macro_rules! impl_from {
+macro_rules! derive_from_error {
     ($($error:tt),*) => {
         $(
             impl From<$error> for Error {
@@ -50,7 +50,7 @@ macro_rules! impl_from {
     };
 }
 
-impl_from!(AttributeError, IoError, NameError, OverflowError, SyntaxError, TypeError);
+derive_from_error!(AttributeError, IoError, NameError, OverflowError, SyntaxError, TypeError);
 
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum AttributeError {
