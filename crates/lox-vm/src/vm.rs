@@ -10,7 +10,7 @@ use rustc_hash::FxHasher;
 use crate::compiler::Compiler;
 use crate::intern::Intern;
 use crate::op;
-use crate::value::{Closure, Function, Native, Object, ObjectExt, ObjectType, Value};
+use crate::value::{Closure, Function, Native, Object, ObjectExt, ObjectType, Upvalue, Value};
 
 const FRAMES_MAX: usize = 64;
 const STACK_MAX: usize = FRAMES_MAX * STACK_MAX_PER_FRAME;
@@ -53,7 +53,7 @@ impl VM {
         let mut stack_top = stack;
 
         let ip = function.chunk.ops.as_ptr();
-        let closure = &Closure { function: &mut function.into() as _ };
+        let closure = &Closure { function: &mut function.into() as _, upvalues: Vec::new() };
 
         let mut frames: Vec<CallFrame> = Vec::with_capacity(256);
         let mut frame = CallFrame {
@@ -101,7 +101,12 @@ impl VM {
         }
         /// Peeks at a [`Value`] from the stack.
         macro_rules! peek {
-            () => {{ unsafe { stack_top.sub(1) } }};
+            () => {{
+                #[allow(unused_unsafe)]
+                unsafe {
+                    stack_top.sub(1)
+                }
+            }};
             ($n:expr) => {{
                 #[allow(unused_unsafe)]
                 unsafe {
@@ -214,6 +219,18 @@ impl VM {
                             bail!(NameError::NotDefined { name: name.as_str().to_string() })
                         }
                     };
+                }
+                op::GET_UPVALUE => {
+                    let upvalue_idx = read_u8!() as usize;
+                    let upvalue = unsafe { frame.closure.upvalues.get_unchecked(upvalue_idx).as_upvalue() };
+                    let value = unsafe { *upvalue.location };
+                    push!(value);
+                }
+                op::SET_UPVALUE => {
+                    let upvalue_idx = read_u8!() as usize;
+                    let upvalue = unsafe { frame.closure.upvalues.get_unchecked(upvalue_idx).as_upvalue() };
+                    let value = upvalue.location;
+                    unsafe { *value = *peek!() };
                 }
                 op::EQUAL => binary_op!(==),
                 op::NOT_EQUAL => binary_op!(!=),
@@ -346,7 +363,26 @@ impl VM {
                 }
                 op::CLOSURE => {
                     let function = read_object!();
-                    let closure = Closure { function };
+
+                    let upvalue_count = function.as_function().upvalues as usize;
+                    let mut upvalues = Vec::with_capacity(upvalue_count);
+
+                    for _ in 0..upvalue_count {
+                        let is_local = read_u8!();
+                        let upvalue_idx = read_u8!();
+
+                        let upvalue = if is_local != 0 {
+                            let location = unsafe { frame.stack.add(upvalue_idx as usize) };
+                            let upvalue = Upvalue { location };
+                            Box::into_raw(Box::new(upvalue.into()))
+                        } else {
+                            frame.closure.upvalues[upvalue_idx as usize]
+                        };
+                        upvalues.push(upvalue);
+                    }
+
+                    let closure = Closure { function, upvalues };
+
                     let value = self.allocate(closure.into());
                     push!(value);
                 }

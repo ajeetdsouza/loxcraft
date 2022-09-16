@@ -15,6 +15,13 @@ pub enum Value {
 }
 
 impl Value {
+    pub fn as_object(&self) -> *mut Object {
+        match self {
+            Value::Object(object) => *object,
+            _ => unsafe { hint::unreachable_unchecked() },
+        }
+    }
+
     pub fn bool(&self) -> bool {
         match self {
             Self::Nil | Self::Boolean(false) => false,
@@ -28,9 +35,10 @@ impl Value {
             Self::Boolean(_) => "bool",
             Self::Native(_) => "native",
             Self::Number(_) => "number",
-            Self::Object(object) => match (unsafe { &**object }).type_ {
+            Self::Object(object) => match &(unsafe { &**object }).type_ {
                 ObjectType::Closure(_) | ObjectType::Function(_) => "function",
                 ObjectType::String(_) => "string",
+                ObjectType::Upvalue(upvalue) => unsafe { *upvalue.location }.type_(),
             },
         }
     }
@@ -116,6 +124,7 @@ impl Display for Object {
                 name => write!(f, "<function {name}>"),
             },
             ObjectType::String(string) => write!(f, "{string}"),
+            ObjectType::Upvalue(_) => write!(f, "<upvalue>"),
         }
     }
 }
@@ -133,23 +142,32 @@ macro_rules! derive_from_object {
 derive_from_object!(Closure, Closure);
 derive_from_object!(Function, Function);
 derive_from_object!(String, &'static str);
+derive_from_object!(Upvalue, Upvalue);
 
 pub enum ObjectType {
     Closure(Closure),
     Function(Function),
     String(&'static str),
+    Upvalue(Upvalue),
 }
 
 #[derive(Debug)]
 pub struct Closure {
     pub function: *mut Object,
+    pub upvalues: Vec<*mut Object>,
 }
 
 #[derive(Debug)]
 pub struct Function {
     pub name: *mut Object,
     pub arity: u8,
+    pub upvalues: u8,
     pub chunk: Chunk,
+}
+
+#[derive(Debug)]
+pub struct Upvalue {
+    pub location: *mut Value,
 }
 
 /// Unsafe extension functions. Use only when you are certain what the
@@ -157,6 +175,7 @@ pub struct Function {
 pub trait ObjectExt {
     fn as_function(self) -> &'static Function;
     fn as_str(self) -> &'static str;
+    fn as_upvalue(self) -> &'static Upvalue;
 
     fn type_(self) -> &'static ObjectType;
 }
@@ -172,6 +191,13 @@ impl ObjectExt for *mut Object {
     fn as_str(self) -> &'static str {
         match self.type_() {
             ObjectType::String(string) => string,
+            _ => unsafe { hint::unreachable_unchecked() },
+        }
+    }
+
+    fn as_upvalue(self) -> &'static Upvalue {
+        match self.type_() {
+            ObjectType::Upvalue(upvalue) => upvalue,
             _ => unsafe { hint::unreachable_unchecked() },
         }
     }

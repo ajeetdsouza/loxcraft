@@ -11,6 +11,8 @@ iota! {
             , GET_GLOBAL
             , DEFINE_GLOBAL
             , SET_GLOBAL
+            , GET_UPVALUE
+            , SET_UPVALUE
             , EQUAL
             , NOT_EQUAL
             , GREATER

@@ -4,7 +4,7 @@ use lox_common::error::{OverflowError, Result};
 use lox_common::types::Span;
 
 use crate::op;
-use crate::value::Value;
+use crate::value::{ObjectExt, Value};
 
 #[derive(Debug, Default)]
 pub struct Chunk {
@@ -53,6 +53,8 @@ impl Chunk {
             op::GET_GLOBAL => self.debug_op_constant("OP_GET_GLOBAL", idx),
             op::DEFINE_GLOBAL => self.debug_op_constant("OP_DEFINE_GLOBAL", idx),
             op::SET_GLOBAL => self.debug_op_constant("OP_SET_GLOBAL", idx),
+            op::GET_UPVALUE => self.debug_op_byte("OP_GET_UPVALUE", idx),
+            op::SET_UPVALUE => self.debug_op_byte("OP_SET_UPVALUE", idx),
             op::EQUAL => self.debug_op_simple("OP_EQUAL", idx),
             op::NOT_EQUAL => self.debug_op_simple("OP_NOT_EQUAL", idx),
             op::GREATER => self.debug_op_simple("OP_GREATER", idx),
@@ -71,7 +73,28 @@ impl Chunk {
             op::LOOP => self.debug_op_jump("OP_LOOP", idx, false),
             op::RETURN => self.debug_op_simple("OP_RETURN", idx),
             op::CALL => self.debug_op_byte("OP_CALL", idx),
-            op::CLOSURE => self.debug_op_simple("OP_CLOSURE", idx),
+            op::CLOSURE => {
+                let mut idx = idx + 1;
+                let constant_idx = self.ops[idx];
+                let constant = &self.constants[constant_idx as usize];
+                eprintln!("{name:16} {constant_idx:>4} '{constant}'", name = "OP_CLOSURE");
+
+                let function = constant.as_object().as_function();
+                for _ in 0..function.upvalues {
+                    let offset = idx;
+
+                    idx += 1;
+                    let is_local = self.ops[idx];
+                    let label = if is_local == 0 { "upvalue" } else { "local" };
+
+                    idx += 1;
+                    let upvalue_idx = self.ops[idx];
+
+                    eprintln!("{offset:04} |                     {label} {upvalue_idx}");
+                }
+
+                idx + 1
+            }
             byte => self.debug_op_simple(&format!("OP_UNKNOWN({byte:#X})"), idx),
         }
     }

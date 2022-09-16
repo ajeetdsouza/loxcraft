@@ -115,6 +115,8 @@ pub enum OverflowError {
     TooManyLocals,
     #[error("cannot define more than 256 parameters in a function")]
     TooManyParams,
+    #[error("cannot use more than 256 closure variables in a function")]
+    TooManyUpvalues,
 }
 
 impl AsDiagnostic for OverflowError {

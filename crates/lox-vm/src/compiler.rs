@@ -21,9 +21,10 @@ impl Compiler {
         let (name, _) = intern.insert_str("");
         Self {
             ctx: CompilerCtx {
-                function: Function { name, arity: 0, chunk: Chunk::default() },
+                function: Function { name, arity: 0, upvalues: 0, chunk: Chunk::default() },
                 type_: FunctionType::Script,
-                locals: Vec::new(), // vec![Default::default()],
+                locals: Vec::new(),
+                upvalues: Vec::new(),
                 parent: None,
                 scope_depth: 0,
             },
@@ -103,9 +104,10 @@ impl Compiler {
                     fun.params.len().try_into().map_err(|_| (OverflowError::TooManyParams.into(), span.clone()))?;
 
                 let ctx = CompilerCtx {
-                    function: Function { name, arity, chunk: Chunk::default() },
+                    function: Function { name, arity, upvalues: 0, chunk: Chunk::default() },
                     type_: FunctionType::Function,
-                    locals: Vec::new(), // vec![Default::default()],
+                    locals: Vec::new(),
+                    upvalues: Vec::new(),
                     parent: None,
                     scope_depth: self.ctx.scope_depth + 1,
                 };
@@ -128,11 +130,16 @@ impl Compiler {
                     self.emit_u8(op::RETURN, span);
                 }
 
-                let function = self.end_ctx();
+                let (function, upvalues) = self.end_ctx();
                 let object: Object = function.into();
                 let value: Value = Box::into_raw(Box::new(object)).into();
                 self.emit_u8(op::CLOSURE, span);
                 self.emit_constant(value, span)?;
+
+                for upvalue in &upvalues {
+                    self.ctx.function.chunk.write_u8(upvalue.is_local as u8, span);
+                    self.ctx.function.chunk.write_u8(upvalue.idx, span);
+                }
 
                 if self.ctx.scope_depth == 0 {
                     self.emit_u8(op::DEFINE_GLOBAL, span);
@@ -351,16 +358,19 @@ impl Compiler {
     }
 
     /// Pops the current ctx and extracts a [`Function`] from it.
-    fn end_ctx(&mut self) -> Function {
+    fn end_ctx(&mut self) -> (Function, Vec<Upvalue>) {
         let parent = self.ctx.parent.take().expect("tried to end context in a script");
         let ctx = mem::replace(&mut self.ctx, *parent);
-        ctx.function
+        (ctx.function, ctx.upvalues)
     }
 
     fn get_variable(&mut self, name: &str, span: &Span, intern: &mut Intern) -> Result<()> {
-        if let Some(local_idx) = self.resolve_local(name, span)? {
+        if let Some(local_idx) = self.ctx.resolve_local(name, span)? {
             self.emit_u8(op::GET_LOCAL, span);
             self.emit_u8(local_idx, span);
+        } else if let Some(upvalue_idx) = self.ctx.resolve_upvalue(name, span)? {
+            self.emit_u8(op::GET_UPVALUE, span);
+            self.emit_u8(upvalue_idx, span);
         } else {
             let (name, _) = intern.insert_str(name);
             self.emit_u8(op::GET_GLOBAL, span);
@@ -370,7 +380,7 @@ impl Compiler {
     }
 
     fn set_variable(&mut self, name: &str, span: &Span, intern: &mut Intern) -> Result<()> {
-        if let Some(local_idx) = self.resolve_local(name, span)? {
+        if let Some(local_idx) = self.ctx.resolve_local(name, span)? {
             self.emit_u8(op::SET_LOCAL, span);
             self.emit_u8(local_idx, span);
         } else {
@@ -402,19 +412,6 @@ impl Compiler {
 
     fn define_local(&mut self) {
         self.ctx.locals.last_mut().unwrap().is_initialized = true;
-    }
-
-    fn resolve_local(&self, name: &str, span: &Span) -> Result<Option<u8>> {
-        match self.ctx.locals.iter().enumerate().rfind(|(_, local)| local.name == name) {
-            Some((idx, local)) => {
-                if local.is_initialized {
-                    Ok(Some(idx as u8))
-                } else {
-                    Err((NameError::AccessInsideInitializer { name: name.to_string() }.into(), span.clone()))
-                }
-            }
-            None => Ok(None),
-        }
     }
 
     /// A jump takes 1 byte for the instruction followed by 2 bytes for the
@@ -492,8 +489,60 @@ pub struct CompilerCtx {
     function: Function,
     type_: FunctionType,
     locals: Vec<Local>,
+    upvalues: Vec<Upvalue>,
     parent: Option<Box<CompilerCtx>>,
     scope_depth: usize,
+}
+
+impl CompilerCtx {
+    fn resolve_local(&self, name: &str, span: &Span) -> Result<Option<u8>> {
+        match self.locals.iter().enumerate().rfind(|(_, local)| local.name == name) {
+            Some((idx, local)) => {
+                if local.is_initialized {
+                    Ok(Some(idx as u8))
+                } else {
+                    Err((NameError::AccessInsideInitializer { name: name.to_string() }.into(), span.clone()))
+                }
+            }
+            None => Ok(None),
+        }
+    }
+
+    fn resolve_upvalue(&mut self, name: &str, span: &Span) -> Result<Option<u8>> {
+        let local_idx = match &self.parent {
+            Some(parent) => parent.resolve_local(name, span)?,
+            None => return Ok(None),
+        };
+
+        match local_idx {
+            Some(local_idx) => {
+                let upvalue_idx = self.add_upvalue(local_idx, true, span)?;
+                Ok(Some(upvalue_idx))
+            }
+            None => match &mut self.parent {
+                Some(parent) => parent.resolve_upvalue(name, span),
+                None => Ok(None),
+            },
+        }
+    }
+
+    fn add_upvalue(&mut self, idx: u8, is_local: bool, span: &Span) -> Result<u8> {
+        let upvalue = Upvalue { idx, is_local };
+        let upvalue_idx = match self.upvalues.iter().position(|u| u == &upvalue) {
+            Some(upvalue_idx) => upvalue_idx,
+            None => {
+                self.upvalues.push(upvalue);
+                self.upvalues.len() - 1
+            }
+        };
+
+        self.function.upvalues = self
+            .function
+            .upvalues
+            .checked_add(1)
+            .ok_or_else(|| (OverflowError::TooManyUpvalues.into(), span.clone()))?;
+        Ok(upvalue_idx as u8)
+    }
 }
 
 #[derive(Debug, Default)]
@@ -505,6 +554,12 @@ struct Local {
     /// variables.
     depth: usize,
     is_initialized: bool,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct Upvalue {
+    idx: u8,
+    is_local: bool,
 }
 
 #[derive(Debug, Eq, PartialEq)]
