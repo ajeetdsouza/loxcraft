@@ -19,6 +19,7 @@ const STACK_MAX_PER_FRAME: usize = u8::MAX as usize + 1;
 pub struct VM {
     pub globals: HashMap<*mut Object, Value, BuildHasherDefault<FxHasher>>,
     pub objects: Vec<*mut Object>,
+    pub open_upvalues: Vec<*mut Object>,
     pub intern: Intern,
 }
 
@@ -31,7 +32,7 @@ impl VM {
         let (clock, _) = intern.insert_str("clock");
         globals.insert(clock, Native::Clock.into());
 
-        Self { globals, objects: Vec::with_capacity(256), intern }
+        Self { globals, objects: Vec::with_capacity(256), open_upvalues: Vec::with_capacity(256), intern }
     }
 
     pub fn run<W: io::Write>(&mut self, source: &str, stdout: &mut W) -> Result<(), Vec<ErrorS>> {
@@ -53,7 +54,7 @@ impl VM {
         let mut stack_top = stack;
 
         let ip = function.chunk.ops.as_ptr();
-        let closure = &Closure { function: &mut function.into() as _, upvalues: Vec::new() };
+        let closure = &Closure { function: &mut function.into(), upvalues: Vec::new() };
 
         let mut frames: Vec<CallFrame> = Vec::with_capacity(256);
         let mut frame = CallFrame {
@@ -104,7 +105,9 @@ impl VM {
             () => {{
                 #[allow(unused_unsafe)]
                 unsafe {
-                    stack_top.sub(1)
+                    let stack_ptr = stack_top.sub(1);
+                    debug_assert!(stack_ptr >= frame.stack);
+                    stack_ptr
                 }
             }};
             ($n:expr) => {{
@@ -130,7 +133,7 @@ impl VM {
                     *unsafe { frame.closure.function.as_function().chunk.constants.get_unchecked(constant_idx) };
                 match constant {
                     Value::Object(object) => object,
-                    _ => unsafe { hint::unreachable_unchecked() },
+                    _ => unreachable(),
                 }
             }};
         }
@@ -373,8 +376,7 @@ impl VM {
 
                         let upvalue = if is_local != 0 {
                             let location = unsafe { frame.stack.add(upvalue_idx as usize) };
-                            let upvalue = Upvalue { location };
-                            Box::into_raw(Box::new(upvalue.into()))
+                            self.capture_upvalue(location)
                         } else {
                             frame.closure.upvalues[upvalue_idx as usize]
                         };
@@ -382,12 +384,17 @@ impl VM {
                     }
 
                     let closure = Closure { function, upvalues };
-
-                    let value = self.allocate(closure.into());
-                    push!(value);
+                    let closure = self.allocate(closure.into());
+                    push!(closure);
+                }
+                op::CLOSE_UPVALUE => {
+                    let last = peek!();
+                    self.close_upvalues(last);
+                    pop!();
                 }
                 op::RETURN => {
                     let value = pop!();
+                    self.close_upvalues(frame.stack);
                     match frames.pop() {
                         Some(prev_frame) => {
                             stack_top = frame.stack;
@@ -397,7 +404,7 @@ impl VM {
                         None => break,
                     };
                 }
-                _ => unsafe { hint::unreachable_unchecked() },
+                _ => unreachable(),
             }
 
             if cfg!(feature = "debug-trace") {
@@ -411,7 +418,7 @@ impl VM {
             }
         }
 
-        debug_assert!(frame.stack == stack_top);
+        debug_assert!(frame.stack == stack_top, "VM finished executing but stack is not empty");
         Ok(())
     }
 
@@ -419,6 +426,40 @@ impl VM {
         let object = Box::into_raw(Box::new(object));
         self.objects.push(object);
         object.into()
+    }
+
+    fn capture_upvalue(&mut self, location: *mut Value) -> *mut Object {
+        for object in self.open_upvalues.iter().rev() {
+            // if object.as_upvalue().location < location {
+            //     break;
+            // }
+            if object.as_upvalue().location == location {
+                return *object;
+            }
+        }
+
+        let upvalue = Upvalue { location, closed: Value::Nil };
+        let upvalue = Box::into_raw(Box::new(upvalue.into()));
+        self.open_upvalues.push(upvalue);
+        self.open_upvalues.sort_unstable_by_key(|o| o.as_upvalue().location);
+
+        upvalue
+    }
+
+    fn close_upvalues(&mut self, last: *mut Value) {
+        // for upvalue in self.open_upvalues.iter_mut().rev() {
+        //     match &mut unsafe { &mut **upvalue }.type_ {
+        //         ObjectType::Upvalue(upvalue) => {
+        //             if upvalue.location < last {
+        //                 break;
+        //             }
+        //             println!("Closing upvalue: {:?}", upvalue);
+        //             upvalue.closed = unsafe { *upvalue.location };
+        //             upvalue.location = &mut upvalue.closed;
+        //         }
+        //         _ => unreachable(),
+        //     }
+        // }
     }
 }
 
@@ -436,4 +477,8 @@ pub struct CallFrame<'a> {
     closure: &'a Closure,
     ip: *const u8,
     stack: *mut Value,
+}
+
+fn unreachable() -> ! {
+    if cfg!(debug_assertions) { unreachable!() } else { unsafe { hint::unreachable_unchecked() } }
 }

@@ -80,7 +80,7 @@ impl Chunk {
                 eprintln!("{name:16} {constant_idx:>4} '{constant}'", name = "OP_CLOSURE");
 
                 let function = constant.as_object().as_function();
-                for _ in 0..function.upvalues {
+                for _ in 0..(*function).upvalues {
                     let offset = idx;
 
                     idx += 1;
@@ -95,6 +95,7 @@ impl Chunk {
 
                 idx + 1
             }
+            op::CLOSE_UPVALUE => self.debug_op_simple("OP_CLOSE_UPVALUE", idx),
             byte => self.debug_op_simple(&format!("OP_UNKNOWN({byte:#X})"), idx),
         }
     }

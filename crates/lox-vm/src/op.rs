@@ -31,5 +31,6 @@ iota! {
             , LOOP
             , CALL
             , CLOSURE
+            , CLOSE_UPVALUE
             , RETURN
 }

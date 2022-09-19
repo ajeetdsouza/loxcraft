@@ -168,6 +168,7 @@ pub struct Function {
 #[derive(Debug)]
 pub struct Upvalue {
     pub location: *mut Value,
+    pub closed: Value,
 }
 
 /// Unsafe extension functions. Use only when you are certain what the

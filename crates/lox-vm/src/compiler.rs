@@ -365,13 +365,16 @@ impl Compiler {
     }
 
     fn get_variable(&mut self, name: &str, span: &Span, intern: &mut Intern) -> Result<()> {
-        if let Some(local_idx) = self.ctx.resolve_local(name, span)? {
+        if let Some(local_idx) = self.ctx.resolve_local(name, false, span)? {
+            println!("found local: {name}");
             self.emit_u8(op::GET_LOCAL, span);
             self.emit_u8(local_idx, span);
         } else if let Some(upvalue_idx) = self.ctx.resolve_upvalue(name, span)? {
+            println!("found upvalue: {name}");
             self.emit_u8(op::GET_UPVALUE, span);
             self.emit_u8(upvalue_idx, span);
         } else {
+            println!("found global: {name}");
             let (name, _) = intern.insert_str(name);
             self.emit_u8(op::GET_GLOBAL, span);
             self.emit_constant(name.into(), span)?;
@@ -380,9 +383,12 @@ impl Compiler {
     }
 
     fn set_variable(&mut self, name: &str, span: &Span, intern: &mut Intern) -> Result<()> {
-        if let Some(local_idx) = self.ctx.resolve_local(name, span)? {
+        if let Some(local_idx) = self.ctx.resolve_local(name, false, span)? {
             self.emit_u8(op::SET_LOCAL, span);
             self.emit_u8(local_idx, span);
+        } else if let Some(upvalue_idx) = self.ctx.resolve_upvalue(name, span)? {
+            self.emit_u8(op::SET_UPVALUE, span);
+            self.emit_u8(upvalue_idx, span);
         } else {
             let (name, _) = intern.insert_str(name);
             self.emit_u8(op::SET_GLOBAL, span);
@@ -401,7 +407,8 @@ impl Compiler {
             }
         }
 
-        let local = Local { name: name.to_string(), depth: self.ctx.scope_depth, is_initialized: false };
+        let local =
+            Local { name: name.to_string(), depth: self.ctx.scope_depth, is_initialized: false, is_captured: false };
         self.ctx.locals.push(local);
 
         if self.ctx.locals.len() > u8::MAX as usize {
@@ -465,8 +472,12 @@ impl Compiler {
         // Remove all locals that are no longer in scope.
         while let Some(local) = self.ctx.locals.last() {
             if local.depth > self.ctx.scope_depth {
+                if local.is_captured {
+                    self.emit_u8(op::CLOSE_UPVALUE, span);
+                } else {
+                    self.emit_u8(op::POP, span);
+                }
                 self.ctx.locals.pop();
-                self.emit_u8(op::POP, span);
             } else {
                 break;
             }
@@ -495,10 +506,13 @@ pub struct CompilerCtx {
 }
 
 impl CompilerCtx {
-    fn resolve_local(&self, name: &str, span: &Span) -> Result<Option<u8>> {
-        match self.locals.iter().enumerate().rfind(|(_, local)| local.name == name) {
+    fn resolve_local(&mut self, name: &str, capture: bool, span: &Span) -> Result<Option<u8>> {
+        match self.locals.iter_mut().enumerate().rfind(|(_, local)| local.name == name) {
             Some((idx, local)) => {
                 if local.is_initialized {
+                    if capture {
+                        local.is_captured = true;
+                    }
                     Ok(Some(idx as u8))
                 } else {
                     Err((NameError::AccessInsideInitializer { name: name.to_string() }.into(), span.clone()))
@@ -509,21 +523,27 @@ impl CompilerCtx {
     }
 
     fn resolve_upvalue(&mut self, name: &str, span: &Span) -> Result<Option<u8>> {
-        let local_idx = match &self.parent {
-            Some(parent) => parent.resolve_local(name, span)?,
+        let local_idx = match &mut self.parent {
+            Some(parent) => parent.resolve_local(name, true, span)?,
             None => return Ok(None),
         };
 
-        match local_idx {
-            Some(local_idx) => {
-                let upvalue_idx = self.add_upvalue(local_idx, true, span)?;
-                Ok(Some(upvalue_idx))
-            }
-            None => match &mut self.parent {
-                Some(parent) => parent.resolve_upvalue(name, span),
-                None => Ok(None),
-            },
-        }
+        if let Some(local_idx) = local_idx {
+            let upvalue_idx = self.add_upvalue(local_idx, true, span)?;
+            return Ok(Some(upvalue_idx));
+        };
+
+        let upvalue_idx = match &mut self.parent {
+            Some(parent) => parent.resolve_upvalue(name, span)?,
+            None => return Ok(None),
+        };
+
+        if let Some(upvalue_idx) = upvalue_idx {
+            let upvalue_idx = self.add_upvalue(upvalue_idx, false, span)?;
+            return Ok(Some(upvalue_idx));
+        };
+
+        Ok(None)
     }
 
     fn add_upvalue(&mut self, idx: u8, is_local: bool, span: &Span) -> Result<u8> {
@@ -532,15 +552,15 @@ impl CompilerCtx {
             Some(upvalue_idx) => upvalue_idx,
             None => {
                 self.upvalues.push(upvalue);
+                self.function.upvalues = self
+                    .function
+                    .upvalues
+                    .checked_add(1)
+                    .ok_or_else(|| (OverflowError::TooManyUpvalues.into(), span.clone()))?;
                 self.upvalues.len() - 1
             }
         };
 
-        self.function.upvalues = self
-            .function
-            .upvalues
-            .checked_add(1)
-            .ok_or_else(|| (OverflowError::TooManyUpvalues.into(), span.clone()))?;
         Ok(upvalue_idx as u8)
     }
 }
@@ -554,6 +574,7 @@ struct Local {
     /// variables.
     depth: usize,
     is_initialized: bool,
+    is_captured: bool,
 }
 
 #[derive(Debug, Eq, PartialEq)]
