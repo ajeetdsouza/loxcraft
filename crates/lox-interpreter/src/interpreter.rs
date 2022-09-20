@@ -140,7 +140,9 @@ impl<'stdout> Interpreter<'stdout> {
                     self.run_stmt(env, &while_.body)?;
                 }
             }
-            Stmt::Error => unreachable!("interpreter started despite parsing errors"),
+            Stmt::Error => {
+                unreachable!("interpreter started despite parsing errors")
+            }
         }
         Ok(())
     }

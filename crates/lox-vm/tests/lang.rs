@@ -8,6 +8,11 @@ use test_generator::test_resources;
 
 #[test_resources("./res/examples/**/*.lox")]
 fn lox(path: &str) {
+    // Miri is too slow to run this test.
+    if cfg!(miri) && path == "res/examples/limit/loop_too_large.lox" {
+        return;
+    }
+
     let path = Path::new("../..").join(path);
     let source = fs::read_to_string(path).unwrap();
     let mut exp_output = String::new();

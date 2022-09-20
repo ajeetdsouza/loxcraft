@@ -212,7 +212,7 @@ pub struct ExprVar {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Var {
     pub name: String,
-    /// This field is initialized as [`None`] by the parser, and is later filled
-    /// by the resolver.
+    /// This field is initialized as [`None`] by the parser, and is later
+    /// filled by the resolver.
     pub depth: Option<usize>,
 }

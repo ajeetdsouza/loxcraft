@@ -4,7 +4,7 @@ use lox_common::error::{OverflowError, Result};
 use lox_common::types::Span;
 
 use crate::op;
-use crate::value::{ObjectExt, Value};
+use crate::value::Value;
 
 #[derive(Debug, Default)]
 pub struct Chunk {
@@ -79,8 +79,8 @@ impl Chunk {
                 let constant = &self.constants[constant_idx as usize];
                 eprintln!("{name:16} {constant_idx:>4} '{constant}'", name = "OP_CLOSURE");
 
-                let function = constant.as_object().as_function();
-                for _ in 0..(*function).upvalues {
+                let function = unsafe { constant.object().function };
+                for _ in 0..unsafe { (*function).upvalues } {
                     let offset = idx;
 
                     idx += 1;

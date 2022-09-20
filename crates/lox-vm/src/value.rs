@@ -2,7 +2,7 @@ use std::fmt::{self, Display, Formatter};
 use std::hint;
 use std::ops::Not;
 
-use crate::chunk::Chunk;
+use crate::object::{Object, ObjectType};
 
 #[derive(Clone, Copy, Debug, Default)]
 pub enum Value {
@@ -11,11 +11,11 @@ pub enum Value {
     Boolean(bool),
     Native(Native),
     Number(f64),
-    Object(*mut Object),
+    Object(Object),
 }
 
 impl Value {
-    pub fn as_object(&self) -> *mut Object {
+    pub fn object(&self) -> Object {
         match self {
             Value::Object(object) => *object,
             _ => unsafe { hint::unreachable_unchecked() },
@@ -35,10 +35,10 @@ impl Value {
             Self::Boolean(_) => "bool",
             Self::Native(_) => "native",
             Self::Number(_) => "number",
-            Self::Object(object) => match &(unsafe { &**object }).type_ {
-                ObjectType::Closure(_) | ObjectType::Function(_) => "function",
-                ObjectType::String(_) => "string",
-                ObjectType::Upvalue(upvalue) => unsafe { *upvalue.location }.type_(),
+            Self::Object(object) => match unsafe { (*object.common).type_ } {
+                ObjectType::Closure | ObjectType::Function => "function",
+                ObjectType::String => "string",
+                ObjectType::Upvalue => unsafe { *(*object.upvalue).location }.type_(),
             },
         }
     }
@@ -56,7 +56,7 @@ impl Display for Value {
                 write!(f, "<native {}>", name)
             }
             Self::Number(number) => write!(f, "{number}"),
-            Self::Object(object) => write!(f, "{}", unsafe { &**object }),
+            Self::Object(object) => write!(f, "{object}"),
         }
     }
 }
@@ -79,9 +79,9 @@ impl From<Native> for Value {
     }
 }
 
-impl From<*mut Object> for Value {
-    fn from(object: *mut Object) -> Self {
-        Self::Object(object)
+impl<T: Into<Object>> From<T> for Value {
+    fn from(object: T) -> Self {
+        Self::Object(object.into())
     }
 }
 
@@ -110,104 +110,6 @@ pub enum Native {
     Clock,
 }
 
-pub struct Object {
-    pub is_marked: bool,
-    pub type_: ObjectType,
-}
-
-impl Display for Object {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match &self.type_ {
-            ObjectType::Closure(closure) => write!(f, "{}", unsafe { &*closure.function }),
-            ObjectType::Function(function) => match function.name.as_str() {
-                "" => write!(f, "<script>"),
-                name => write!(f, "<function {name}>"),
-            },
-            ObjectType::String(string) => write!(f, "{string}"),
-            ObjectType::Upvalue(_) => write!(f, "<upvalue>"),
-        }
-    }
-}
-
-macro_rules! derive_from_object {
-    ($object:tt, $type_:ty) => {
-        impl From<$type_> for Object {
-            fn from(object: $type_) -> Self {
-                Self { is_marked: false, type_: ObjectType::$object(object) }
-            }
-        }
-    };
-}
-
-derive_from_object!(Closure, Closure);
-derive_from_object!(Function, Function);
-derive_from_object!(String, &'static str);
-derive_from_object!(Upvalue, Upvalue);
-
-pub enum ObjectType {
-    Closure(Closure),
-    Function(Function),
-    String(&'static str),
-    Upvalue(Upvalue),
-}
-
-#[derive(Debug)]
-pub struct Closure {
-    pub function: *mut Object,
-    pub upvalues: Vec<*mut Object>,
-}
-
-#[derive(Debug)]
-pub struct Function {
-    pub name: *mut Object,
-    pub arity: u8,
-    pub upvalues: u8,
-    pub chunk: Chunk,
-}
-
-#[derive(Debug)]
-pub struct Upvalue {
-    pub location: *mut Value,
-    pub closed: Value,
-}
-
-/// Unsafe extension functions. Use only when you are certain what the
-/// underlying type is.
-pub trait ObjectExt {
-    fn as_function(self) -> &'static Function;
-    fn as_str(self) -> &'static str;
-    fn as_upvalue(self) -> &'static Upvalue;
-
-    fn type_(self) -> &'static ObjectType;
-}
-
-impl ObjectExt for *mut Object {
-    fn as_function(self) -> &'static Function {
-        match self.type_() {
-            ObjectType::Function(function) => function,
-            _ => unsafe { hint::unreachable_unchecked() },
-        }
-    }
-
-    fn as_str(self) -> &'static str {
-        match self.type_() {
-            ObjectType::String(string) => string,
-            _ => unsafe { hint::unreachable_unchecked() },
-        }
-    }
-
-    fn as_upvalue(self) -> &'static Upvalue {
-        match self.type_() {
-            ObjectType::Upvalue(upvalue) => upvalue,
-            _ => unsafe { hint::unreachable_unchecked() },
-        }
-    }
-
-    fn type_(self) -> &'static ObjectType {
-        unsafe { &(*self).type_ }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::mem;
@@ -217,6 +119,5 @@ mod tests {
     #[test]
     fn sizes() {
         assert_eq!(mem::size_of::<Value>(), 16);
-        assert_eq!(mem::size_of::<*mut Object>(), 8);
     }
 }

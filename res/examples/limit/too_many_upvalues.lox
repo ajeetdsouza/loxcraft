@@ -99,7 +99,7 @@ fun f() {
       vf0; vf1; vf2; vf3; vf4; vf5; vf6; vf7;
       vf8; vf9; vfa; vfb; vfc; vfd; vfe; vff;
 
-      // out: Error at 'oops': Too many closure variables in function.
+      // out: OverflowError: cannot use more than 256 closure variables in a function
       oops;
     }
   }

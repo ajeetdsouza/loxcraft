@@ -9,17 +9,18 @@ use rustc_hash::FxHasher;
 
 use crate::compiler::Compiler;
 use crate::intern::Intern;
+use crate::object::{Object, ObjectClosure, ObjectFunction, ObjectString, ObjectType, ObjectUpvalue};
 use crate::op;
-use crate::value::{Closure, Function, Native, Object, ObjectExt, ObjectType, Upvalue, Value};
+use crate::value::{Native, Value};
 
 const FRAMES_MAX: usize = 64;
 const STACK_MAX: usize = FRAMES_MAX * STACK_MAX_PER_FRAME;
 const STACK_MAX_PER_FRAME: usize = u8::MAX as usize + 1;
 
 pub struct VM {
-    pub globals: HashMap<*mut Object, Value, BuildHasherDefault<FxHasher>>,
-    pub objects: Vec<*mut Object>,
-    pub open_upvalues: Vec<*mut Object>,
+    pub globals: HashMap<*mut ObjectString, Value, BuildHasherDefault<FxHasher>>,
+    pub objects: Vec<Object>,
+    pub open_upvalues: Vec<*mut ObjectUpvalue>,
     pub intern: Intern,
 }
 
@@ -37,24 +38,27 @@ impl VM {
 
     pub fn run<W: io::Write>(&mut self, source: &str, stdout: &mut W) -> Result<(), Vec<ErrorS>> {
         let function = Compiler::compile(source, &mut self.intern)?;
-        if let Err(e) = self.run_function(function, stdout) {
+        if let Err(e) = unsafe { self.run_function(function, stdout) } {
             return Err(vec![e]);
         }
         Ok(())
     }
 
-    pub fn run_function<W: io::Write>(&mut self, function: Function, stdout: &mut W) -> Result<()> {
+    pub unsafe fn run_function<W: io::Write>(&mut self, function: *mut ObjectFunction, stdout: &mut W) -> Result<()> {
+        let closure = ObjectClosure::new(function, Vec::new());
+        let ip = (*(*closure).function).chunk.ops.as_ptr();
+
         // Accessing `stack` without bounds checking is safe because:
-        // - Each frame can store a theoretical maximum of `STACK_MAX_PER_FRAME` values on the stack.
-        // - The frame count can never exceed `MAX_FRAMES`, otherwise we throw a stack overflow error.
-        // - Thus, we can statically allocate a stack of size `STACK_MAX = FRAMES_MAX * STACK_MAX_PER_FRAME`
-        //   and we are guaranteed to never exceed this.
+        // - Each frame can store a theoretical maximum of `STACK_MAX_PER_FRAME`
+        //   values on the stack.
+        // - The frame count can never exceed `MAX_FRAMES`, otherwise we throw a
+        //   stack overflow error.
+        // - Thus, we can statically allocate a stack of size
+        //   `STACK_MAX = FRAMES_MAX * STACK_MAX_PER_FRAME` and we are
+        //   guaranteed to never exceed this size.
         let mut stack: [Value; STACK_MAX] = [Default::default(); STACK_MAX];
         let stack = stack.as_mut_ptr();
         let mut stack_top = stack;
-
-        let ip = function.chunk.ops.as_ptr();
-        let closure = &Closure { function: &mut function.into(), upvalues: Vec::new() };
 
         let mut frames: Vec<CallFrame> = Vec::with_capacity(256);
         let mut frame = CallFrame {
@@ -70,9 +74,12 @@ impl VM {
         /// Reads an instruction / byte from the current [`Chunk`].
         macro_rules! read_u8 {
             () => {{
-                let byte = unsafe { *frame.ip };
-                frame.ip = unsafe { frame.ip.add(1) };
-                byte
+                #[allow(unused_unsafe)]
+                {
+                    let byte = unsafe { *frame.ip };
+                    frame.ip = unsafe { frame.ip.add(1) };
+                    byte
+                }
             }};
         }
         /// Reads a 16-bit value from the current [`Chunk`].
@@ -87,33 +94,39 @@ impl VM {
         /// Pushes a value to the stack.
         macro_rules! push {
             ($value:expr) => {{
-                let value = $value;
-                unsafe { *stack_top = value };
-                stack_top = unsafe { stack_top.add(1) };
+                #[allow(unused_unsafe)]
+                {
+                    let value = $value;
+                    unsafe { *stack_top = value };
+                    stack_top = unsafe { stack_top.add(1) };
+                }
             }};
         }
         /// Pops a [`Value`] from the stack.
         macro_rules! pop {
             () => {{
-                stack_top = unsafe { stack_top.sub(1) };
-                debug_assert!(stack_top >= frame.stack);
-                unsafe { *stack_top }
+                #[allow(unused_unsafe)]
+                {
+                    stack_top = unsafe { stack_top.sub(1) };
+                    debug_assert!(stack_top >= frame.stack);
+                    unsafe { *stack_top }
+                }
             }};
         }
         /// Peeks at a [`Value`] from the stack.
         macro_rules! peek {
             () => {{
                 #[allow(unused_unsafe)]
-                unsafe {
-                    let stack_ptr = stack_top.sub(1);
+                {
+                    let stack_ptr = unsafe { stack_top.sub(1) };
                     debug_assert!(stack_ptr >= frame.stack);
                     stack_ptr
                 }
             }};
             ($n:expr) => {{
                 #[allow(unused_unsafe)]
-                unsafe {
-                    stack_top.sub($n + 1)
+                {
+                    unsafe { stack_top.sub($n + 1) }
                 }
             }};
         }
@@ -121,36 +134,47 @@ impl VM {
         /// Reads a [`Value`] from the current [`Chunk`].
         macro_rules! read_value {
             () => {{
-                let constant_idx = read_u8!() as usize;
-                *unsafe { frame.closure.function.as_function().chunk.constants.get_unchecked(constant_idx) }
+                #[allow(unused_unsafe)]
+                {
+                    let function = (*frame.closure).function;
+                    let constant_idx = read_u8!() as usize;
+                    *unsafe { (*function).chunk.constants.get_unchecked(constant_idx) }
+                }
             }};
         }
         /// Reads an [`Object`] from the current [`Chunk`].
         macro_rules! read_object {
             () => {{
-                let constant_idx = read_u8!() as usize;
-                let constant =
-                    *unsafe { frame.closure.function.as_function().chunk.constants.get_unchecked(constant_idx) };
-                match constant {
-                    Value::Object(object) => object,
-                    _ => unreachable(),
+                #[allow(unused_unsafe)]
+                {
+                    let function = (*frame.closure).function;
+                    let constant_idx = read_u8!() as usize;
+                    let constant = *unsafe { (*function).chunk.constants.get_unchecked(constant_idx) };
+                    match constant {
+                        Value::Object(object) => object,
+                        _ => unsafe { hint::unreachable_unchecked() },
+                    }
                 }
             }};
         }
 
         macro_rules! bail {
             ($error:expr) => {{
-                let idx =
-                    unsafe { frame.ip.offset_from(frame.closure.function.as_function().chunk.ops.as_ptr()) } as usize;
-                let span = &frame.closure.function.as_function().chunk.spans[idx];
-                return Err(($error.into(), span.clone()));
+                #[allow(unused_unsafe)]
+                {
+                    let function = (*frame.closure).function;
+                    let idx = unsafe { frame.ip.offset_from((*function).chunk.ops.as_ptr()) } as usize;
+                    let span = (*function).chunk.spans[idx].clone();
+                    return Err(($error.into(), span));
+                }
             }};
         }
 
         loop {
             if cfg!(feature = "debug-trace") {
-                let idx = unsafe { frame.ip.offset_from(frame.closure.function.as_function().chunk.ops.as_ptr()) };
-                frame.closure.function.as_function().chunk.debug_op(idx as usize);
+                let function = (*frame.closure).function;
+                let idx = unsafe { frame.ip.offset_from((*function).chunk.ops.as_ptr()) };
+                (*function).chunk.debug_op(idx as usize);
             }
 
             /// Binary operator that acts on any [`Value`].
@@ -201,38 +225,38 @@ impl VM {
                 }
                 op::GET_GLOBAL => {
                     let name = read_object!();
-                    match self.globals.get(&name) {
+                    match self.globals.get(&name.string) {
                         Some(value) => push!(*value),
                         None => {
-                            bail!(NameError::NotDefined { name: name.as_str().to_string() })
+                            bail!(NameError::NotDefined { name: (*name.string).value.to_string() })
                         }
                     }
                 }
                 op::DEFINE_GLOBAL => {
                     let name = read_object!();
                     let value = pop!();
-                    self.globals.insert(name, value);
+                    self.globals.insert(name.string, value);
                 }
                 op::SET_GLOBAL => {
                     let name = read_object!();
                     let value = peek!();
-                    match self.globals.entry(name) {
+                    match self.globals.entry(name.string) {
                         Entry::Occupied(mut entry) => entry.insert(unsafe { *value }),
                         Entry::Vacant(_) => {
-                            bail!(NameError::NotDefined { name: name.as_str().to_string() })
+                            bail!(NameError::NotDefined { name: (*name.string).value.to_string() })
                         }
                     };
                 }
                 op::GET_UPVALUE => {
                     let upvalue_idx = read_u8!() as usize;
-                    let upvalue = unsafe { frame.closure.upvalues.get_unchecked(upvalue_idx).as_upvalue() };
-                    let value = unsafe { *upvalue.location };
+                    let object = *unsafe { (*frame.closure).upvalues.get_unchecked(upvalue_idx) };
+                    let value = unsafe { *(*object).location };
                     push!(value);
                 }
                 op::SET_UPVALUE => {
                     let upvalue_idx = read_u8!() as usize;
-                    let upvalue = unsafe { frame.closure.upvalues.get_unchecked(upvalue_idx).as_upvalue() };
-                    let value = upvalue.location;
+                    let object = *unsafe { (*frame.closure).upvalues.get_unchecked(upvalue_idx) };
+                    let value = (*object).location;
                     unsafe { *value = *peek!() };
                 }
                 op::EQUAL => binary_op!(==),
@@ -247,11 +271,13 @@ impl VM {
                     let b = pop!();
                     let a = pop!();
                     match (a, b) {
-                        (Value::Number(n1), Value::Number(n2)) => push!((n1 + n2).into()),
+                        (Value::Number(n1), Value::Number(n2)) => {
+                            push!((n1 + n2).into())
+                        }
                         (Value::Object(o1), Value::Object(o2)) => {
-                            match (o1.type_(), o2.type_()) {
-                                (&ObjectType::String(a), &ObjectType::String(b)) => {
-                                    let string = [a, b].concat();
+                            match ((*o1.common).type_, (*o2.common).type_) {
+                                (ObjectType::String, ObjectType::String) => {
+                                    let string = [(*o1.string).value, (*o2.string).value].concat();
                                     let (object, inserted) = self.intern.insert_string(string);
                                     if inserted {
                                         // TODO: Add this back once we have a GC.
@@ -259,11 +285,13 @@ impl VM {
                                     };
                                     push!(object.into());
                                 }
-                                _ => bail!(TypeError::UnsupportedOperandInfix {
-                                    op: "+".to_string(),
-                                    lt_type: a.type_().to_string(),
-                                    rt_type: b.type_().to_string(),
-                                }),
+                                _ => {
+                                    bail!(TypeError::UnsupportedOperandInfix {
+                                        op: "+".to_string(),
+                                        lt_type: a.type_().to_string(),
+                                        rt_type: b.type_().to_string(),
+                                    })
+                                }
                             };
                         }
                         _ => bail!(TypeError::UnsupportedOperandInfix {
@@ -315,13 +343,14 @@ impl VM {
                     let arg_count = read_u8!();
                     let callee = unsafe { *peek!(arg_count as usize) };
                     match callee {
-                        Value::Object(object) => match object.type_() {
-                            ObjectType::Closure(closure) => {
-                                let function = closure.function.as_function();
-                                if arg_count != function.arity {
+                        Value::Object(object) => match (*object.common).type_ {
+                            ObjectType::Closure => {
+                                let closure = object.closure;
+                                let function = (*closure).function;
+                                if arg_count != (*function).arity {
                                     bail!(TypeError::ArityMismatch {
-                                        name: function.name.as_str().to_string(),
-                                        exp_args: function.arity,
+                                        name: (*(*function).name).value.to_string(),
+                                        exp_args: (*function).arity,
                                         got_args: arg_count,
                                     });
                                 }
@@ -332,7 +361,7 @@ impl VM {
                                 frames.push(frame);
                                 frame = CallFrame {
                                     closure,
-                                    ip: function.chunk.ops.as_ptr(),
+                                    ip: (*function).chunk.ops.as_ptr(),
                                     stack: peek!(arg_count as usize),
                                 };
                             }
@@ -365,9 +394,9 @@ impl VM {
                     }
                 }
                 op::CLOSURE => {
-                    let function = read_object!();
+                    let function = read_object!().function;
 
-                    let upvalue_count = function.as_function().upvalues as usize;
+                    let upvalue_count = (*function).upvalues as usize;
                     let mut upvalues = Vec::with_capacity(upvalue_count);
 
                     for _ in 0..upvalue_count {
@@ -376,15 +405,15 @@ impl VM {
 
                         let upvalue = if is_local != 0 {
                             let location = unsafe { frame.stack.add(upvalue_idx as usize) };
+                            println!("capture location: {}", location.offset_from(stack));
                             self.capture_upvalue(location)
                         } else {
-                            frame.closure.upvalues[upvalue_idx as usize]
+                            unsafe { *(*frame.closure).upvalues.get_unchecked(upvalue_idx as usize) }
                         };
                         upvalues.push(upvalue);
                     }
 
-                    let closure = Closure { function, upvalues };
-                    let closure = self.allocate(closure.into());
+                    let closure = ObjectClosure::new(function, upvalues).into();
                     push!(closure);
                 }
                 op::CLOSE_UPVALUE => {
@@ -404,7 +433,7 @@ impl VM {
                         None => break,
                     };
                 }
-                _ => unreachable(),
+                _ => unsafe { hint::unreachable_unchecked() },
             }
 
             if cfg!(feature = "debug-trace") {
@@ -422,63 +451,39 @@ impl VM {
         Ok(())
     }
 
-    fn allocate(&mut self, object: Object) -> Value {
-        let object = Box::into_raw(Box::new(object));
-        self.objects.push(object);
-        object.into()
-    }
-
-    fn capture_upvalue(&mut self, location: *mut Value) -> *mut Object {
-        for object in self.open_upvalues.iter().rev() {
-            // if object.as_upvalue().location < location {
-            //     break;
-            // }
-            if object.as_upvalue().location == location {
-                return *object;
+    fn capture_upvalue(&mut self, location: *mut Value) -> *mut ObjectUpvalue {
+        match self.open_upvalues.iter().find(|&&upvalue| unsafe { (*upvalue).location } == location) {
+            Some(&upvalue) => upvalue,
+            None => {
+                let upvalue = ObjectUpvalue::new(location);
+                self.open_upvalues.push(upvalue);
+                upvalue
             }
         }
-
-        let upvalue = Upvalue { location, closed: Value::Nil };
-        let upvalue = Box::into_raw(Box::new(upvalue.into()));
-        self.open_upvalues.push(upvalue);
-        self.open_upvalues.sort_unstable_by_key(|o| o.as_upvalue().location);
-
-        upvalue
     }
 
     fn close_upvalues(&mut self, last: *mut Value) {
-        // for upvalue in self.open_upvalues.iter_mut().rev() {
-        //     match &mut unsafe { &mut **upvalue }.type_ {
-        //         ObjectType::Upvalue(upvalue) => {
-        //             if upvalue.location < last {
-        //                 break;
-        //             }
-        //             println!("Closing upvalue: {:?}", upvalue);
-        //             upvalue.closed = unsafe { *upvalue.location };
-        //             upvalue.location = &mut upvalue.closed;
-        //         }
-        //         _ => unreachable(),
-        //     }
-        // }
+        for idx in (0..self.open_upvalues.len()).rev() {
+            let upvalue = *unsafe { self.open_upvalues.get_unchecked(idx) };
+            if last <= unsafe { (*upvalue).location } {
+                unsafe { (*upvalue).closed = *(*upvalue).location };
+                unsafe { (*upvalue).location = &mut (*upvalue).closed };
+                self.open_upvalues.swap_remove(idx);
+            }
+        }
     }
 }
 
 impl Drop for VM {
     fn drop(&mut self) {
-        for &object in &self.objects {
-            unsafe {
-                let _ = Box::from_raw(object);
-            }
+        for &_object in &self.objects {
+            // Garbage collection.
         }
     }
 }
 
-pub struct CallFrame<'a> {
-    closure: &'a Closure,
+pub struct CallFrame {
+    closure: *mut ObjectClosure,
     ip: *const u8,
     stack: *mut Value,
-}
-
-fn unreachable() -> ! {
-    if cfg!(debug_assertions) { unreachable!() } else { unsafe { hint::unreachable_unchecked() } }
 }

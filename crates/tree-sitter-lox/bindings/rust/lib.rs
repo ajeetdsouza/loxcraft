@@ -1,7 +1,9 @@
-//! This crate provides Lox language support for the [tree-sitter][] parsing library.
+//! This crate provides Lox language support for the [tree-sitter][] parsing
+//! library.
 //!
-//! Typically, you will use the [language][language func] function to add this language to a
-//! tree-sitter [Parser][], and then use the parser to parse some code:
+//! Typically, you will use the [language][language func] function to add this
+//! language to a tree-sitter [Parser][], and then use the parser to parse some
+//! code:
 //!
 //! ```
 //! let code = "";
@@ -34,8 +36,9 @@ pub fn language() -> Language {
 pub const NODE_TYPES: &str = include_str!("../../src/node-types.json");
 
 // Uncomment these to include any queries that this grammar contains
-
 pub const HIGHLIGHTS_QUERY: &str = include_str!("../../queries/highlights.scm");
+// ```
 // pub const INJECTIONS_QUERY: &str = include_str!("../../queries/injections.scm");
 // pub const LOCALS_QUERY: &str = include_str!("../../queries/locals.scm");
 // pub const TAGS_QUERY: &str = include_str!("../../queries/tags.scm");
+// ```

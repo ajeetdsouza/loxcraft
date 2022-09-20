@@ -5,10 +5,10 @@ use lox_common::error::{ErrorS, NameError, OverflowError, Result, SyntaxError};
 use lox_common::types::Span;
 use lox_syntax::ast::{Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Stmt, StmtS};
 
-use crate::chunk::Chunk;
 use crate::intern::Intern;
+use crate::object::ObjectFunction;
 use crate::op;
-use crate::value::{Function, Object, Value};
+use crate::value::Value;
 
 #[derive(Debug)]
 pub struct Compiler {
@@ -21,7 +21,7 @@ impl Compiler {
         let (name, _) = intern.insert_str("");
         Self {
             ctx: CompilerCtx {
-                function: Function { name, arity: 0, upvalues: 0, chunk: Chunk::default() },
+                function: ObjectFunction::new(name, 0),
                 type_: FunctionType::Script,
                 locals: Vec::new(),
                 upvalues: Vec::new(),
@@ -31,7 +31,7 @@ impl Compiler {
         }
     }
 
-    pub fn compile(source: &str, intern: &mut Intern) -> Result<Function, Vec<ErrorS>> {
+    pub fn compile(source: &str, intern: &mut Intern) -> Result<*mut ObjectFunction, Vec<ErrorS>> {
         let mut compiler = Self::new(intern);
         let program = lox_syntax::parse(source)?;
         for stmt in &program.stmts {
@@ -58,8 +58,8 @@ impl Compiler {
             Stmt::For(for_) => {
                 self.begin_scope();
 
-                // Evaluate init statement. This may be an expression, a variable
-                // assignment, or nothing at all.
+                // Evaluate init statement. This may be an expression, a
+                // variable assignment, or nothing at all.
                 if let Some(init) = &for_.init {
                     self.compile_stmt(init, intern)?;
                 }
@@ -104,7 +104,7 @@ impl Compiler {
                     fun.params.len().try_into().map_err(|_| (OverflowError::TooManyParams.into(), span.clone()))?;
 
                 let ctx = CompilerCtx {
-                    function: Function { name, arity, upvalues: 0, chunk: Chunk::default() },
+                    function: ObjectFunction::new(name, arity),
                     type_: FunctionType::Function,
                     locals: Vec::new(),
                     upvalues: Vec::new(),
@@ -125,20 +125,19 @@ impl Compiler {
                 }
 
                 // Implicit return at the end of the function.
-                if self.ctx.function.chunk.ops.last() != Some(&op::RETURN) {
+                if unsafe { (*self.ctx.function).chunk.ops.last() } != Some(&op::RETURN) {
                     self.emit_u8(op::NIL, span);
                     self.emit_u8(op::RETURN, span);
                 }
 
                 let (function, upvalues) = self.end_ctx();
-                let object: Object = function.into();
-                let value: Value = Box::into_raw(Box::new(object)).into();
+                let value = function.into();
                 self.emit_u8(op::CLOSURE, span);
                 self.emit_constant(value, span)?;
 
                 for upvalue in &upvalues {
-                    self.ctx.function.chunk.write_u8(upvalue.is_local as u8, span);
-                    self.ctx.function.chunk.write_u8(upvalue.idx, span);
+                    self.emit_u8(upvalue.is_local as u8, span);
+                    self.emit_u8(upvalue.idx as u8, span);
                 }
 
                 if self.ctx.scope_depth == 0 {
@@ -358,7 +357,7 @@ impl Compiler {
     }
 
     /// Pops the current ctx and extracts a [`Function`] from it.
-    fn end_ctx(&mut self) -> (Function, Vec<Upvalue>) {
+    fn end_ctx(&mut self) -> (*mut ObjectFunction, Vec<Upvalue>) {
         let parent = self.ctx.parent.take().expect("tried to end context in a script");
         let ctx = mem::replace(&mut self.ctx, *parent);
         (ctx.function, ctx.upvalues)
@@ -430,28 +429,30 @@ impl Compiler {
         self.emit_u8(opcode, span);
         self.emit_u8(0xFF, span);
         self.emit_u8(0xFF, span);
-        self.ctx.function.chunk.ops.len() - 2
+        unsafe { (*self.ctx.function).chunk.ops.len() - 2 }
     }
 
     /// Takes the index of the jump offset to be patched as input, and patches
     /// it to point to the current instruction.
     fn patch_jump(&mut self, offset_idx: usize, span: &Span) -> Result<()> {
         // The extra -2 is to account for the space taken by the offset.
-        let offset = self.ctx.function.chunk.ops.len() - 2 - offset_idx;
+        let offset = unsafe { (*self.ctx.function).chunk.ops.len() - 2 - offset_idx };
         let offset = offset.try_into().map_err(|_| (OverflowError::JumpTooLarge.into(), span.clone()))?;
         let offset = u16::to_le_bytes(offset);
-        [self.ctx.function.chunk.ops[offset_idx], self.ctx.function.chunk.ops[offset_idx + 1]] = offset;
+        unsafe {
+            [(*self.ctx.function).chunk.ops[offset_idx], (*self.ctx.function).chunk.ops[offset_idx + 1]] = offset
+        };
         Ok(())
     }
 
     fn start_loop(&self) -> usize {
-        self.ctx.function.chunk.ops.len()
+        unsafe { (*self.ctx.function).chunk.ops.len() }
     }
 
     fn emit_loop(&mut self, start_idx: usize, span: &Span) -> Result<()> {
-        // The extra +3 is to account for the space taken by the instruction
-        // and the offset.
-        let offset = self.ctx.function.chunk.ops.len() + 3 - start_idx;
+        // The extra +3 is to account for the space taken by the instruction and
+        // the offset.
+        let offset = unsafe { (*self.ctx.function).chunk.ops.len() } + 3 - start_idx;
         let offset = offset.try_into().map_err(|_| (OverflowError::JumpTooLarge.into(), span.clone()))?;
         let offset = u16::to_le_bytes(offset);
 
@@ -485,11 +486,11 @@ impl Compiler {
     }
 
     fn emit_u8(&mut self, byte: u8, span: &Span) {
-        self.ctx.function.chunk.write_u8(byte, span);
+        unsafe { (*self.ctx.function).chunk.write_u8(byte, span) };
     }
 
     fn emit_constant(&mut self, value: Value, span: &Span) -> Result<()> {
-        let constant_idx = self.ctx.function.chunk.write_constant(value, span)?;
+        let constant_idx = unsafe { (*self.ctx.function).chunk.write_constant(value, span)? };
         self.emit_u8(constant_idx, span);
         Ok(())
     }
@@ -497,7 +498,7 @@ impl Compiler {
 
 #[derive(Debug)]
 pub struct CompilerCtx {
-    function: Function,
+    function: *mut ObjectFunction,
     type_: FunctionType,
     locals: Vec<Local>,
     upvalues: Vec<Upvalue>,
@@ -552,11 +553,13 @@ impl CompilerCtx {
             Some(upvalue_idx) => upvalue_idx,
             None => {
                 self.upvalues.push(upvalue);
-                self.function.upvalues = self
-                    .function
-                    .upvalues
-                    .checked_add(1)
-                    .ok_or_else(|| (OverflowError::TooManyUpvalues.into(), span.clone()))?;
+                unsafe {
+                    (*self.function).upvalues = self
+                        .upvalues
+                        .len()
+                        .try_into()
+                        .map_err(|_| (OverflowError::TooManyUpvalues.into(), span.clone()))?
+                };
                 self.upvalues.len() - 1
             }
         };
