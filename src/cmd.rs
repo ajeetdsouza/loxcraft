@@ -10,12 +10,12 @@ use reedline::Signal;
 use crate::repl::{self, Prompt};
 
 #[derive(Clap, Debug)]
-#[clap(about, author, disable_help_subcommand = true, propagate_version = true, version)]
+#[command(about, author, disable_help_subcommand = true, propagate_version = true, version)]
 pub enum Cmd {
     Lsp,
     #[cfg(feature = "playground")]
     Playground {
-        #[clap(long, default_value = "3000")]
+        #[arg(long, default_value = "3000")]
         port: u16,
     },
     Repl,

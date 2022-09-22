@@ -18,7 +18,7 @@ impl Backend {
 
     pub async fn publish_diagnostics(&self, source: &str, uri: Url, version: Option<i32>) {
         let errors = match lox_syntax::parse(source) {
-            Ok(mut program) => lox_interpreter::resolve(&mut program),
+            Ok(mut program) => todo!(),
             Err(e) => e,
         };
         let diagnostics = report_err(source, &errors);

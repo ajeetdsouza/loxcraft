@@ -51,6 +51,9 @@ impl Compiler {
                 }
                 self.end_scope(span);
             }
+            Stmt::Class(class) => {
+                todo!();
+            }
             Stmt::Expr(expr) => {
                 self.compile_expr(&expr.value, intern)?;
                 self.emit_u8(op::POP, span);

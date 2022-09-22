@@ -8,6 +8,7 @@ use crate::value::Value;
 #[repr(C)]
 pub union Object {
     pub common: *mut ObjectCommon,
+    pub class: *mut ObjectClass,
     pub closure: *mut ObjectClosure,
     pub function: *mut ObjectFunction,
     pub string: *mut ObjectString,
@@ -24,6 +25,7 @@ impl Display for Object {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         unsafe {
             match (*self.common).type_ {
+                ObjectType::Class => write!(f, "<class {}>", (*(*self.class).name).value),
                 ObjectType::Closure => {
                     write!(f, "<function {}>", (*(*(*self.closure).function).name).value)
                 }
@@ -84,10 +86,18 @@ pub struct ObjectCommon {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(C)]
 pub enum ObjectType {
+    Class,
     Closure,
     Function,
     String,
     Upvalue,
+}
+
+#[repr(C)]
+pub struct ObjectClass {
+    pub type_: ObjectType,
+    pub is_marked: bool,
+    pub name: *mut ObjectString,
 }
 
 #[repr(C)]

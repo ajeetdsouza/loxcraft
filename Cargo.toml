@@ -9,7 +9,7 @@ keywords = ["compiler", "interpreter", "language", "lox", "vm"]
 license = "MIT"
 name = "lox"
 repository = "https://github.com/ajeetdsouza/lox"
-rust-version = "1.61"
+rust-version = "1.64"
 version = "0.1.0"
 
 [badges]
@@ -19,29 +19,60 @@ maintenance = { status = "actively-developed" }
 members = ["crates/*"]
 exclude = ["crates/lox-wasm"]
 
+[workspace.dependencies]
+anyhow = "1.0.52"
+cc = "1.0.73"
+clap = { version = "=4.0.0-rc.2", features = ["derive"] }
+codespan-reporting = "0.11.1"
+criterion = { version = "0.4.0", default-features = false }
+dirs = "4.0.0"
+hashbrown = { version = "0.12.3", default-features = false, features = [
+    "inline-more",
+] }
+http = "0.2.6"
+human-panic = "1.0.3"
+iota = "0.2.2"
+lalrpop = { version = "0.19.1", default-features = false }
+lalrpop-util = "0.19.6"
+logos = "0.12.0"
+mimalloc = { version = "0.1.27", default-features = false }
+nu-ansi-term = "0.46.0"
+pretty_assertions = "1.1.0"
+reedline = "0.11.0"
+rust-embed = { version = "6.4.0", features = ["include-exclude"] }
+rustc-hash = "1.1.0"
+termcolor = "1.1.3"
+test-generator = "0.3.0"
+thiserror = "1.0.32"
+tokio = { version = "1.17.0", features = ["io-std", "rt"] }
+tower-lsp = "0.17.0"
+tree-sitter = "0.20.4"
+tree-sitter-highlight = "0.20.1"
+warp = "0.3.2"
+webbrowser = "0.8.0"
+
 [features]
-default = ["playground"]
+default = []
 playground = ["dep:lox-playground"]
-profiling = ["lox-interpreter/profiling"]
+profiling = []
 debug-trace = ["lox-vm/debug-trace"]
 
 [dependencies]
-anyhow = "1.0.52"
-clap = { version = "3.2.0", features = ["derive"] }
-dirs = "4.0.0"
-human-panic = "1.0.3"
-lox-common = { path = "crates/lox-common" }
-lox-lsp = { path = "crates/lox-lsp" }
-lox-interpreter = { path = "crates/lox-interpreter" }
+anyhow.workspace = true
+clap.workspace = true
+dirs.workspace = true
+human-panic.workspace = true
+lox-common.path = "crates/lox-common"
+lox-lsp.path = "crates/lox-lsp"
 lox-playground = { path = "crates/lox-playground", optional = true }
-lox-syntax = { path = "crates/lox-syntax" }
-lox-vm = { path = "crates/lox-vm" }
-mimalloc = { version = "0.1.27", default-features = false }
-nu-ansi-term = "0.46.0"
-reedline = "0.10.0"
-termcolor = "1.1.3"
-tree-sitter-highlight = "0.20.1"
-tree-sitter-lox = { path = "crates/tree-sitter-lox", version = "*" }
+lox-syntax.path = "crates/lox-syntax"
+lox-vm.path = "crates/lox-vm"
+mimalloc.workspace = true
+nu-ansi-term.workspace = true
+reedline.workspace = true
+termcolor.workspace = true
+tree-sitter-highlight.workspace = true
+tree-sitter-lox.path = "crates/tree-sitter-lox"
 
 [[bench]]
 name = "lang"

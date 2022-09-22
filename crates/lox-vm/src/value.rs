@@ -36,6 +36,7 @@ impl Value {
             Self::Native(_) => "native",
             Self::Number(_) => "number",
             Self::Object(object) => match unsafe { (*object.common).type_ } {
+                ObjectType::Class => "class",
                 ObjectType::Closure | ObjectType::Function => "function",
                 ObjectType::String => "string",
                 ObjectType::Upvalue => unsafe { *(*object.upvalue).location }.type_(),
