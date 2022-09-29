@@ -1,11 +1,11 @@
+use std::fmt::{self, Display, Formatter};
+use std::io::{self, Write};
+
 use lox_common::error::report_err;
-use lox_interpreter::Interpreter;
+use lox_vm::VM;
 use serde::Serialize;
 use termcolor::{Color, WriteColor};
 use wasm_bindgen::prelude::*;
-
-use std::fmt::{self, Display, Formatter};
-use std::io::{self, Write};
 
 #[wasm_bindgen]
 #[allow(non_snake_case)]
@@ -13,15 +13,14 @@ pub fn loxRun(source: &str) {
     console_error_panic_hook::set_once();
 
     let mut output = Output::new();
-    let errors = Interpreter::new(&mut output).run(source);
-    if !errors.is_empty() {
+    if let Err(errors) = VM::new().run(source, &mut output) {
         let mut writer = HtmlWriter::new(&mut output);
         for e in errors.iter() {
             report_err(&mut writer, source, e);
         }
         postMessage(&Message::ExitFailure.to_string());
         return;
-    };
+    }
     postMessage(&Message::ExitSuccess.to_string());
 }
 

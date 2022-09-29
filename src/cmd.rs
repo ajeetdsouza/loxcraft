@@ -2,14 +2,14 @@ use std::fs;
 use std::io::{self, Write};
 
 use anyhow::{bail, Context, Result};
-use clap::Parser as Clap;
+use clap::Parser;
 use lox_common::error::ErrorS;
 use lox_vm::VM;
 use reedline::Signal;
 
 use crate::repl::{self, Prompt};
 
-#[derive(Clap, Debug)]
+#[derive(Debug, Parser)]
 #[command(about, author, disable_help_subcommand = true, propagate_version = true, version)]
 pub enum Cmd {
     Lsp,

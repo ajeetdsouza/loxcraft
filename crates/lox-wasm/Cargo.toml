@@ -7,19 +7,14 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-askama_escape = "0.10.3"
-console_error_panic_hook = "0.1.1"
+askama_escape.workspace = true
+console_error_panic_hook.workspace = true
 lox-common.path = "../lox-common"
-serde = { version = "1.0.136", features = ["derive"] }
-serde_json = "1.0.79"
-termcolor = "1.1.3"
-wasm-bindgen = "0.2.80"
-
-[workspace]
-
-[profile.release]
-codegen-units = 1
-lto = true
+lox-vm.path = "../lox-vm"
+serde.workspace = true
+serde_json.workspace = true
+termcolor.workspace = true
+wasm-bindgen.workspace = true
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = ['-Os']
