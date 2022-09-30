@@ -9,7 +9,7 @@ use rustc_hash::FxHasher;
 
 use crate::compiler::Compiler;
 use crate::intern::Intern;
-use crate::object::{Object, ObjectClosure, ObjectFunction, ObjectString, ObjectType, ObjectUpvalue};
+use crate::object::{Object, ObjectClass, ObjectClosure, ObjectFunction, ObjectString, ObjectType, ObjectUpvalue};
 use crate::op;
 use crate::value::{Native, Value};
 
@@ -38,15 +38,18 @@ impl VM {
 
     pub fn run<W: io::Write>(&mut self, source: &str, stdout: &mut W) -> Result<(), Vec<ErrorS>> {
         let function = Compiler::compile(source, &mut self.intern)?;
-        if let Err(e) = unsafe { self.run_function(function, stdout) } {
+        unsafe {
+            (*function).chunk.debug("main");
+        }
+        if let Err(e) = self.run_function(function, stdout) {
             return Err(vec![e]);
         }
         Ok(())
     }
 
-    pub unsafe fn run_function<W: io::Write>(&mut self, function: *mut ObjectFunction, stdout: &mut W) -> Result<()> {
+    pub fn run_function<W: io::Write>(&mut self, function: *mut ObjectFunction, stdout: &mut W) -> Result<()> {
         let closure = ObjectClosure::new(function, Vec::new());
-        let ip = (*(*closure).function).chunk.ops.as_ptr();
+        let ip = unsafe { (*(*closure).function).chunk.ops.as_ptr() };
 
         // Accessing `stack` without bounds checking is safe because:
         // - Each frame can store a theoretical maximum of `STACK_MAX_PER_FRAME`
@@ -136,7 +139,7 @@ impl VM {
             () => {{
                 #[allow(unused_unsafe)]
                 {
-                    let function = (*frame.closure).function;
+                    let function = unsafe { (*frame.closure).function };
                     let constant_idx = read_u8!() as usize;
                     *unsafe { (*function).chunk.constants.get_unchecked(constant_idx) }
                 }
@@ -147,7 +150,7 @@ impl VM {
             () => {{
                 #[allow(unused_unsafe)]
                 {
-                    let function = (*frame.closure).function;
+                    let function = unsafe { (*frame.closure).function };
                     let constant_idx = read_u8!() as usize;
                     let constant = *unsafe { (*function).chunk.constants.get_unchecked(constant_idx) };
                     match constant {
@@ -162,9 +165,9 @@ impl VM {
             ($error:expr) => {{
                 #[allow(unused_unsafe)]
                 {
-                    let function = (*frame.closure).function;
+                    let function = unsafe { (*frame.closure).function };
                     let idx = unsafe { frame.ip.offset_from((*function).chunk.ops.as_ptr()) } as usize;
-                    let span = (*function).chunk.spans[idx].clone();
+                    let span = unsafe { (*function).chunk.spans[idx].clone() };
                     return Err(($error.into(), span));
                 }
             }};
@@ -172,9 +175,9 @@ impl VM {
 
         loop {
             if cfg!(feature = "debug-trace") {
-                let function = (*frame.closure).function;
+                let function = unsafe { (*frame.closure).function };
                 let idx = unsafe { frame.ip.offset_from((*function).chunk.ops.as_ptr()) };
-                (*function).chunk.debug_op(idx as usize);
+                unsafe { (*function).chunk.debug_op(idx as usize) };
             }
 
             /// Binary operator that acts on any [`Value`].
@@ -225,25 +228,25 @@ impl VM {
                 }
                 op::GET_GLOBAL => {
                     let name = read_object!();
-                    match self.globals.get(&name.string) {
+                    match self.globals.get(unsafe { &name.string }) {
                         Some(value) => push!(*value),
                         None => {
-                            bail!(NameError::NotDefined { name: (*name.string).value.to_string() })
+                            bail!(NameError::NotDefined { name: unsafe { (*name.string).value.to_string() } })
                         }
                     }
                 }
                 op::DEFINE_GLOBAL => {
                     let name = read_object!();
                     let value = pop!();
-                    self.globals.insert(name.string, value);
+                    self.globals.insert(unsafe { name.string }, value);
                 }
                 op::SET_GLOBAL => {
                     let name = read_object!();
                     let value = peek!();
-                    match self.globals.entry(name.string) {
+                    match self.globals.entry(unsafe { name.string }) {
                         Entry::Occupied(mut entry) => entry.insert(unsafe { *value }),
                         Entry::Vacant(_) => {
-                            bail!(NameError::NotDefined { name: (*name.string).value.to_string() })
+                            bail!(NameError::NotDefined { name: unsafe { (*name.string).value.to_string() } })
                         }
                     };
                 }
@@ -256,7 +259,7 @@ impl VM {
                 op::SET_UPVALUE => {
                     let upvalue_idx = read_u8!() as usize;
                     let object = *unsafe { (*frame.closure).upvalues.get_unchecked(upvalue_idx) };
-                    let value = (*object).location;
+                    let value = unsafe { (*object).location };
                     unsafe { *value = *peek!() };
                 }
                 op::EQUAL => binary_op!(==),
@@ -275,9 +278,9 @@ impl VM {
                             push!((n1 + n2).into())
                         }
                         (Value::Object(o1), Value::Object(o2)) => {
-                            match ((*o1.common).type_, (*o2.common).type_) {
+                            match unsafe { ((*o1.common).type_, (*o2.common).type_) } {
                                 (ObjectType::String, ObjectType::String) => {
-                                    let string = [(*o1.string).value, (*o2.string).value].concat();
+                                    let string = unsafe { [(*o1.string).value, (*o2.string).value] }.concat();
                                     let (object, inserted) = self.intern.insert_string(string);
                                     if inserted {
                                         // TODO: Add this back once we have a GC.
@@ -343,14 +346,14 @@ impl VM {
                     let arg_count = read_u8!();
                     let callee = unsafe { *peek!(arg_count as usize) };
                     match callee {
-                        Value::Object(object) => match (*object.common).type_ {
+                        Value::Object(object) => match unsafe { (*object.common).type_ } {
                             ObjectType::Closure => {
-                                let closure = object.closure;
-                                let function = (*closure).function;
-                                if arg_count != (*function).arity {
+                                let closure = unsafe { object.closure };
+                                let function = unsafe { (*closure).function };
+                                if arg_count != unsafe { (*function).arity } {
                                     bail!(TypeError::ArityMismatch {
-                                        name: (*(*function).name).value.to_string(),
-                                        exp_args: (*function).arity,
+                                        name: unsafe { (*(*function).name).value.to_string() },
+                                        exp_args: unsafe { (*function).arity },
                                         got_args: arg_count,
                                     });
                                 }
@@ -361,7 +364,7 @@ impl VM {
                                 frames.push(frame);
                                 frame = CallFrame {
                                     closure,
-                                    ip: (*function).chunk.ops.as_ptr(),
+                                    ip: unsafe { (*function).chunk.ops.as_ptr() },
                                     stack: peek!(arg_count as usize),
                                 };
                             }
@@ -394,9 +397,9 @@ impl VM {
                     }
                 }
                 op::CLOSURE => {
-                    let function = read_object!().function;
+                    let function = unsafe { read_object!().function };
 
-                    let upvalue_count = (*function).upvalues as usize;
+                    let upvalue_count = unsafe { (*function).upvalues } as usize;
                     let mut upvalues = Vec::with_capacity(upvalue_count);
 
                     for _ in 0..upvalue_count {
@@ -405,7 +408,7 @@ impl VM {
 
                         let upvalue = if is_local != 0 {
                             let location = unsafe { frame.stack.add(upvalue_idx as usize) };
-                            println!("capture location: {}", location.offset_from(stack));
+                            println!("capture location: {}", unsafe { location.offset_from(stack) });
                             self.capture_upvalue(location)
                         } else {
                             unsafe { *(*frame.closure).upvalues.get_unchecked(upvalue_idx as usize) }
@@ -432,6 +435,11 @@ impl VM {
                         }
                         None => break,
                     };
+                }
+                op::CLASS => {
+                    let name = unsafe { read_object!().string };
+                    let class = ObjectClass::new(name).into();
+                    push!(class);
                 }
                 _ => unsafe { hint::unreachable_unchecked() },
             }

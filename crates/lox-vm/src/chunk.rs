@@ -71,7 +71,6 @@ impl Chunk {
             op::JUMP => self.debug_op_jump("OP_JUMP", idx, true),
             op::JUMP_IF_FALSE => self.debug_op_jump("OP_JUMP_IF_FALSE", idx, true),
             op::LOOP => self.debug_op_jump("OP_LOOP", idx, false),
-            op::RETURN => self.debug_op_simple("OP_RETURN", idx),
             op::CALL => self.debug_op_byte("OP_CALL", idx),
             op::CLOSURE => {
                 let mut idx = idx + 1;
@@ -96,6 +95,8 @@ impl Chunk {
                 idx + 1
             }
             op::CLOSE_UPVALUE => self.debug_op_simple("OP_CLOSE_UPVALUE", idx),
+            op::RETURN => self.debug_op_simple("OP_RETURN", idx),
+            op::CLASS => self.debug_op_constant("OP_CONSTANT", idx),
             byte => self.debug_op_simple(&format!("OP_UNKNOWN({byte:#X})"), idx),
         }
     }

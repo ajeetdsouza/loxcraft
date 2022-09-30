@@ -41,6 +41,12 @@ impl Display for Object {
 
 impl Eq for Object {}
 
+impl From<*mut ObjectClass> for Object {
+    fn from(class: *mut ObjectClass) -> Self {
+        Self { class }
+    }
+}
+
 impl From<*mut ObjectClosure> for Object {
     fn from(closure: *mut ObjectClosure) -> Self {
         Self { closure }
@@ -98,6 +104,13 @@ pub struct ObjectClass {
     pub type_: ObjectType,
     pub is_marked: bool,
     pub name: *mut ObjectString,
+}
+
+impl ObjectClass {
+    pub fn new(name: *mut ObjectString) -> *mut Self {
+        let class = ObjectClass { type_: ObjectType::Closure, is_marked: false, name };
+        Box::into_raw(Box::new(class))
+    }
 }
 
 #[repr(C)]

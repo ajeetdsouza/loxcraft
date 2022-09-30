@@ -33,4 +33,5 @@ iota! {
             , CLOSURE
             , CLOSE_UPVALUE
             , RETURN
+            , CLASS
 }

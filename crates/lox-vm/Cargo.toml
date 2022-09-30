@@ -17,6 +17,5 @@ lox-syntax.path = "../lox-syntax"
 rustc-hash.workspace = true
 
 [dev-dependencies]
-criterion.workspace = true
 pretty_assertions.workspace = true
 test-generator.workspace = true

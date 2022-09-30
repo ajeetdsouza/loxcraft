@@ -78,6 +78,9 @@ termcolor.workspace = true
 tree-sitter-highlight.workspace = true
 tree-sitter-lox.path = "crates/tree-sitter-lox"
 
+[dev-dependencies]
+criterion.workspace = true
+
 [[bench]]
 name = "lang"
 harness = false
