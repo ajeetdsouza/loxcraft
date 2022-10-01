@@ -10,7 +10,13 @@ use reedline::Signal;
 use crate::repl::{self, Prompt};
 
 #[derive(Debug, Parser)]
-#[command(about, author, disable_help_subcommand = true, propagate_version = true, version)]
+#[command(
+    about,
+    author,
+    disable_help_subcommand = true,
+    propagate_version = true,
+    version
+)]
 pub enum Cmd {
     Lsp,
     #[cfg(feature = "playground")]
@@ -37,7 +43,7 @@ impl Cmd {
 }
 
 pub fn repl() -> Result<()> {
-    let mut vm = VM::new();
+    let mut vm = VM::default();
     let mut editor = repl::editor().context("could not start REPL")?;
     let stdout = &mut io::stdout().lock();
 
@@ -64,8 +70,9 @@ pub fn repl() -> Result<()> {
 }
 
 fn run(path: &str) -> Result<()> {
-    let source = fs::read_to_string(&path).with_context(|| format!("could not read file: {}", path))?;
-    let mut vm = VM::new();
+    let source = fs::read_to_string(&path)
+        .with_context(|| format!("could not read file: {}", path))?;
+    let mut vm = VM::default();
     let stdout = &mut io::stdout().lock();
     if let Err(e) = vm.run(&source, stdout) {
         report_err(&source, e);
@@ -79,5 +86,7 @@ fn report_err(source: &str, errors: Vec<ErrorS>) {
     for err in errors {
         lox_common::error::report_err(&mut buffer, source, &err);
     }
-    io::stderr().write_all(buffer.as_slice()).expect("failed to write to stderr");
+    io::stderr()
+        .write_all(buffer.as_slice())
+        .expect("failed to write to stderr");
 }

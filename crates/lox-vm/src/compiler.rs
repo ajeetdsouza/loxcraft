@@ -1,11 +1,15 @@
 use std::convert::TryInto;
 use std::mem;
 
-use lox_common::error::{ErrorS, NameError, OverflowError, Result, SyntaxError};
+use lox_common::error::{
+    ErrorS, NameError, OverflowError, Result, SyntaxError,
+};
 use lox_common::types::Span;
-use lox_syntax::ast::{Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Stmt, StmtS};
+use lox_syntax::ast::{
+    Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Stmt, StmtS,
+};
 
-use crate::intern::Intern;
+use crate::gc::{Gc, GcAlloc};
 use crate::object::ObjectFunction;
 use crate::op;
 use crate::value::Value;
@@ -17,11 +21,11 @@ pub struct Compiler {
 
 impl Compiler {
     /// Creates a compiler for a new script.
-    pub fn new(intern: &mut Intern) -> Self {
-        let (name, _) = intern.insert_str("");
+    pub fn new(gc: &mut Gc) -> Self {
+        let name = gc.alloc("");
         Self {
             ctx: CompilerCtx {
-                function: ObjectFunction::new(name, 0),
+                function: gc.alloc(ObjectFunction::new(name, 0)),
                 type_: FunctionType::Script,
                 locals: Vec::new(),
                 upvalues: Vec::new(),
@@ -31,31 +35,38 @@ impl Compiler {
         }
     }
 
-    pub fn compile(source: &str, intern: &mut Intern) -> Result<*mut ObjectFunction, Vec<ErrorS>> {
-        let mut compiler = Self::new(intern);
+    pub fn compile(
+        source: &str,
+        gc: &mut Gc,
+    ) -> Result<*mut ObjectFunction, Vec<ErrorS>> {
+        let mut compiler = Self::new(gc);
         let program = lox_syntax::parse(source)?;
         for stmt in &program.stmts {
-            compiler.compile_stmt(stmt, intern).map_err(|e| vec![e])?;
+            compiler.compile_stmt(stmt, gc).map_err(|e| vec![e])?;
         }
         compiler.emit_u8(op::NIL, &(0..0));
         compiler.emit_u8(op::RETURN, &(0..0));
         Ok(compiler.ctx.function)
     }
 
-    fn compile_stmt(&mut self, (stmt, span): &StmtS, intern: &mut Intern) -> Result<()> {
+    fn compile_stmt(
+        &mut self,
+        (stmt, span): &StmtS,
+        gc: &mut Gc,
+    ) -> Result<()> {
         match stmt {
             Stmt::Block(block) => {
                 self.begin_scope();
                 for stmt in &block.stmts {
-                    self.compile_stmt(stmt, intern)?;
+                    self.compile_stmt(stmt, gc)?;
                 }
                 self.end_scope(span);
             }
-            Stmt::Class(class) => {
+            Stmt::Class(_class) => {
                 todo!();
             }
             Stmt::Expr(expr) => {
-                self.compile_expr(&expr.value, intern)?;
+                self.compile_expr(&expr.value, gc)?;
                 self.emit_u8(op::POP, span);
             }
             Stmt::For(for_) => {
@@ -64,7 +75,7 @@ impl Compiler {
                 // Evaluate init statement. This may be an expression, a
                 // variable assignment, or nothing at all.
                 if let Some(init) = &for_.init {
-                    self.compile_stmt(init, intern)?;
+                    self.compile_stmt(init, gc)?;
                 }
 
                 // START:
@@ -73,7 +84,7 @@ impl Compiler {
                 // Evaluate the condition, if it exists.
                 let mut jump_to_end = None;
                 if let Some(cond) = &for_.cond {
-                    self.compile_expr(cond, intern)?;
+                    self.compile_expr(cond, gc)?;
                     // If the condition is false, go to END.
                     jump_to_end = Some(self.emit_jump(op::JUMP_IF_FALSE, span));
                     // Discard the condition.
@@ -81,11 +92,11 @@ impl Compiler {
                 }
 
                 // Evaluate the body.
-                self.compile_stmt(&for_.body, intern)?;
+                self.compile_stmt(&for_.body, gc)?;
 
                 // Evaluate the increment expression, if it exists.
                 if let Some(incr) = &for_.incr {
-                    self.compile_expr(incr, intern)?;
+                    self.compile_expr(incr, gc)?;
                     // Discard the result of the expression.
                     self.emit_u8(op::POP, span);
                 }
@@ -102,12 +113,13 @@ impl Compiler {
                 self.end_scope(span);
             }
             Stmt::Fun(fun) => {
-                let (name, _) = intern.insert_str(&fun.name);
-                let arity =
-                    fun.params.len().try_into().map_err(|_| (OverflowError::TooManyParams.into(), span.clone()))?;
+                let name = gc.alloc(&fun.name);
+                let arity = fun.params.len().try_into().map_err(|_| {
+                    (OverflowError::TooManyParams.into(), span.clone())
+                })?;
 
                 let ctx = CompilerCtx {
-                    function: ObjectFunction::new(name, arity),
+                    function: gc.alloc(ObjectFunction::new(name, arity)),
                     type_: FunctionType::Function,
                     locals: Vec::new(),
                     upvalues: Vec::new(),
@@ -124,11 +136,13 @@ impl Compiler {
                 }
 
                 for stmt in &fun.body.stmts {
-                    self.compile_stmt(stmt, intern)?;
+                    self.compile_stmt(stmt, gc)?;
                 }
 
                 // Implicit return at the end of the function.
-                if unsafe { (*self.ctx.function).chunk.ops.last() } != Some(&op::RETURN) {
+                if unsafe { (*self.ctx.function).chunk.ops.last() }
+                    != Some(&op::RETURN)
+                {
                     self.emit_u8(op::NIL, span);
                     self.emit_u8(op::RETURN, span);
                 }
@@ -152,13 +166,13 @@ impl Compiler {
                 }
             }
             Stmt::If(if_) => {
-                self.compile_expr(&if_.cond, intern)?;
+                self.compile_expr(&if_.cond, gc)?;
                 // If the condition is false, go to ELSE.
                 let jump_to_else = self.emit_jump(op::JUMP_IF_FALSE, span);
                 // Discard the condition.
                 self.emit_u8(op::POP, span);
                 // Evaluate the if branch.
-                self.compile_stmt(&if_.then, intern)?;
+                self.compile_stmt(&if_.then, gc)?;
                 // Go to END.
                 let jump_to_end = self.emit_jump(op::JUMP, span);
 
@@ -166,23 +180,26 @@ impl Compiler {
                 self.patch_jump(jump_to_else, span)?;
                 self.emit_u8(op::POP, span); // Discard the condition.
                 if let Some(else_) = &if_.else_ {
-                    self.compile_stmt(&else_, intern)?;
+                    self.compile_stmt(else_, gc)?;
                 }
 
                 // END:
                 self.patch_jump(jump_to_end, span)?;
             }
             Stmt::Print(print) => {
-                self.compile_expr(&print.value, intern)?;
+                self.compile_expr(&print.value, gc)?;
                 self.emit_u8(op::PRINT, span);
             }
             Stmt::Return(return_) => {
                 if self.ctx.type_ == FunctionType::Script {
-                    return Err((SyntaxError::ReturnOutsideFunction.into(), span.clone()));
+                    return Err((
+                        SyntaxError::ReturnOutsideFunction.into(),
+                        span.clone(),
+                    ));
                 }
 
                 match &return_.value {
-                    Some(value) => self.compile_expr(value, intern)?,
+                    Some(value) => self.compile_expr(value, gc)?,
                     None => self.emit_u8(op::NIL, span),
                 };
                 self.emit_u8(op::RETURN, span);
@@ -190,9 +207,9 @@ impl Compiler {
             Stmt::Var(var) => {
                 let name = &var.var.name;
                 if self.ctx.scope_depth == 0 {
-                    let (name, _) = intern.insert_str(name);
+                    let name = gc.alloc(name);
                     match &var.value {
-                        Some(value) => self.compile_expr(value, intern)?,
+                        Some(value) => self.compile_expr(value, gc)?,
                         None => self.emit_u8(op::NIL, span),
                     }
                     self.emit_u8(op::DEFINE_GLOBAL, span);
@@ -200,7 +217,7 @@ impl Compiler {
                 } else {
                     self.declare_local(name, span)?;
                     match &var.value {
-                        Some(value) => self.compile_expr(value, intern)?,
+                        Some(value) => self.compile_expr(value, gc)?,
                         None => self.emit_u8(op::NIL, span),
                     }
                     self.define_local();
@@ -211,13 +228,13 @@ impl Compiler {
                 let loop_start = self.start_loop();
 
                 // Evaluate condition.
-                self.compile_expr(&while_.cond, intern)?;
+                self.compile_expr(&while_.cond, gc)?;
                 // If the condition is false, go to END.
                 let jump_to_end = self.emit_jump(op::JUMP_IF_FALSE, span);
                 // Discard the condition.
                 self.emit_u8(op::POP, span);
                 // Evaluate the body of the loop.
-                self.compile_stmt(&while_.body, intern)?;
+                self.compile_stmt(&while_.body, gc)?;
                 // Go to START.
                 self.emit_loop(loop_start, span)?;
 
@@ -232,73 +249,79 @@ impl Compiler {
     }
 
     /// Compute an expression and push it onto the stack.
-    fn compile_expr(&mut self, (expr, span): &ExprS, intern: &mut Intern) -> Result<()> {
+    fn compile_expr(
+        &mut self,
+        (expr, span): &ExprS,
+        gc: &mut Gc,
+    ) -> Result<()> {
         match expr {
             Expr::Assign(assign) => {
-                self.compile_expr(&assign.value, intern)?;
-                self.set_variable(&assign.var.name, span, intern)?;
+                self.compile_expr(&assign.value, gc)?;
+                self.set_variable(&assign.var.name, span, gc)?;
             }
             Expr::Call(call) => {
-                let arg_count =
-                    call.args.len().try_into().map_err(|_| (OverflowError::TooManyArgs.into(), span.clone()))?;
+                let arg_count = call.args.len().try_into().map_err(|_| {
+                    (OverflowError::TooManyArgs.into(), span.clone())
+                })?;
 
-                self.compile_expr(&call.callee, intern)?;
+                self.compile_expr(&call.callee, gc)?;
                 for arg in &call.args {
-                    self.compile_expr(arg, intern)?;
+                    self.compile_expr(arg, gc)?;
                 }
 
                 self.emit_u8(op::CALL, span);
                 self.emit_u8(arg_count, span);
             }
             Expr::Infix(infix) => {
-                self.compile_expr(&infix.lt, intern)?;
+                self.compile_expr(&infix.lt, gc)?;
                 match infix.op {
                     OpInfix::Add => {
-                        self.compile_expr(&infix.rt, intern)?;
+                        self.compile_expr(&infix.rt, gc)?;
                         self.emit_u8(op::ADD, span);
                     }
                     OpInfix::Subtract => {
-                        self.compile_expr(&infix.rt, intern)?;
+                        self.compile_expr(&infix.rt, gc)?;
                         self.emit_u8(op::SUBTRACT, span);
                     }
                     OpInfix::Multiply => {
-                        self.compile_expr(&infix.rt, intern)?;
+                        self.compile_expr(&infix.rt, gc)?;
                         self.emit_u8(op::MULTIPLY, span);
                     }
                     OpInfix::Divide => {
-                        self.compile_expr(&infix.rt, intern)?;
+                        self.compile_expr(&infix.rt, gc)?;
                         self.emit_u8(op::DIVIDE, span);
                     }
                     OpInfix::Less => {
-                        self.compile_expr(&infix.rt, intern)?;
+                        self.compile_expr(&infix.rt, gc)?;
                         self.emit_u8(op::LESS, span);
                     }
                     OpInfix::LessEqual => {
-                        self.compile_expr(&infix.rt, intern)?;
+                        self.compile_expr(&infix.rt, gc)?;
                         self.emit_u8(op::LESS_EQUAL, span);
                     }
                     OpInfix::Greater => {
-                        self.compile_expr(&infix.rt, intern)?;
+                        self.compile_expr(&infix.rt, gc)?;
                         self.emit_u8(op::GREATER, span);
                     }
                     OpInfix::GreaterEqual => {
-                        self.compile_expr(&infix.rt, intern)?;
+                        self.compile_expr(&infix.rt, gc)?;
                         self.emit_u8(op::GREATER_EQUAL, span);
                     }
                     OpInfix::Equal => {
-                        self.compile_expr(&infix.rt, intern)?;
+                        self.compile_expr(&infix.rt, gc)?;
                         self.emit_u8(op::EQUAL, span);
                     }
                     OpInfix::NotEqual => {
-                        self.compile_expr(&infix.rt, intern)?;
+                        self.compile_expr(&infix.rt, gc)?;
                         self.emit_u8(op::NOT_EQUAL, span);
                     }
                     OpInfix::LogicAnd => {
                         // If the first expression is false, go to END.
-                        let jump_to_end = self.emit_jump(op::JUMP_IF_FALSE, span);
+                        let jump_to_end =
+                            self.emit_jump(op::JUMP_IF_FALSE, span);
                         // Otherwise, evaluate the right expression.
                         self.emit_u8(op::POP, span);
-                        self.compile_expr(&infix.rt, intern)?;
+                        self.compile_expr(&infix.rt, gc)?;
 
                         // END:
                         // Short-circuit to the end.
@@ -306,7 +329,8 @@ impl Compiler {
                     }
                     OpInfix::LogicOr => {
                         // If the first expression is false, go to RIGHT_EXPR.
-                        let jump_to_right_expr = self.emit_jump(op::JUMP_IF_FALSE, span);
+                        let jump_to_right_expr =
+                            self.emit_jump(op::JUMP_IF_FALSE, span);
                         // Otherwise, go to END.
                         let jump_to_end = self.emit_jump(op::JUMP, span);
 
@@ -315,7 +339,7 @@ impl Compiler {
                         // Discard the left value.
                         self.emit_u8(op::POP, span);
                         // Evaluate the right expression.
-                        self.compile_expr(&infix.rt, intern)?;
+                        self.compile_expr(&infix.rt, gc)?;
 
                         // END:
                         // Short-circuit to the end.
@@ -333,21 +357,21 @@ impl Compiler {
                     self.emit_constant(value, span)?;
                 }
                 ExprLiteral::String(string) => {
-                    let (object, _) = intern.insert_str(string);
-                    unsafe { (*object).is_marked = true };
-                    let value = object.into();
+                    let string = gc.alloc(string);
+                    unsafe { (*string).is_marked = true };
+                    let value = string.into();
                     self.emit_u8(op::CONSTANT, span);
                     self.emit_constant(value, span)?;
                 }
             },
             Expr::Prefix(prefix) => {
-                self.compile_expr(&prefix.rt, intern)?;
+                self.compile_expr(&prefix.rt, gc)?;
                 match prefix.op {
                     OpPrefix::Negate => self.emit_u8(op::NEGATE, span),
                     OpPrefix::Not => self.emit_u8(op::NOT, span),
                 };
             }
-            Expr::Var(var) => self.get_variable(&var.var.name, span, intern)?,
+            Expr::Var(var) => self.get_variable(&var.var.name, span, gc)?,
             _ => unimplemented!(),
         }
         Ok(())
@@ -361,38 +385,53 @@ impl Compiler {
 
     /// Pops the current ctx and extracts a [`Function`] from it.
     fn end_ctx(&mut self) -> (*mut ObjectFunction, Vec<Upvalue>) {
-        let parent = self.ctx.parent.take().expect("tried to end context in a script");
+        let parent =
+            self.ctx.parent.take().expect("tried to end context in a script");
         let ctx = mem::replace(&mut self.ctx, *parent);
         (ctx.function, ctx.upvalues)
     }
 
-    fn get_variable(&mut self, name: &str, span: &Span, intern: &mut Intern) -> Result<()> {
+    fn get_variable(
+        &mut self,
+        name: &str,
+        span: &Span,
+        gc: &mut Gc,
+    ) -> Result<()> {
         if let Some(local_idx) = self.ctx.resolve_local(name, false, span)? {
             println!("found local: {name}");
             self.emit_u8(op::GET_LOCAL, span);
             self.emit_u8(local_idx, span);
-        } else if let Some(upvalue_idx) = self.ctx.resolve_upvalue(name, span)? {
+        } else if let Some(upvalue_idx) =
+            self.ctx.resolve_upvalue(name, span)?
+        {
             println!("found upvalue: {name}");
             self.emit_u8(op::GET_UPVALUE, span);
             self.emit_u8(upvalue_idx, span);
         } else {
             println!("found global: {name}");
-            let (name, _) = intern.insert_str(name);
+            let name = gc.alloc(name);
             self.emit_u8(op::GET_GLOBAL, span);
             self.emit_constant(name.into(), span)?;
         }
         Ok(())
     }
 
-    fn set_variable(&mut self, name: &str, span: &Span, intern: &mut Intern) -> Result<()> {
+    fn set_variable(
+        &mut self,
+        name: &str,
+        span: &Span,
+        gc: &mut Gc,
+    ) -> Result<()> {
         if let Some(local_idx) = self.ctx.resolve_local(name, false, span)? {
             self.emit_u8(op::SET_LOCAL, span);
             self.emit_u8(local_idx, span);
-        } else if let Some(upvalue_idx) = self.ctx.resolve_upvalue(name, span)? {
+        } else if let Some(upvalue_idx) =
+            self.ctx.resolve_upvalue(name, span)?
+        {
             self.emit_u8(op::SET_UPVALUE, span);
             self.emit_u8(upvalue_idx, span);
         } else {
-            let (name, _) = intern.insert_str(name);
+            let name = gc.alloc(name);
             self.emit_u8(op::SET_GLOBAL, span);
             self.emit_constant(name.into(), span)?;
         }
@@ -405,12 +444,19 @@ impl Compiler {
                 break;
             }
             if local.name == name {
-                return Err((NameError::AlreadyDefined { name: name.to_string() }.into(), span.clone()));
+                return Err((
+                    NameError::AlreadyDefined { name: name.to_string() }.into(),
+                    span.clone(),
+                ));
             }
         }
 
-        let local =
-            Local { name: name.to_string(), depth: self.ctx.scope_depth, is_initialized: false, is_captured: false };
+        let local = Local {
+            name: name.to_string(),
+            depth: self.ctx.scope_depth,
+            is_initialized: false,
+            is_captured: false,
+        };
         self.ctx.locals.push(local);
 
         if self.ctx.locals.len() > u8::MAX as usize {
@@ -439,11 +485,17 @@ impl Compiler {
     /// it to point to the current instruction.
     fn patch_jump(&mut self, offset_idx: usize, span: &Span) -> Result<()> {
         // The extra -2 is to account for the space taken by the offset.
-        let offset = unsafe { (*self.ctx.function).chunk.ops.len() - 2 - offset_idx };
-        let offset = offset.try_into().map_err(|_| (OverflowError::JumpTooLarge.into(), span.clone()))?;
+        let offset =
+            unsafe { (*self.ctx.function).chunk.ops.len() - 2 - offset_idx };
+        let offset = offset
+            .try_into()
+            .map_err(|_| (OverflowError::JumpTooLarge.into(), span.clone()))?;
         let offset = u16::to_le_bytes(offset);
         unsafe {
-            [(*self.ctx.function).chunk.ops[offset_idx], (*self.ctx.function).chunk.ops[offset_idx + 1]] = offset
+            [
+                (*self.ctx.function).chunk.ops[offset_idx],
+                (*self.ctx.function).chunk.ops[offset_idx + 1],
+            ] = offset
         };
         Ok(())
     }
@@ -455,8 +507,11 @@ impl Compiler {
     fn emit_loop(&mut self, start_idx: usize, span: &Span) -> Result<()> {
         // The extra +3 is to account for the space taken by the instruction and
         // the offset.
-        let offset = unsafe { (*self.ctx.function).chunk.ops.len() } + 3 - start_idx;
-        let offset = offset.try_into().map_err(|_| (OverflowError::JumpTooLarge.into(), span.clone()))?;
+        let offset =
+            unsafe { (*self.ctx.function).chunk.ops.len() } + 3 - start_idx;
+        let offset = offset
+            .try_into()
+            .map_err(|_| (OverflowError::JumpTooLarge.into(), span.clone()))?;
         let offset = u16::to_le_bytes(offset);
 
         self.emit_u8(op::LOOP, span);
@@ -493,7 +548,8 @@ impl Compiler {
     }
 
     fn emit_constant(&mut self, value: Value, span: &Span) -> Result<()> {
-        let constant_idx = unsafe { (*self.ctx.function).chunk.write_constant(value, span)? };
+        let constant_idx =
+            unsafe { (*self.ctx.function).chunk.write_constant(value, span)? };
         self.emit_u8(constant_idx, span);
         Ok(())
     }
@@ -510,8 +566,18 @@ pub struct CompilerCtx {
 }
 
 impl CompilerCtx {
-    fn resolve_local(&mut self, name: &str, capture: bool, span: &Span) -> Result<Option<u8>> {
-        match self.locals.iter_mut().enumerate().rfind(|(_, local)| local.name == name) {
+    fn resolve_local(
+        &mut self,
+        name: &str,
+        capture: bool,
+        span: &Span,
+    ) -> Result<Option<u8>> {
+        match self
+            .locals
+            .iter_mut()
+            .enumerate()
+            .rfind(|(_, local)| local.name == name)
+        {
             Some((idx, local)) => {
                 if local.is_initialized {
                     if capture {
@@ -519,14 +585,24 @@ impl CompilerCtx {
                     }
                     Ok(Some(idx as u8))
                 } else {
-                    Err((NameError::AccessInsideInitializer { name: name.to_string() }.into(), span.clone()))
+                    Err((
+                        NameError::AccessInsideInitializer {
+                            name: name.to_string(),
+                        }
+                        .into(),
+                        span.clone(),
+                    ))
                 }
             }
             None => Ok(None),
         }
     }
 
-    fn resolve_upvalue(&mut self, name: &str, span: &Span) -> Result<Option<u8>> {
+    fn resolve_upvalue(
+        &mut self,
+        name: &str,
+        span: &Span,
+    ) -> Result<Option<u8>> {
         let local_idx = match &mut self.parent {
             Some(parent) => parent.resolve_local(name, true, span)?,
             None => return Ok(None),
@@ -550,9 +626,15 @@ impl CompilerCtx {
         Ok(None)
     }
 
-    fn add_upvalue(&mut self, idx: u8, is_local: bool, span: &Span) -> Result<u8> {
+    fn add_upvalue(
+        &mut self,
+        idx: u8,
+        is_local: bool,
+        span: &Span,
+    ) -> Result<u8> {
         let upvalue = Upvalue { idx, is_local };
-        let upvalue_idx = match self.upvalues.iter().position(|u| u == &upvalue) {
+        let upvalue_idx = match self.upvalues.iter().position(|u| u == &upvalue)
+        {
             Some(upvalue_idx) => upvalue_idx,
             None => {
                 self.upvalues.push(upvalue);
@@ -561,7 +643,9 @@ impl CompilerCtx {
                         .upvalues
                         .len()
                         .try_into()
-                        .map_err(|_| (OverflowError::TooManyUpvalues.into(), span.clone()))?
+                        .map_err(|_| {
+                        (OverflowError::TooManyUpvalues.into(), span.clone())
+                    })?
                 };
                 self.upvalues.len() - 1
             }

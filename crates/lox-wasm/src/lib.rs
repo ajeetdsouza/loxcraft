@@ -13,7 +13,7 @@ pub fn loxRun(source: &str) {
     console_error_panic_hook::set_once();
 
     let mut output = Output::new();
-    if let Err(errors) = VM::new().run(source, &mut output) {
+    if let Err(errors) = VM::default().run(source, &mut output) {
         let mut writer = HtmlWriter::new(&mut output);
         for e in errors.iter() {
             report_err(&mut writer, source, e);
@@ -35,7 +35,11 @@ enum Message {
 
 impl Display for Message {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", serde_json::to_string(self).expect("could not serialize message"))
+        write!(
+            f,
+            "{}",
+            serde_json::to_string(self).expect("could not serialize message")
+        )
     }
 }
 
@@ -81,7 +85,8 @@ impl<W> HtmlWriter<W> {
 impl<W: Write> Write for HtmlWriter<W> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         let escaped = String::from_utf8_lossy(buf);
-        let escaped = askama_escape::escape(&escaped, askama_escape::Html).to_string();
+        let escaped =
+            askama_escape::escape(&escaped, askama_escape::Html).to_string();
         write!(self.writer, "{}", escaped)?;
         Ok(buf.len())
     }

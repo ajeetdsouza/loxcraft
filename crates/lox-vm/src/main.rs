@@ -2,7 +2,7 @@ use lox_vm::VM;
 
 fn main() {
     let mut stdout = std::io::stdout().lock();
-    VM::new()
+    VM::default()
         .run(
             r#"
             fun fib(n) {

@@ -15,6 +15,35 @@ pub union Object {
     pub upvalue: *mut ObjectUpvalue,
 }
 
+impl Object {
+    pub fn mark(&self) {
+        if unsafe { (*(*self).common).is_marked } {
+            return;
+        }
+        unsafe { (*(*self).common).is_marked = true };
+    }
+
+    pub fn free(&self) {
+        match unsafe { (*self.common).type_ } {
+            ObjectType::Class => {
+                unsafe { Box::from_raw(self.class) };
+            }
+            ObjectType::Closure => {
+                unsafe { Box::from_raw(self.closure) };
+            }
+            ObjectType::Function => {
+                unsafe { Box::from_raw(self.function) };
+            }
+            ObjectType::String => {
+                unsafe { Box::from_raw(self.string) };
+            }
+            ObjectType::Upvalue => {
+                unsafe { Box::from_raw(self.upvalue) };
+            }
+        }
+    }
+}
+
 impl Debug for Object {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         writeln!(f, "{}", self)
@@ -25,9 +54,15 @@ impl Display for Object {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         unsafe {
             match (*self.common).type_ {
-                ObjectType::Class => write!(f, "<class {}>", (*(*self.class).name).value),
+                ObjectType::Class => {
+                    write!(f, "<class {}>", (*(*self.class).name).value)
+                }
                 ObjectType::Closure => {
-                    write!(f, "<function {}>", (*(*(*self.closure).function).name).value)
+                    write!(
+                        f,
+                        "<function {}>",
+                        (*(*(*self.closure).function).name).value
+                    )
                 }
                 ObjectType::Function => {
                     write!(f, "<function {}>", (*(*self.function).name).value)
@@ -41,35 +76,21 @@ impl Display for Object {
 
 impl Eq for Object {}
 
-impl From<*mut ObjectClass> for Object {
-    fn from(class: *mut ObjectClass) -> Self {
-        Self { class }
-    }
+macro_rules! impl_from_object {
+    ($name:tt, $type_:ty) => {
+        impl From<*mut $type_> for Object {
+            fn from($name: *mut $type_) -> Self {
+                Self { $name }
+            }
+        }
+    };
 }
 
-impl From<*mut ObjectClosure> for Object {
-    fn from(closure: *mut ObjectClosure) -> Self {
-        Self { closure }
-    }
-}
-
-impl From<*mut ObjectFunction> for Object {
-    fn from(function: *mut ObjectFunction) -> Self {
-        Self { function }
-    }
-}
-
-impl From<*mut ObjectString> for Object {
-    fn from(string: *mut ObjectString) -> Self {
-        Self { string }
-    }
-}
-
-impl From<*mut ObjectUpvalue> for Object {
-    fn from(upvalue: *mut ObjectUpvalue) -> Self {
-        Self { upvalue }
-    }
-}
+impl_from_object!(class, ObjectClass);
+impl_from_object!(closure, ObjectClosure);
+impl_from_object!(function, ObjectFunction);
+impl_from_object!(string, ObjectString);
+impl_from_object!(upvalue, ObjectUpvalue);
 
 impl Hash for Object {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -90,7 +111,7 @@ pub struct ObjectCommon {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[repr(C)]
+#[repr(u8)]
 pub enum ObjectType {
     Class,
     Closure,
@@ -107,9 +128,8 @@ pub struct ObjectClass {
 }
 
 impl ObjectClass {
-    pub fn new(name: *mut ObjectString) -> *mut Self {
-        let class = ObjectClass { type_: ObjectType::Closure, is_marked: false, name };
-        Box::into_raw(Box::new(class))
+    pub fn new(name: *mut ObjectString) -> Self {
+        Self { type_: ObjectType::Closure, is_marked: false, name }
     }
 }
 
@@ -122,9 +142,16 @@ pub struct ObjectClosure {
 }
 
 impl ObjectClosure {
-    pub fn new(function: *mut ObjectFunction, upvalues: Vec<*mut ObjectUpvalue>) -> *mut Self {
-        let closure = ObjectClosure { type_: ObjectType::Closure, is_marked: false, function, upvalues };
-        Box::into_raw(Box::new(closure))
+    pub fn new(
+        function: *mut ObjectFunction,
+        upvalues: Vec<*mut ObjectUpvalue>,
+    ) -> Self {
+        Self {
+            type_: ObjectType::Closure,
+            is_marked: false,
+            function,
+            upvalues,
+        }
     }
 }
 
@@ -140,16 +167,15 @@ pub struct ObjectFunction {
 }
 
 impl ObjectFunction {
-    pub fn new(name: *mut ObjectString, arity: u8) -> *mut Self {
-        let function = ObjectFunction {
+    pub fn new(name: *mut ObjectString, arity: u8) -> Self {
+        Self {
             type_: ObjectType::Function,
             is_marked: false,
             name,
             arity,
             upvalues: 0,
             chunk: Default::default(),
-        };
-        Box::into_raw(Box::new(function))
+        }
     }
 }
 
@@ -162,9 +188,8 @@ pub struct ObjectString {
 }
 
 impl ObjectString {
-    pub fn new(value: &'static str) -> *mut Self {
-        let string = ObjectString { type_: ObjectType::String, is_marked: false, value };
-        Box::into_raw(Box::new(string))
+    pub fn new(value: &'static str) -> Self {
+        Self { type_: ObjectType::String, is_marked: false, value }
     }
 }
 
@@ -178,9 +203,12 @@ pub struct ObjectUpvalue {
 }
 
 impl ObjectUpvalue {
-    pub fn new(location: *mut Value) -> *mut Self {
-        let upvalue =
-            ObjectUpvalue { type_: ObjectType::Upvalue, is_marked: false, location, closed: Default::default() };
-        Box::into_raw(Box::new(upvalue))
+    pub fn new(location: *mut Value) -> Self {
+        Self {
+            type_: ObjectType::Upvalue,
+            is_marked: false,
+            location,
+            closed: Default::default(),
+        }
     }
 }

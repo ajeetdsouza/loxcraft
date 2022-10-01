@@ -38,19 +38,24 @@ impl AsDiagnostic for Error {
     }
 }
 
-macro_rules! derive_from_error {
-    ($($error:tt),*) => {
-        $(
-            impl From<$error> for Error {
-                fn from(e: $error) -> Self {
-                    Error::$error(e)
-                }
+macro_rules! impl_from_error {
+    ($($error:tt),+) => {$(
+        impl From<$error> for Error {
+            fn from(e: $error) -> Self {
+                Error::$error(e)
             }
-        )*
-    };
+        }
+    )+};
 }
 
-derive_from_error!(AttributeError, IoError, NameError, OverflowError, SyntaxError, TypeError);
+impl_from_error!(
+    AttributeError,
+    IoError,
+    NameError,
+    OverflowError,
+    SyntaxError,
+    TypeError
+);
 
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum AttributeError {
@@ -153,8 +158,12 @@ impl AsDiagnostic for SyntaxError {
             .with_message(self.to_string())
             .with_labels(vec![Label::primary((), span.clone())]);
         match self {
-            SyntaxError::UnrecognizedEOF { expected, .. } | SyntaxError::UnrecognizedToken { expected, .. } => {
-                diagnostic = diagnostic.with_notes(vec![format!("expected: {}", one_of(expected))]);
+            SyntaxError::UnrecognizedEOF { expected, .. }
+            | SyntaxError::UnrecognizedToken { expected, .. } => {
+                diagnostic = diagnostic.with_notes(vec![format!(
+                    "expected: {}",
+                    one_of(expected)
+                )]);
             }
             _ => {}
         };
@@ -174,7 +183,9 @@ pub enum TypeError {
     SuperclassInvalidType { type_: String },
     #[error("unsupported operand type for {op}: {rt_type:?}")]
     UnsupportedOperandPrefix { op: String, rt_type: String },
-    #[error("unsupported operand type(s) for {op}: {lt_type:?} and {rt_type:?}")]
+    #[error(
+        "unsupported operand type(s) for {op}: {lt_type:?} and {rt_type:?}"
+    )]
     UnsupportedOperandInfix { op: String, lt_type: String, rt_type: String },
 }
 
@@ -208,9 +219,14 @@ fn one_of(tokens: &[String]) -> String {
     output
 }
 
-pub fn report_err(writer: &mut dyn WriteColor, source: &str, (err, span): &ErrorS) {
+pub fn report_err(
+    writer: &mut dyn WriteColor,
+    source: &str,
+    (err, span): &ErrorS,
+) {
     let file = SimpleFile::new("<script>", source);
     let config = term::Config::default();
     let diagnostic = err.as_diagnostic(span);
-    term::emit(writer, &config, &file, &diagnostic).expect("failed to write to output");
+    term::emit(writer, &config, &file, &diagnostic)
+        .expect("failed to write to output");
 }

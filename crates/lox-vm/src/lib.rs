@@ -1,6 +1,6 @@
 mod chunk;
 mod compiler;
-mod intern;
+mod gc;
 mod object;
 mod op;
 mod value;

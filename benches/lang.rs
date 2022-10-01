@@ -3,7 +3,8 @@
 
 use criterion::{criterion_group, criterion_main, Criterion};
 
-pub fn lang(c: &mut Criterion) {
+pub fn lang(_c: &mut Criterion) {
+    todo!()
     //     for entry in fs::read_dir("benches/lang").unwrap() {
     //         let path = PathBuf::from(entry.unwrap().file_name());
     //         let _source = fs::read_to_string(&path).unwrap_or_else(|_| {

@@ -23,10 +23,7 @@ impl Value {
     }
 
     pub fn bool(&self) -> bool {
-        match self {
-            Self::Nil | Self::Boolean(false) => false,
-            _ => true,
-        }
+        !matches!(self, Self::Nil | Self::Boolean(false))
     }
 
     pub fn type_(&self) -> &'static str {
@@ -39,7 +36,9 @@ impl Value {
                 ObjectType::Class => "class",
                 ObjectType::Closure | ObjectType::Function => "function",
                 ObjectType::String => "string",
-                ObjectType::Upvalue => unsafe { *(*object.upvalue).location }.type_(),
+                ObjectType::Upvalue => {
+                    unsafe { *(*object.upvalue).location }.type_()
+                }
             },
         }
     }
