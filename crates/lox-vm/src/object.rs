@@ -174,7 +174,7 @@ impl ObjectFunction {
             name,
             arity,
             upvalues: 0,
-            chunk: Default::default(),
+            chunk: Chunk::default(),
         }
     }
 }
@@ -208,7 +208,7 @@ impl ObjectUpvalue {
             type_: ObjectType::Upvalue,
             is_marked: false,
             location,
-            closed: Default::default(),
+            closed: Value::default(),
         }
     }
 }

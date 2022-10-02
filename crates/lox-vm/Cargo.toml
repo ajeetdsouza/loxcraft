@@ -10,6 +10,7 @@ default = []
 debug-trace = []
 
 [dependencies]
+arrayvec.workspace = true
 hashbrown.workspace = true
 iota.workspace = true
 lox-common.path = "../lox-common"

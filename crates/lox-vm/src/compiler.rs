@@ -398,17 +398,14 @@ impl Compiler {
         gc: &mut Gc,
     ) -> Result<()> {
         if let Some(local_idx) = self.ctx.resolve_local(name, false, span)? {
-            println!("found local: {name}");
             self.emit_u8(op::GET_LOCAL, span);
             self.emit_u8(local_idx, span);
         } else if let Some(upvalue_idx) =
             self.ctx.resolve_upvalue(name, span)?
         {
-            println!("found upvalue: {name}");
             self.emit_u8(op::GET_UPVALUE, span);
             self.emit_u8(upvalue_idx, span);
         } else {
-            println!("found global: {name}");
             let name = gc.alloc(name);
             self.emit_u8(op::GET_GLOBAL, span);
             self.emit_constant(name.into(), span)?;

@@ -20,6 +20,7 @@ members = ["crates/*", "xtask"]
 
 [workspace.dependencies]
 anyhow = "1.0.52"
+arrayvec = "0.7.2"
 askama_escape = "0.10.3"
 cc = "1.0.73"
 clap = { version = "4.0.0", features = ["derive"] }
@@ -94,4 +95,5 @@ strip = false
 # codegen-units = 1
 debug = 0
 lto = true
+panic = "abort"
 strip = true
