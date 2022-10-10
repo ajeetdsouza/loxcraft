@@ -1,3 +1,4 @@
+mod allocator;
 mod chunk;
 mod compiler;
 mod gc;

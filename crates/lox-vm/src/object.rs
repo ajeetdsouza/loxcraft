@@ -16,14 +16,14 @@ pub union Object {
 }
 
 impl Object {
-    pub fn mark(&self) {
+    pub fn mark(&mut self) {
         if unsafe { (*(*self).common).is_marked } {
             return;
         }
         unsafe { (*(*self).common).is_marked = true };
     }
 
-    pub fn free(&self) {
+    pub fn free(self) {
         match unsafe { (*self.common).type_ } {
             ObjectType::Class => {
                 unsafe { Box::from_raw(self.class) };

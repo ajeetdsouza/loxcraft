@@ -72,7 +72,6 @@ lox-lsp.path = "crates/lox-lsp"
 lox-playground = { path = "crates/lox-playground", optional = true }
 lox-syntax.path = "crates/lox-syntax"
 lox-vm.path = "crates/lox-vm"
-mimalloc.workspace = true
 nu-ansi-term.workspace = true
 reedline.workspace = true
 termcolor.workspace = true
@@ -92,7 +91,7 @@ debug = true
 strip = false
 
 [profile.release]
-# codegen-units = 1
+codegen-units = 1
 debug = 0
 lto = true
 panic = "abort"

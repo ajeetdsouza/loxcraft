@@ -13,7 +13,14 @@ use clap::Parser;
     version
 )]
 pub enum Cmd {
-    Build { args: Vec<String> },
+    Build {
+        #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
+        args: Vec<String>,
+    },
+    MiriTest {
+        #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
+        args: Vec<String>,
+    },
 }
 
 fn main() -> Result<()> {
@@ -27,11 +34,9 @@ fn main() -> Result<()> {
                 Command::new("wasm-pack")
                     .args(&[
                         "build",
-                        "--out-dir",
-                        "pkg",
+                        "--out-dir=pkg",
                         "--release",
-                        "--target",
-                        "web",
+                        "--target=web",
                     ])
                     .current_dir(path),
             )?;
@@ -46,6 +51,24 @@ fn main() -> Result<()> {
 
             // cargo
             run_cmd(Command::new("cargo").arg("build").args(args))?;
+        }
+        Cmd::MiriTest { args } => {
+            run_cmd(
+                Command::new("cargo")
+                    .args(&[
+                        "+nightly",
+                        "miri",
+                        "nextest",
+                        "run",
+                        "--no-fail-fast",
+                        "--package=lox-vm",
+                    ])
+                    .args(args)
+                    .envs([
+                        ("RUST_BACKTRACE", "1"),
+                        ("MIRIFLAGS", "-Zmiri-disable-isolation"),
+                    ]),
+            )?;
         }
     }
     Ok(())

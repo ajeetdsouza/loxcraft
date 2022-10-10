@@ -9,7 +9,7 @@ use lox_syntax::ast::{
     Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Stmt, StmtS,
 };
 
-use crate::gc::{Gc, GcAlloc};
+use crate::gc::Gc;
 use crate::object::ObjectFunction;
 use crate::op;
 use crate::value::Value;

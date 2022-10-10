@@ -1,5 +1,6 @@
 use std::hash::BuildHasherDefault;
 use std::io::Write;
+use std::pin::Pin;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{hint, ptr};
 
@@ -12,7 +13,7 @@ use lox_common::error::{
 use rustc_hash::FxHasher;
 
 use crate::compiler::Compiler;
-use crate::gc::{Gc, GcAlloc};
+use crate::gc::Gc;
 use crate::object::{
     ObjectClass, ObjectClosure, ObjectFunction, ObjectString, ObjectType,
     ObjectUpvalue,
@@ -44,24 +45,24 @@ pub struct VM {
     /// - Thus, we can statically allocate a stack of size
     ///   `STACK_MAX = FRAMES_MAX * STACK_MAX_PER_FRAME` and we are
     ///   guaranteed to never exceed this size.
-    stack: [Value; STACK_MAX],
+    stack: Pin<Box<[Value; STACK_MAX]>>,
     stack_top: *mut Value,
 }
 
 impl VM {
-    pub fn run<W: Write>(
+    pub fn run(
         &mut self,
         source: &str,
-        stdout: &mut W,
+        stdout: &mut impl Write,
     ) -> Result<(), Vec<ErrorS>> {
         let function = Compiler::compile(source, &mut self.gc)?;
         self.run_function(function, stdout).map_err(|e| vec![e])
     }
 
-    pub fn run_function<W: Write>(
+    pub fn run_function(
         &mut self,
         function: *mut ObjectFunction,
-        stdout: &mut W,
+        stdout: &mut impl Write,
     ) -> Result<()> {
         let mut closure =
             self.gc.alloc(ObjectClosure::new(function, Vec::new()));
@@ -543,14 +544,17 @@ impl Default for VM {
         let clock = gc.alloc("clock");
         globals.insert(clock, Native::Clock.into());
 
-        let open_upvalues = Vec::with_capacity(256);
-
-        let frames = ArrayVec::new();
-
-        let mut stack: [Value; STACK_MAX] = [Value::default(); STACK_MAX];
+        let mut stack = Box::pin([Value::default(); STACK_MAX]);
         let stack_top = stack.as_mut_ptr();
 
-        Self { globals, open_upvalues, gc, frames, stack, stack_top }
+        Self {
+            globals,
+            open_upvalues: Vec::with_capacity(256),
+            gc,
+            frames: ArrayVec::new(),
+            stack,
+            stack_top,
+        }
     }
 }
 

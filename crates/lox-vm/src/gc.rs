@@ -16,6 +16,20 @@ pub struct Gc {
 }
 
 impl Gc {
+    pub fn alloc<T>(&mut self, object: impl GcAlloc<T>) -> T {
+        object.alloc(self)
+    }
+
+    pub fn mark(&mut self, object: impl GcMark) {
+        object.mark(self);
+    }
+
+    pub fn unmark_all(&mut self) {
+        for object in &self.objects {
+            unsafe { (*object.common).is_marked = true };
+        }
+    }
+
     pub fn trace(&mut self) {
         while let Some(object) = self.gray_objects.pop() {
             match unsafe { (*object.common).type_ } {
@@ -80,30 +94,30 @@ impl Drop for Gc {
     }
 }
 
-pub trait GcAlloc<T, U> {
-    fn alloc(&mut self, object: T) -> U;
+pub trait GcAlloc<T> {
+    fn alloc(self, gc: &mut Gc) -> T;
 }
 
-impl<T> GcAlloc<T, *mut T> for Gc
+impl<T> GcAlloc<*mut T> for T
 where
     *mut T: Into<Object>,
 {
-    fn alloc(&mut self, object: T) -> *mut T {
-        let object = Box::into_raw(Box::new(object));
-        self.objects.push(object.into());
+    fn alloc(self, gc: &mut Gc) -> *mut T {
+        let object = Box::into_raw(Box::new(self));
+        gc.objects.push(object.into());
         object
     }
 }
 
-impl<S> GcAlloc<S, *mut ObjectString> for Gc
+impl<S> GcAlloc<*mut ObjectString> for S
 where
     S: AsRef<str> + Into<String>,
 {
-    fn alloc(&mut self, str: S) -> *mut ObjectString {
-        match self.strings.raw_entry_mut().from_key(str.as_ref()) {
+    fn alloc(self, gc: &mut Gc) -> *mut ObjectString {
+        match gc.strings.raw_entry_mut().from_key(self.as_ref()) {
             RawEntryMut::Occupied(entry) => *entry.get(),
             RawEntryMut::Vacant(entry) => {
-                let string = str.into();
+                let string = self.into();
                 let object =
                     Box::into_raw(Box::new(ObjectString::new(unsafe {
                         mem::transmute(string.as_str())
@@ -115,24 +129,24 @@ where
     }
 }
 
-pub trait GcMark<T> {
-    fn mark(&mut self, object: T);
+pub trait GcMark {
+    fn mark(self, gc: &mut Gc);
 }
 
-impl GcMark<Value> for Gc {
-    fn mark(&mut self, value: Value) {
-        if let Value::Object(object) = value {
-            self.mark(object);
+impl GcMark for Value {
+    fn mark(self, gc: &mut Gc) {
+        if let Value::Object(object) = self {
+            object.mark(gc);
         }
     }
 }
 
-impl<T: Into<Object>> GcMark<T> for Gc {
-    fn mark(&mut self, object: T) {
-        let object = object.into();
+impl<T: Into<Object>> GcMark for T {
+    fn mark(self, gc: &mut Gc) {
+        let object = self.into();
         if unsafe { (*object.common).is_marked } {
             unsafe { (*object.common).is_marked = true };
-            self.gray_objects.push(object);
+            gc.gray_objects.push(object);
         }
     }
 }
