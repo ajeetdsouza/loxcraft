@@ -12,7 +12,7 @@ use lox_common::error::{
 };
 use rustc_hash::FxHasher;
 
-use crate::allocator::ALLOCATED_BYTES;
+use crate::allocator::GLOBAL;
 use crate::compiler::Compiler;
 use crate::gc::{Gc, GcAlloc};
 use crate::object::{
@@ -497,7 +497,7 @@ impl VM {
 
     fn alloc<T>(&mut self, object: impl GcAlloc<T>) -> T {
         if cfg!(feature = "stress-gc")
-            || unsafe { ALLOCATED_BYTES } > self.next_gc
+            || GLOBAL.allocated_bytes() > self.next_gc
         {
             self.collect_garbage();
         }
@@ -530,7 +530,7 @@ impl VM {
 
         self.gc.trace();
         self.gc.sweep();
-        self.next_gc = unsafe { ALLOCATED_BYTES } * GC_HEAP_GROW_FACTOR;
+        self.next_gc = GLOBAL.allocated_bytes() * GC_HEAP_GROW_FACTOR;
 
         if cfg!(feature = "debug-gc") {
             println!("-- gc end");
