@@ -7,7 +7,9 @@ edition = "2021"
 
 [features]
 default = []
+debug-gc = []
 debug-trace = []
+stress-gc = []
 
 [dependencies]
 arrayvec.workspace = true

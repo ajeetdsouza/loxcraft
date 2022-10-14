@@ -21,7 +21,7 @@ unsafe impl<T: GlobalAlloc> GlobalAlloc for Allocator<T> {
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        ALLOCATED_BYTES -= layout.size();
+        ALLOCATED_BYTES = ALLOCATED_BYTES.saturating_sub(layout.size());
         self.0.dealloc(ptr, layout)
     }
 
@@ -36,7 +36,8 @@ unsafe impl<T: GlobalAlloc> GlobalAlloc for Allocator<T> {
         layout: Layout,
         new_size: usize,
     ) -> *mut u8 {
-        ALLOCATED_BYTES = (ALLOCATED_BYTES + new_size) - layout.size();
+        ALLOCATED_BYTES =
+            ALLOCATED_BYTES.saturating_sub(layout.size()) + new_size;
         self.0.realloc(ptr, layout, new_size)
     }
 }

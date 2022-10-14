@@ -12,8 +12,9 @@ use lox_common::error::{
 };
 use rustc_hash::FxHasher;
 
+use crate::allocator::ALLOCATED_BYTES;
 use crate::compiler::Compiler;
-use crate::gc::Gc;
+use crate::gc::{Gc, GcAlloc};
 use crate::object::{
     ObjectClass, ObjectClosure, ObjectFunction, ObjectString, ObjectType,
     ObjectUpvalue,
@@ -21,6 +22,7 @@ use crate::object::{
 use crate::op;
 use crate::value::{Native, Value};
 
+const GC_HEAP_GROW_FACTOR: usize = 2;
 const FRAMES_MAX: usize = 64;
 const STACK_MAX: usize = FRAMES_MAX * STACK_MAX_PER_FRAME;
 const STACK_MAX_PER_FRAME: usize = u8::MAX as usize + 1;
@@ -29,7 +31,9 @@ pub struct VM {
     pub globals:
         HashMap<*mut ObjectString, Value, BuildHasherDefault<FxHasher>>,
     pub open_upvalues: Vec<*mut ObjectUpvalue>,
+
     pub gc: Gc,
+    next_gc: usize,
 
     /// `frames` is the current stack of frames running in the [`VM`].
     ///
@@ -64,8 +68,10 @@ impl VM {
         function: *mut ObjectFunction,
         stdout: &mut impl Write,
     ) -> Result<()> {
-        let mut closure =
-            self.gc.alloc(ObjectClosure::new(function, Vec::new()));
+        self.push(function.into());
+        let mut closure = self.alloc(ObjectClosure::new(function, Vec::new()));
+        self.pop();
+
         let mut ip = unsafe { (*(*closure).function).chunk.ops.as_ptr() };
         let mut stack = self.stack_top;
 
@@ -253,10 +259,12 @@ impl VM {
                 // op::ADD is a special case, because it works on strings as
                 // well as numbers.
                 op::ADD => {
-                    let b = self.pop();
-                    let a = self.pop();
+                    let b = unsafe { *self.peek(0) };
+                    let a = unsafe { *self.peek(1) };
                     match (a, b) {
                         (Value::Number(n1), Value::Number(n2)) => {
+                            self.pop();
+                            self.pop();
                             self.push((n1 + n2).into())
                         }
                         (Value::Object(o1), Value::Object(o2)) => {
@@ -268,7 +276,9 @@ impl VM {
                                         [(*o1.string).value, (*o2.string).value]
                                     }
                                     .concat();
-                                    let string = self.gc.alloc(string);
+                                    let string = self.alloc(string);
+                                    self.pop();
+                                    self.pop();
                                     self.push(string.into());
                                 }
                                 _ => {
@@ -434,7 +444,7 @@ impl VM {
                     }
 
                     let closure =
-                        self.gc.alloc(ObjectClosure::new(function, upvalues));
+                        self.alloc(ObjectClosure::new(function, upvalues));
                     self.push(closure.into());
                 }
                 op::CLOSE_UPVALUE => {
@@ -461,7 +471,7 @@ impl VM {
                 }
                 op::CLASS => {
                     let name = unsafe { read_object!().string };
-                    let class = self.gc.alloc(ObjectClass::new(name)).into();
+                    let class = self.alloc(ObjectClass::new(name)).into();
                     self.push(class);
                 }
                 _ => unsafe { hint::unreachable_unchecked() },
@@ -483,6 +493,48 @@ impl VM {
             "VM finished executing but stack is not empty"
         );
         Ok(())
+    }
+
+    fn alloc<T>(&mut self, object: impl GcAlloc<T>) -> T {
+        if cfg!(feature = "stress-gc")
+            || unsafe { ALLOCATED_BYTES } > self.next_gc
+        {
+            self.collect_garbage();
+        }
+        self.gc.alloc(object)
+    }
+
+    fn collect_garbage(&mut self) {
+        if cfg!(feature = "debug-gc") {
+            println!("-- gc begin");
+        }
+
+        let mut stack_ptr = self.stack.as_ptr();
+        while stack_ptr < self.stack_top {
+            self.gc.mark(unsafe { *stack_ptr });
+            stack_ptr = unsafe { stack_ptr.add(1) };
+        }
+
+        for (&name, &value) in &self.globals {
+            self.gc.mark(name);
+            self.gc.mark(value);
+        }
+
+        for frame in &self.frames {
+            self.gc.mark(frame.closure);
+        }
+
+        for &upvalue in &self.open_upvalues {
+            self.gc.mark(upvalue);
+        }
+
+        self.gc.trace();
+        self.gc.sweep();
+        self.next_gc = unsafe { ALLOCATED_BYTES } * GC_HEAP_GROW_FACTOR;
+
+        if cfg!(feature = "debug-gc") {
+            println!("-- gc end");
+        }
     }
 
     /// Pushes a [`Value`] to the stack.
@@ -513,7 +565,7 @@ impl VM {
         {
             Some(&upvalue) => upvalue,
             None => {
-                let upvalue = self.gc.alloc(ObjectUpvalue::new(location));
+                let upvalue = self.alloc(ObjectUpvalue::new(location));
                 self.open_upvalues.push(upvalue);
                 upvalue
             }
@@ -551,6 +603,7 @@ impl Default for VM {
             globals,
             open_upvalues: Vec::with_capacity(256),
             gc,
+            next_gc: 1024 * 1024,
             frames: ArrayVec::new(),
             stack,
             stack_top,

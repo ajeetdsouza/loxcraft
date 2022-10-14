@@ -16,6 +16,15 @@ pub union Object {
 }
 
 impl Object {
+    pub fn type_(&self) -> &'static str {
+        match unsafe { (*self.common).type_ } {
+            ObjectType::Class => "class",
+            ObjectType::Closure | ObjectType::Function => "function",
+            ObjectType::String => "string",
+            ObjectType::Upvalue => unsafe { *(*self.upvalue).location }.type_(),
+        }
+    }
+
     pub fn mark(&mut self) {
         if unsafe { (*(*self).common).is_marked } {
             return;
@@ -58,14 +67,15 @@ impl Display for Object {
                     write!(f, "<class {}>", (*(*self.class).name).value)
                 }
                 ObjectType::Closure => {
-                    write!(
-                        f,
-                        "<function {}>",
-                        (*(*(*self.closure).function).name).value
-                    )
+                    write!(f, "{}", Object::from((*self.closure).function))
                 }
                 ObjectType::Function => {
-                    write!(f, "<function {}>", (*(*self.function).name).value)
+                    let name = (*(*self.function).name).value;
+                    if name == "" {
+                        write!(f, "<script>")
+                    } else {
+                        write!(f, "<function {}>", name)
+                    }
                 }
                 ObjectType::String => write!(f, "{}", (*self.string).value),
                 ObjectType::Upvalue => write!(f, "<upvalue>"),

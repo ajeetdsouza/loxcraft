@@ -2,7 +2,7 @@ use std::fmt::{self, Display, Formatter};
 use std::hint;
 use std::ops::Not;
 
-use crate::object::{Object, ObjectType};
+use crate::object::Object;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub enum Value {
@@ -32,14 +32,7 @@ impl Value {
             Self::Boolean(_) => "bool",
             Self::Native(_) => "native",
             Self::Number(_) => "number",
-            Self::Object(object) => match unsafe { (*object.common).type_ } {
-                ObjectType::Class => "class",
-                ObjectType::Closure | ObjectType::Function => "function",
-                ObjectType::String => "string",
-                ObjectType::Upvalue => {
-                    unsafe { *(*object.upvalue).location }.type_()
-                }
-            },
+            Self::Object(object) => object.type_(),
         }
     }
 }
@@ -119,5 +112,6 @@ mod tests {
     #[test]
     fn sizes() {
         assert_eq!(mem::size_of::<Value>(), 16);
+        assert_eq!(mem::size_of::<Object>(), 8);
     }
 }

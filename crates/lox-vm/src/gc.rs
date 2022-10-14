@@ -32,6 +32,9 @@ impl Gc {
 
     pub fn trace(&mut self) {
         while let Some(object) = self.gray_objects.pop() {
+            if cfg!(feature = "debug-gc") {
+                println!("blacken {}: {object}", object.type_());
+            }
             match unsafe { (*object.common).type_ } {
                 ObjectType::Class => {
                     let class = unsafe { object.class };
@@ -63,21 +66,25 @@ impl Gc {
     }
 
     pub fn sweep(&mut self) {
-        // TODO: benchmark against `drain_filter`
         for idx in (0..self.objects.len()).rev() {
             let object = self.objects[idx];
             if unsafe { (*object.common).is_marked } {
                 unsafe { (*object.common).is_marked = false };
             } else {
+                println!("free {}: {object}", object.type_());
                 self.objects.swap_remove(idx);
                 object.free();
             }
         }
 
-        for (_, string) in self
-            .strings
-            .drain_filter(|_, &mut string| !unsafe { (*string).is_marked })
-        {
+        for (_, string) in self.strings.drain_filter(|_, &mut string| {
+            if unsafe { (*string).is_marked } {
+                unsafe { (*string).is_marked = false };
+                false
+            } else {
+                true
+            }
+        }) {
             unsafe { Box::from_raw(string) };
         }
     }
@@ -103,9 +110,15 @@ where
     *mut T: Into<Object>,
 {
     fn alloc(self, gc: &mut Gc) -> *mut T {
-        let object = Box::into_raw(Box::new(self));
-        gc.objects.push(object.into());
-        object
+        let object_ptr = Box::into_raw(Box::new(self));
+        let object = object_ptr.into();
+
+        if cfg!(feature = "debug-gc") {
+            println!("allocate {}: {object}", object.type_());
+        }
+
+        gc.objects.push(object);
+        object_ptr
     }
 }
 
@@ -144,7 +157,10 @@ impl GcMark for Value {
 impl<T: Into<Object>> GcMark for T {
     fn mark(self, gc: &mut Gc) {
         let object = self.into();
-        if unsafe { (*object.common).is_marked } {
+        if !unsafe { (*object.common).is_marked } {
+            if cfg!(feature = "debug-gc") {
+                println!("mark {}: {object}", object.type_());
+            }
             unsafe { (*object.common).is_marked = true };
             gc.gray_objects.push(object);
         }
