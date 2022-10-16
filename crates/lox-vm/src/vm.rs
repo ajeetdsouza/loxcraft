@@ -8,7 +8,8 @@ use arrayvec::ArrayVec;
 use hashbrown::hash_map::Entry;
 use hashbrown::HashMap;
 use lox_common::error::{
-    ErrorS, IoError, NameError, OverflowError, Result, TypeError,
+    AttributeError, ErrorS, IoError, NameError, OverflowError, Result,
+    TypeError,
 };
 use rustc_hash::FxHasher;
 
@@ -16,8 +17,8 @@ use crate::allocator::GLOBAL;
 use crate::compiler::Compiler;
 use crate::gc::{Gc, GcAlloc};
 use crate::object::{
-    ObjectClass, ObjectClosure, ObjectFunction, ObjectString, ObjectType,
-    ObjectUpvalue,
+    ObjectClass, ObjectClosure, ObjectFunction, ObjectInstance, ObjectString,
+    ObjectType, ObjectUpvalue,
 };
 use crate::op;
 use crate::value::{Native, Value};
@@ -75,6 +76,7 @@ impl VM {
         let mut ip = unsafe { (*(*closure).function).chunk.ops.as_ptr() };
         let mut stack = self.stack_top;
 
+        self.frames.clear();
         self.frames.push(CallFrame {
             closure,
             ip: ptr::null(),
@@ -119,11 +121,7 @@ impl VM {
             () => {{
                 #[allow(unused_unsafe)]
                 {
-                    let constant_idx = read_u8!() as usize;
-                    let function = unsafe { (*closure).function };
-                    let constant = *unsafe {
-                        (*function).chunk.constants.get_unchecked(constant_idx)
-                    };
+                    let constant = read_value!();
                     match constant {
                         Value::Object(object) => object,
                         _ => unsafe { hint::unreachable_unchecked() },
@@ -250,6 +248,55 @@ impl VM {
                     let value = unsafe { (*object).location };
                     unsafe { *value = *self.peek(0) };
                 }
+                op::GET_PROPERTY => {
+                    // TODO: Do we really need to peek here?
+                    let name = unsafe { read_object!().string };
+                    let instance = match unsafe { *self.peek(0) } {
+                        Value::Object(object)
+                            if unsafe {
+                                (*object.common).type_ == ObjectType::Instance
+                            } =>
+                        unsafe { object.instance },
+                        value => bail!(AttributeError::NoSuchAttribute {
+                            type_: value.type_().to_string(),
+                            name: unsafe { (*name).value.to_string() },
+                        }),
+                    };
+
+                    match unsafe { (*instance).fields.get(&name) } {
+                        Some(value) => {
+                            // Pop the instance from the stack.
+                            self.pop();
+                            self.push(*value);
+                        }
+                        None => bail!(AttributeError::NoSuchAttribute {
+                            type_: unsafe {
+                                (*(*(*instance).class).name).value.to_string()
+                            },
+                            name: unsafe { (*name).value.to_string() },
+                        }),
+                    }
+                }
+                op::SET_PROPERTY => {
+                    // TODO: Do we really need to peek here?
+                    let name = unsafe { read_object!().string };
+                    let instance = match unsafe { *self.peek(0) } {
+                        Value::Object(object)
+                            if unsafe {
+                                (*object.common).type_ == ObjectType::Instance
+                            } =>
+                        unsafe { object.instance },
+                        value => bail!(AttributeError::NoSuchAttribute {
+                            type_: value.type_().to_string(),
+                            name: unsafe { (*name).value.to_string() },
+                        }),
+                    };
+                    let value = unsafe { *self.peek(1) };
+                    unsafe { (*instance).fields.insert(name, value) };
+
+                    // Pop the instance.
+                    self.pop();
+                }
                 op::EQUAL => binary_op!(==),
                 op::NOT_EQUAL => binary_op!(!=),
                 op::GREATER => binary_op_number!(>),
@@ -344,6 +391,13 @@ impl VM {
                         Value::Object(object) => match unsafe {
                             (*object.common).type_
                         } {
+                            ObjectType::Class => {
+                                let instance =
+                                    self.alloc(ObjectInstance::new(unsafe {
+                                        object.class
+                                    }));
+                                self.push(instance.into());
+                            }
                             ObjectType::Closure => {
                                 // Save the current state of the VM.
                                 let frame = unsafe {
@@ -496,15 +550,16 @@ impl VM {
     }
 
     fn alloc<T>(&mut self, object: impl GcAlloc<T>) -> T {
-        if cfg!(feature = "stress-gc")
-            || GLOBAL.allocated_bytes() > self.next_gc
+        if !cfg!(feature = "disable-gc")
+            && (cfg!(feature = "stress-gc")
+                || GLOBAL.allocated_bytes() > self.next_gc)
         {
-            self.collect_garbage();
+            self.gc();
         }
         self.gc.alloc(object)
     }
 
-    fn collect_garbage(&mut self) {
+    fn gc(&mut self) {
         if cfg!(feature = "debug-gc") {
             println!("-- gc begin");
         }
@@ -530,6 +585,7 @@ impl VM {
 
         self.gc.trace();
         self.gc.sweep();
+
         self.next_gc = GLOBAL.allocated_bytes() * GC_HEAP_GROW_FACTOR;
 
         if cfg!(feature = "debug-gc") {

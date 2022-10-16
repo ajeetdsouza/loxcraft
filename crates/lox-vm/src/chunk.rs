@@ -1,5 +1,6 @@
 use std::ops::Index;
 
+use arrayvec::ArrayVec;
 use lox_common::error::{OverflowError, Result};
 use lox_common::types::Span;
 
@@ -9,7 +10,7 @@ use crate::value::Value;
 #[derive(Debug, Default)]
 pub struct Chunk {
     pub ops: Vec<u8>,
-    pub constants: Vec<Value>,
+    pub constants: ArrayVec<Value, 256>,
     pub spans: VecRun<Span>,
 }
 
@@ -27,12 +28,13 @@ impl Chunk {
             {
                 Some(idx) => idx,
                 None => {
-                    self.constants.push(value);
+                    self.constants.try_push(value).map_err(|_| {
+                        (OverflowError::TooManyConstants.into(), span.clone())
+                    })?;
                     self.constants.len() - 1
                 }
             };
-        idx.try_into()
-            .map_err(|_| (OverflowError::TooManyConstants.into(), span.clone()))
+        Ok(idx.try_into().unwrap())
     }
 
     pub fn debug(&self, name: &str) {
@@ -60,6 +62,8 @@ impl Chunk {
             op::SET_GLOBAL => self.debug_op_constant("OP_SET_GLOBAL", idx),
             op::GET_UPVALUE => self.debug_op_byte("OP_GET_UPVALUE", idx),
             op::SET_UPVALUE => self.debug_op_byte("OP_SET_UPVALUE", idx),
+            op::GET_PROPERTY => self.debug_op_constant("OP_GET_PROPERTY", idx),
+            op::SET_PROPERTY => self.debug_op_constant("OP_SET_PROPERTY", idx),
             op::EQUAL => self.debug_op_simple("OP_EQUAL", idx),
             op::NOT_EQUAL => self.debug_op_simple("OP_NOT_EQUAL", idx),
             op::GREATER => self.debug_op_simple("OP_GREATER", idx),
@@ -108,7 +112,7 @@ impl Chunk {
             }
             op::CLOSE_UPVALUE => self.debug_op_simple("OP_CLOSE_UPVALUE", idx),
             op::RETURN => self.debug_op_simple("OP_RETURN", idx),
-            op::CLASS => self.debug_op_constant("OP_CONSTANT", idx),
+            op::CLASS => self.debug_op_constant("OP_CLASS", idx),
             byte => {
                 self.debug_op_simple(&format!("OP_UNKNOWN({byte:#X})"), idx)
             }

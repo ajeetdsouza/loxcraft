@@ -1,6 +1,7 @@
 use std::convert::TryInto;
 use std::mem;
 
+use arrayvec::ArrayVec;
 use lox_common::error::{
     ErrorS, NameError, OverflowError, Result, SyntaxError,
 };
@@ -27,8 +28,8 @@ impl Compiler {
             ctx: CompilerCtx {
                 function: gc.alloc(ObjectFunction::new(name, 0)),
                 type_: FunctionType::Script,
-                locals: Vec::new(),
-                upvalues: Vec::new(),
+                locals: ArrayVec::new(),
+                upvalues: ArrayVec::new(),
                 parent: None,
                 scope_depth: 0,
             },
@@ -62,8 +63,19 @@ impl Compiler {
                 }
                 self.end_scope(span);
             }
-            Stmt::Class(_class) => {
-                todo!();
+            Stmt::Class(class) => {
+                let name = gc.alloc(&class.name).into();
+
+                self.emit_u8(op::CLASS, span);
+                self.emit_constant(name, span)?;
+
+                if self.is_global() {
+                    self.emit_u8(op::DEFINE_GLOBAL, span);
+                    self.emit_constant(name, span)?;
+                } else {
+                    self.declare_local(&class.name, span)?;
+                    self.define_local();
+                }
             }
             Stmt::Expr(expr) => {
                 self.compile_expr(&expr.value, gc)?;
@@ -121,8 +133,8 @@ impl Compiler {
                 let ctx = CompilerCtx {
                     function: gc.alloc(ObjectFunction::new(name, arity)),
                     type_: FunctionType::Function,
-                    locals: Vec::new(),
-                    upvalues: Vec::new(),
+                    locals: ArrayVec::new(),
+                    upvalues: ArrayVec::new(),
                     parent: None,
                     scope_depth: self.ctx.scope_depth + 1,
                 };
@@ -153,11 +165,11 @@ impl Compiler {
                 self.emit_constant(value, span)?;
 
                 for upvalue in &upvalues {
-                    self.emit_u8(upvalue.is_local as u8, span);
-                    self.emit_u8(upvalue.idx as u8, span);
+                    self.emit_u8(upvalue.is_local.into(), span);
+                    self.emit_u8(upvalue.idx, span);
                 }
 
-                if self.ctx.scope_depth == 0 {
+                if self.is_global() {
                     self.emit_u8(op::DEFINE_GLOBAL, span);
                     self.emit_constant(name.into(), span)?;
                 } else {
@@ -206,7 +218,7 @@ impl Compiler {
             }
             Stmt::Var(var) => {
                 let name = &var.var.name;
-                if self.ctx.scope_depth == 0 {
+                if self.is_global() {
                     let name = gc.alloc(name);
                     match &var.value {
                         Some(value) => self.compile_expr(value, gc)?,
@@ -271,6 +283,13 @@ impl Compiler {
 
                 self.emit_u8(op::CALL, span);
                 self.emit_u8(arg_count, span);
+            }
+            Expr::Get(get) => {
+                self.compile_expr(&get.object, gc)?;
+
+                let name = gc.alloc(&get.name).into();
+                self.emit_u8(op::GET_PROPERTY, span);
+                self.emit_constant(name, span)?;
             }
             Expr::Infix(infix) => {
                 self.compile_expr(&infix.lt, gc)?;
@@ -371,6 +390,14 @@ impl Compiler {
                     OpPrefix::Not => self.emit_u8(op::NOT, span),
                 };
             }
+            Expr::Set(set) => {
+                self.compile_expr(&set.value, gc)?;
+                self.compile_expr(&set.object, gc)?;
+
+                let name = gc.alloc(&set.name).into();
+                self.emit_u8(op::SET_PROPERTY, span);
+                self.emit_constant(name, span)?;
+            }
             Expr::Var(var) => self.get_variable(&var.var.name, span, gc)?,
             _ => unimplemented!(),
         }
@@ -384,7 +411,7 @@ impl Compiler {
     }
 
     /// Pops the current ctx and extracts a [`Function`] from it.
-    fn end_ctx(&mut self) -> (*mut ObjectFunction, Vec<Upvalue>) {
+    fn end_ctx(&mut self) -> (*mut ObjectFunction, ArrayVec<Upvalue, 255>) {
         let parent =
             self.ctx.parent.take().expect("tried to end context in a script");
         let ctx = mem::replace(&mut self.ctx, *parent);
@@ -454,12 +481,10 @@ impl Compiler {
             is_initialized: false,
             is_captured: false,
         };
-        self.ctx.locals.push(local);
-
-        if self.ctx.locals.len() > u8::MAX as usize {
-            return Err((OverflowError::TooManyLocals.into(), span.clone()));
-        }
-        Ok(())
+        self.ctx
+            .locals
+            .try_push(local)
+            .map_err(|_| (OverflowError::TooManyLocals.into(), span.clone()))
     }
 
     fn define_local(&mut self) {
@@ -550,14 +575,19 @@ impl Compiler {
         self.emit_u8(constant_idx, span);
         Ok(())
     }
+
+    fn is_global(&self) -> bool {
+        self.ctx.scope_depth == 0
+    }
 }
 
 #[derive(Debug)]
 pub struct CompilerCtx {
     function: *mut ObjectFunction,
     type_: FunctionType,
-    locals: Vec<Local>,
-    upvalues: Vec<Upvalue>,
+    locals: ArrayVec<Local, 256>,
+    // TODO: how is this 256 in the book?
+    upvalues: ArrayVec<Upvalue, 255>,
     parent: Option<Box<CompilerCtx>>,
     scope_depth: usize,
 }
@@ -580,7 +610,7 @@ impl CompilerCtx {
                     if capture {
                         local.is_captured = true;
                     }
-                    Ok(Some(idx as u8))
+                    Ok(Some(idx.try_into().unwrap()))
                 } else {
                     Err((
                         NameError::AccessInsideInitializer {
@@ -632,23 +662,19 @@ impl CompilerCtx {
         let upvalue = Upvalue { idx, is_local };
         let upvalue_idx = match self.upvalues.iter().position(|u| u == &upvalue)
         {
-            Some(upvalue_idx) => upvalue_idx,
+            Some(upvalue_idx) => upvalue_idx.try_into().unwrap(),
             None => {
-                self.upvalues.push(upvalue);
-                unsafe {
-                    (*self.function).upvalues = self
-                        .upvalues
-                        .len()
-                        .try_into()
-                        .map_err(|_| {
-                        (OverflowError::TooManyUpvalues.into(), span.clone())
-                    })?
-                };
-                self.upvalues.len() - 1
+                self.upvalues.try_push(upvalue).map_err(|_| {
+                    (OverflowError::TooManyUpvalues.into(), span.clone())
+                })?;
+                let upvalues = self.upvalues.len().try_into().unwrap();
+
+                unsafe { (*self.function).upvalues = upvalues };
+                upvalues - 1
             }
         };
 
-        Ok(upvalue_idx as u8)
+        Ok(upvalue_idx)
     }
 }
 

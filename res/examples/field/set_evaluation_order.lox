@@ -1,2 +1,2 @@
-undefined1.bar // out: NameError: name "undefined2" is not defined
-  = undefined2;
+// out: NameError: name "undefined2" is not defined
+undefined1.bar = undefined2;

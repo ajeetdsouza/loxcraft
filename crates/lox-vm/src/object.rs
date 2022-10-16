@@ -1,5 +1,8 @@
 use std::fmt::{self, Debug, Display, Formatter};
-use std::hash::{Hash, Hasher};
+use std::hash::{BuildHasherDefault, Hash, Hasher};
+
+use hashbrown::HashMap;
+use rustc_hash::FxHasher;
 
 use crate::chunk::Chunk;
 use crate::value::Value;
@@ -11,6 +14,7 @@ pub union Object {
     pub class: *mut ObjectClass,
     pub closure: *mut ObjectClosure,
     pub function: *mut ObjectFunction,
+    pub instance: *mut ObjectInstance,
     pub string: *mut ObjectString,
     pub upvalue: *mut ObjectUpvalue,
 }
@@ -19,7 +23,11 @@ impl Object {
     pub fn type_(&self) -> &'static str {
         match unsafe { (*self.common).type_ } {
             ObjectType::Class => "class",
-            ObjectType::Closure | ObjectType::Function => "function",
+            ObjectType::Closure => "function",
+            ObjectType::Function => "function_impl",
+            ObjectType::Instance => unsafe {
+                (*(*(*self.instance).class).name).value
+            },
             ObjectType::String => "string",
             ObjectType::Upvalue => unsafe { *(*self.upvalue).location }.type_(),
         }
@@ -43,6 +51,9 @@ impl Object {
             ObjectType::Function => {
                 unsafe { Box::from_raw(self.function) };
             }
+            ObjectType::Instance => {
+                unsafe { Box::from_raw(self.instance) };
+            }
             ObjectType::String => {
                 unsafe { Box::from_raw(self.string) };
             }
@@ -55,7 +66,7 @@ impl Object {
 
 impl Debug for Object {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        writeln!(f, "{}", self)
+        write!(f, "{}", self)
     }
 }
 
@@ -76,6 +87,13 @@ impl Display for Object {
                     } else {
                         write!(f, "<function {}>", name)
                     }
+                }
+                ObjectType::Instance => {
+                    write!(
+                        f,
+                        "<instance {}>",
+                        (*(*(*self.instance).class).name).value
+                    )
                 }
                 ObjectType::String => write!(f, "{}", (*self.string).value),
                 ObjectType::Upvalue => write!(f, "<upvalue>"),
@@ -99,6 +117,7 @@ macro_rules! impl_from_object {
 impl_from_object!(class, ObjectClass);
 impl_from_object!(closure, ObjectClosure);
 impl_from_object!(function, ObjectFunction);
+impl_from_object!(instance, ObjectInstance);
 impl_from_object!(string, ObjectString);
 impl_from_object!(upvalue, ObjectUpvalue);
 
@@ -126,10 +145,12 @@ pub enum ObjectType {
     Class,
     Closure,
     Function,
+    Instance,
     String,
     Upvalue,
 }
 
+#[derive(Debug)]
 #[repr(C)]
 pub struct ObjectClass {
     pub type_: ObjectType,
@@ -139,10 +160,11 @@ pub struct ObjectClass {
 
 impl ObjectClass {
     pub fn new(name: *mut ObjectString) -> Self {
-        Self { type_: ObjectType::Closure, is_marked: false, name }
+        Self { type_: ObjectType::Class, is_marked: false, name }
     }
 }
 
+#[derive(Debug)]
 #[repr(C)]
 pub struct ObjectClosure {
     pub type_: ObjectType,
@@ -185,6 +207,26 @@ impl ObjectFunction {
             arity,
             upvalues: 0,
             chunk: Chunk::default(),
+        }
+    }
+}
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct ObjectInstance {
+    pub type_: ObjectType,
+    pub is_marked: bool,
+    pub class: *mut ObjectClass,
+    pub fields: HashMap<*mut ObjectString, Value, BuildHasherDefault<FxHasher>>,
+}
+
+impl ObjectInstance {
+    pub fn new(class: *mut ObjectClass) -> Self {
+        Self {
+            type_: ObjectType::Instance,
+            is_marked: false,
+            class,
+            fields: HashMap::default(),
         }
     }
 }

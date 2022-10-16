@@ -13,6 +13,8 @@ iota! {
             , SET_GLOBAL
             , GET_UPVALUE
             , SET_UPVALUE
+            , GET_PROPERTY
+            , SET_PROPERTY
             , EQUAL
             , NOT_EQUAL
             , GREATER

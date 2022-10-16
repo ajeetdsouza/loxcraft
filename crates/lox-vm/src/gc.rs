@@ -24,12 +24,6 @@ impl Gc {
         object.mark(self);
     }
 
-    pub fn unmark_all(&mut self) {
-        for object in &self.objects {
-            unsafe { (*object.common).is_marked = true };
-        }
-    }
-
     pub fn trace(&mut self) {
         while let Some(object) = self.gray_objects.pop() {
             if cfg!(feature = "debug-gc") {
@@ -56,6 +50,14 @@ impl Gc {
                         }
                     }
                 }
+                ObjectType::Instance => {
+                    self.mark(unsafe { (*object.instance).class });
+                    for (&name, &value) in unsafe { &(*object.instance).fields }
+                    {
+                        self.mark(name);
+                        self.mark(value);
+                    }
+                }
                 ObjectType::String => {}
                 ObjectType::Upvalue => {
                     let upvalue = unsafe { object.upvalue };
@@ -71,22 +73,20 @@ impl Gc {
             if unsafe { (*object.common).is_marked } {
                 unsafe { (*object.common).is_marked = false };
             } else {
-                println!("free {}: {object}", object.type_());
                 self.objects.swap_remove(idx);
                 object.free();
             }
         }
 
-        for (_, string) in self.strings.drain_filter(|_, &mut string| {
+        self.strings.drain_filter(|_, &mut string| {
             if unsafe { (*string).is_marked } {
                 unsafe { (*string).is_marked = false };
                 false
             } else {
+                unsafe { Box::from_raw(string) };
                 true
             }
-        }) {
-            unsafe { Box::from_raw(string) };
-        }
+        });
     }
 }
 
@@ -131,6 +131,9 @@ where
             RawEntryMut::Occupied(entry) => *entry.get(),
             RawEntryMut::Vacant(entry) => {
                 let string = self.into();
+                if cfg!(feature = "debug-gc") {
+                    println!("allocate string: {string}");
+                }
                 let object =
                     Box::into_raw(Box::new(ObjectString::new(unsafe {
                         mem::transmute(string.as_str())
