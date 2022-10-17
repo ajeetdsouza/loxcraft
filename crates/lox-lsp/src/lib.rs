@@ -2,9 +2,9 @@ use anyhow::{Context, Result};
 use lox_common::error::ErrorS;
 use lox_common::types::Span;
 use tower_lsp::lsp_types::{
-    Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams,
-    DidOpenTextDocumentParams, InitializeParams, InitializeResult, Position,
-    Range, ServerCapabilities, ServerInfo, TextDocumentSyncKind, Url,
+    Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams, DidOpenTextDocumentParams,
+    InitializeParams, InitializeResult, Position, Range, ServerCapabilities, ServerInfo,
+    TextDocumentSyncKind, Url,
 };
 use tower_lsp::{jsonrpc, Client, LanguageServer, LspService, Server};
 
@@ -17,12 +17,7 @@ impl Backend {
         Self { client }
     }
 
-    pub async fn publish_diagnostics(
-        &self,
-        source: &str,
-        uri: Url,
-        version: Option<i32>,
-    ) {
+    pub async fn publish_diagnostics(&self, source: &str, uri: Url, version: Option<i32>) {
         let errors = match lox_syntax::parse(source) {
             Ok(mut _program) => todo!(),
             Err(e) => e,
@@ -34,10 +29,7 @@ impl Backend {
 
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
-    async fn initialize(
-        &self,
-        _: InitializeParams,
-    ) -> jsonrpc::Result<InitializeResult> {
+    async fn initialize(&self, _: InitializeParams) -> jsonrpc::Result<InitializeResult> {
         Ok(InitializeResult {
             capabilities: ServerCapabilities {
                 text_document_sync: Some(TextDocumentSyncKind::FULL.into()),
@@ -70,10 +62,7 @@ impl LanguageServer for Backend {
 }
 
 fn get_range(source: &str, span: &Span) -> Range {
-    Range {
-        start: get_position(source, span.start),
-        end: get_position(source, span.end),
-    }
+    Range { start: get_position(source, span.start), end: get_position(source, span.end) }
 }
 
 fn get_position(source: &str, idx: usize) -> Position {

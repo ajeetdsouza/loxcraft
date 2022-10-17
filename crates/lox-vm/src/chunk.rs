@@ -23,17 +23,15 @@ impl Chunk {
     /// Writes a constant to the [`Chunk`] and returns its index. If an equal
     /// [`Value`] is already present, then its index is returned instead.
     pub fn write_constant(&mut self, value: Value, span: &Span) -> Result<u8> {
-        let idx =
-            match self.constants.iter().position(|&constant| constant == value)
-            {
-                Some(idx) => idx,
-                None => {
-                    self.constants.try_push(value).map_err(|_| {
-                        (OverflowError::TooManyConstants.into(), span.clone())
-                    })?;
-                    self.constants.len() - 1
-                }
-            };
+        let idx = match self.constants.iter().position(|&constant| constant == value) {
+            Some(idx) => idx,
+            None => {
+                self.constants
+                    .try_push(value)
+                    .map_err(|_| (OverflowError::TooManyConstants.into(), span.clone()))?;
+                self.constants.len() - 1
+            }
+        };
         Ok(idx.try_into().unwrap())
     }
 
@@ -56,9 +54,7 @@ impl Chunk {
             op::GET_LOCAL => self.debug_op_byte("OP_GET_LOCAL", idx),
             op::SET_LOCAL => self.debug_op_byte("OP_SET_LOCAL", idx),
             op::GET_GLOBAL => self.debug_op_constant("OP_GET_GLOBAL", idx),
-            op::DEFINE_GLOBAL => {
-                self.debug_op_constant("OP_DEFINE_GLOBAL", idx)
-            }
+            op::DEFINE_GLOBAL => self.debug_op_constant("OP_DEFINE_GLOBAL", idx),
             op::SET_GLOBAL => self.debug_op_constant("OP_SET_GLOBAL", idx),
             op::GET_UPVALUE => self.debug_op_byte("OP_GET_UPVALUE", idx),
             op::SET_UPVALUE => self.debug_op_byte("OP_SET_UPVALUE", idx),
@@ -78,19 +74,14 @@ impl Chunk {
             op::NEGATE => self.debug_op_simple("OP_NEGATE", idx),
             op::PRINT => self.debug_op_simple("OP_PRINT", idx),
             op::JUMP => self.debug_op_jump("OP_JUMP", idx, true),
-            op::JUMP_IF_FALSE => {
-                self.debug_op_jump("OP_JUMP_IF_FALSE", idx, true)
-            }
+            op::JUMP_IF_FALSE => self.debug_op_jump("OP_JUMP_IF_FALSE", idx, true),
             op::LOOP => self.debug_op_jump("OP_LOOP", idx, false),
             op::CALL => self.debug_op_byte("OP_CALL", idx),
             op::CLOSURE => {
                 let mut idx = idx + 1;
                 let constant_idx = self.ops[idx];
                 let constant = &self.constants[constant_idx as usize];
-                eprintln!(
-                    "{name:16} {constant_idx:>4} '{constant}'",
-                    name = "OP_CLOSURE"
-                );
+                eprintln!("{name:16} {constant_idx:>4} '{constant}'", name = "OP_CLOSURE");
 
                 let function = unsafe { constant.object().function };
                 for _ in 0..unsafe { (*function).upvalues } {
@@ -103,9 +94,7 @@ impl Chunk {
                     idx += 1;
                     let upvalue_idx = self.ops[idx];
 
-                    eprintln!(
-                        "{offset:04} |                     {label} {upvalue_idx}"
-                    );
+                    eprintln!("{offset:04} |                     {label} {upvalue_idx}");
                 }
 
                 idx + 1
@@ -113,9 +102,7 @@ impl Chunk {
             op::CLOSE_UPVALUE => self.debug_op_simple("OP_CLOSE_UPVALUE", idx),
             op::RETURN => self.debug_op_simple("OP_RETURN", idx),
             op::CLASS => self.debug_op_constant("OP_CLASS", idx),
-            byte => {
-                self.debug_op_simple(&format!("OP_UNKNOWN({byte:#X})"), idx)
-            }
+            byte => self.debug_op_simple(&format!("OP_UNKNOWN({byte:#X})"), idx),
         }
     }
 
@@ -138,8 +125,7 @@ impl Chunk {
     }
 
     fn debug_op_jump(&self, name: &str, idx: usize, is_forward: bool) -> usize {
-        let to_offset =
-            u16::from_le_bytes([self.ops[idx + 1], self.ops[idx + 2]]);
+        let to_offset = u16::from_le_bytes([self.ops[idx + 1], self.ops[idx + 2]]);
         let offset_sign = if is_forward { 1 } else { -1 };
         // The +3 is to account for the 3 byte jump instruction.
         let to_idx = (idx as isize) + (to_offset as isize) * offset_sign + 3;

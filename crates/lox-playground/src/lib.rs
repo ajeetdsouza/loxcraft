@@ -26,9 +26,8 @@ pub fn serve(port: u16) -> Result<()> {
 }
 
 async fn serve_async(port: u16) {
-    let routes = warp::path::end()
-        .and_then(serve_index)
-        .or(warp::path::tail().and_then(serve_asset));
+    let routes =
+        warp::path::end().and_then(serve_index).or(warp::path::tail().and_then(serve_asset));
     let url = format!("http://127.0.0.1:{port}");
     eprintln!("Running playground on {url}");
     if let Err(e) = webbrowser::open(&url) {
@@ -46,15 +45,10 @@ async fn serve_asset(path: Tail) -> Result<impl Reply, Rejection> {
 }
 
 fn serve_impl(path: &str) -> Result<impl Reply, Rejection> {
-    let compressed_br =
-        [".css", ".js", ".wasm"].iter().any(|ext| path.ends_with(ext));
-    let contents = if compressed_br {
-        Asset::get(&format!("{path}.br"))
-    } else {
-        Asset::get(path)
-    }
-    .ok_or_else(warp::reject::not_found)?
-    .data;
+    let compressed_br = [".css", ".js", ".wasm"].iter().any(|ext| path.ends_with(ext));
+    let contents = if compressed_br { Asset::get(&format!("{path}.br")) } else { Asset::get(path) }
+        .ok_or_else(warp::reject::not_found)?
+        .data;
 
     let mut response = Response::new(contents.into());
     let headers = response.headers_mut();

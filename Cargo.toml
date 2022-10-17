@@ -79,13 +79,6 @@ lox-syntax.path = "crates/lox-syntax"
 lox-vm.path = "crates/lox-vm"
 termcolor.workspace = true
 
-[dev-dependencies]
-criterion.workspace = true
-
-[[bench]]
-name = "lang"
-harness = false
-
 [profile.release]
 codegen-units = 1
 debug = 0

@@ -25,9 +25,7 @@ impl Object {
             ObjectType::Class => "class",
             ObjectType::Closure => "function",
             ObjectType::Function => "function_impl",
-            ObjectType::Instance => unsafe {
-                (*(*(*self.instance).class).name).value
-            },
+            ObjectType::Instance => unsafe { (*(*(*self.instance).class).name).value },
             ObjectType::String => "string",
             ObjectType::Upvalue => unsafe { *(*self.upvalue).location }.type_(),
         }
@@ -89,11 +87,7 @@ impl Display for Object {
                     }
                 }
                 ObjectType::Instance => {
-                    write!(
-                        f,
-                        "<instance {}>",
-                        (*(*(*self.instance).class).name).value
-                    )
+                    write!(f, "<instance {}>", (*(*(*self.instance).class).name).value)
                 }
                 ObjectType::String => write!(f, "{}", (*self.string).value),
                 ObjectType::Upvalue => write!(f, "<upvalue>"),
@@ -174,16 +168,8 @@ pub struct ObjectClosure {
 }
 
 impl ObjectClosure {
-    pub fn new(
-        function: *mut ObjectFunction,
-        upvalues: Vec<*mut ObjectUpvalue>,
-    ) -> Self {
-        Self {
-            type_: ObjectType::Closure,
-            is_marked: false,
-            function,
-            upvalues,
-        }
+    pub fn new(function: *mut ObjectFunction, upvalues: Vec<*mut ObjectUpvalue>) -> Self {
+        Self { type_: ObjectType::Closure, is_marked: false, function, upvalues }
     }
 }
 
@@ -222,12 +208,7 @@ pub struct ObjectInstance {
 
 impl ObjectInstance {
     pub fn new(class: *mut ObjectClass) -> Self {
-        Self {
-            type_: ObjectType::Instance,
-            is_marked: false,
-            class,
-            fields: HashMap::default(),
-        }
+        Self { type_: ObjectType::Instance, is_marked: false, class, fields: HashMap::default() }
     }
 }
 
@@ -256,11 +237,6 @@ pub struct ObjectUpvalue {
 
 impl ObjectUpvalue {
     pub fn new(location: *mut Value) -> Self {
-        Self {
-            type_: ObjectType::Upvalue,
-            is_marked: false,
-            location,
-            closed: Value::default(),
-        }
+        Self { type_: ObjectType::Upvalue, is_marked: false, location, closed: Value::default() }
     }
 }

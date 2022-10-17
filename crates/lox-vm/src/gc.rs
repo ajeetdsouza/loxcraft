@@ -52,8 +52,7 @@ impl Gc {
                 }
                 ObjectType::Instance => {
                     self.mark(unsafe { (*object.instance).class });
-                    for (&name, &value) in unsafe { &(*object.instance).fields }
-                    {
+                    for (&name, &value) in unsafe { &(*object.instance).fields } {
                         self.mark(name);
                         self.mark(value);
                     }
@@ -134,10 +133,9 @@ where
                 if cfg!(feature = "gc-trace") {
                     println!("allocate string: {string}");
                 }
-                let object =
-                    Box::into_raw(Box::new(ObjectString::new(unsafe {
-                        mem::transmute(string.as_str())
-                    })));
+                let object = Box::into_raw(Box::new(ObjectString::new(unsafe {
+                    mem::transmute(string.as_str())
+                })));
                 entry.insert(string, object);
                 object
             }

@@ -6,10 +6,15 @@ use lox_vm::VM;
 use pretty_assertions::assert_eq;
 use test_generator::test_resources;
 
-#[test_resources("./res/examples/**/*.lox")]
+#[test_resources("examples/**/*.lox")]
 fn lox(path: &str) {
-    // Miri is too slow to run this test.
-    if cfg!(miri) && path == "res/examples/limit/loop_too_large.lox" {
+    // Miri is too slow to run these tests.
+    const MIRI_SKIP_PATHS: &[&str] = &[
+        "examples/field/many.lox",
+        "examples/limit/loop_too_large.lox",
+        "examples/limit/stack_overflow.lox",
+    ];
+    if cfg!(miri) && MIRI_SKIP_PATHS.contains(&path) {
         return;
     }
 
@@ -29,7 +34,6 @@ fn lox(path: &str) {
         let (e, _) = e.first().expect("received empty error");
         writeln!(&mut got_output, "{e}").expect("could not write to output");
     }
-    let got_output =
-        str::from_utf8(&got_output).expect("invalid UTF-8 in output");
+    let got_output = str::from_utf8(&got_output).expect("invalid UTF-8 in output");
     assert_eq!(exp_output, got_output);
 }

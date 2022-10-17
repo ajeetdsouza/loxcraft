@@ -7,13 +7,7 @@ use lox_common::error::ErrorS;
 use lox_vm::VM;
 
 #[derive(Debug, Parser)]
-#[command(
-    about,
-    author,
-    disable_help_subcommand = true,
-    propagate_version = true,
-    version
-)]
+#[command(about, author, disable_help_subcommand = true, propagate_version = true, version)]
 pub enum Cmd {
     Lsp,
     Playground {
@@ -52,9 +46,8 @@ impl Cmd {
                 lox_repl::run()
             }
             Cmd::Run { path } => {
-                let source = fs::read_to_string(&path).with_context(|| {
-                    format!("could not read file: {}", path)
-                })?;
+                let source = fs::read_to_string(&path)
+                    .with_context(|| format!("could not read file: {}", path))?;
                 let mut vm = VM::default();
                 let stdout = &mut io::stdout().lock();
                 if let Err(e) = vm.run(&source, stdout) {
@@ -72,7 +65,5 @@ fn report_err(source: &str, errors: Vec<ErrorS>) {
     for err in errors {
         lox_common::error::report_error(&mut buffer, source, &err);
     }
-    io::stderr()
-        .write_all(buffer.as_slice())
-        .expect("failed to write to stderr");
+    io::stderr().write_all(buffer.as_slice()).expect("failed to write to stderr");
 }

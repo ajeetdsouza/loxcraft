@@ -1,7 +1,6 @@
 edition = "2021"
 group_imports = "StdExternalCrate"
 imports_granularity = "Module"
-max_width = 80
 newline_style = "Native"
 use_field_init_shorthand = true
 use_small_heuristics = "Max"

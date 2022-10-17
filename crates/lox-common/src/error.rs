@@ -50,14 +50,7 @@ macro_rules! impl_from_error {
     )+};
 }
 
-impl_from_error!(
-    AttributeError,
-    IoError,
-    NameError,
-    OverflowError,
-    SyntaxError,
-    TypeError
-);
+impl_from_error!(AttributeError, IoError, NameError, OverflowError, SyntaxError, TypeError);
 
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum AttributeError {
@@ -162,10 +155,7 @@ impl AsDiagnostic for SyntaxError {
         match self {
             SyntaxError::UnrecognizedEOF { expected, .. }
             | SyntaxError::UnrecognizedToken { expected, .. } => {
-                diagnostic = diagnostic.with_notes(vec![format!(
-                    "expected: {}",
-                    one_of(expected)
-                )]);
+                diagnostic = diagnostic.with_notes(vec![format!("expected: {}", one_of(expected))]);
             }
             _ => {}
         };
@@ -185,9 +175,7 @@ pub enum TypeError {
     SuperclassInvalidType { type_: String },
     #[error("unsupported operand type for {op}: {rt_type:?}")]
     UnsupportedOperandPrefix { op: String, rt_type: String },
-    #[error(
-        "unsupported operand type(s) for {op}: {lt_type:?} and {rt_type:?}"
-    )]
+    #[error("unsupported operand type(s) for {op}: {lt_type:?} and {rt_type:?}")]
     UnsupportedOperandInfix { op: String, lt_type: String, rt_type: String },
 }
 
@@ -221,11 +209,7 @@ fn one_of(tokens: &[String]) -> String {
     output
 }
 
-pub fn report_errors(
-    writer: &mut impl io::Write,
-    source: &str,
-    errors: &[ErrorS],
-) {
+pub fn report_errors(writer: &mut impl io::Write, source: &str, errors: &[ErrorS]) {
     let mut buffer = termcolor::Buffer::ansi();
     for err in errors {
         report_error(&mut buffer, source, &err);
@@ -233,14 +217,9 @@ pub fn report_errors(
     writer.write_all(buffer.as_slice()).expect("failed to write to output");
 }
 
-pub fn report_error(
-    writer: &mut impl WriteColor,
-    source: &str,
-    (error, span): &ErrorS,
-) {
+pub fn report_error(writer: &mut impl WriteColor, source: &str, (error, span): &ErrorS) {
     let file = SimpleFile::new("<script>", source);
     let config = term::Config::default();
     let diagnostic = error.as_diagnostic(span);
-    term::emit(writer, &config, &file, &diagnostic)
-        .expect("failed to write to output");
+    term::emit(writer, &config, &file, &diagnostic).expect("failed to write to output");
 }

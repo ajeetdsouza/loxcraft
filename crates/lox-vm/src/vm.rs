@@ -8,8 +8,7 @@ use arrayvec::ArrayVec;
 use hashbrown::hash_map::Entry;
 use hashbrown::HashMap;
 use lox_common::error::{
-    AttributeError, ErrorS, IoError, NameError, OverflowError, Result,
-    TypeError,
+    AttributeError, ErrorS, IoError, NameError, OverflowError, Result, TypeError,
 };
 use rustc_hash::FxHasher;
 
@@ -17,8 +16,8 @@ use crate::allocator::GLOBAL;
 use crate::compiler::Compiler;
 use crate::gc::{Gc, GcAlloc};
 use crate::object::{
-    ObjectClass, ObjectClosure, ObjectFunction, ObjectInstance, ObjectString,
-    ObjectType, ObjectUpvalue,
+    ObjectClass, ObjectClosure, ObjectFunction, ObjectInstance, ObjectString, ObjectType,
+    ObjectUpvalue,
 };
 use crate::op;
 use crate::value::{Native, Value};
@@ -29,8 +28,7 @@ const STACK_MAX: usize = FRAMES_MAX * STACK_MAX_PER_FRAME;
 const STACK_MAX_PER_FRAME: usize = u8::MAX as usize + 1;
 
 pub struct VM {
-    pub globals:
-        HashMap<*mut ObjectString, Value, BuildHasherDefault<FxHasher>>,
+    pub globals: HashMap<*mut ObjectString, Value, BuildHasherDefault<FxHasher>>,
     pub open_upvalues: Vec<*mut ObjectUpvalue>,
 
     pub gc: Gc,
@@ -55,11 +53,7 @@ pub struct VM {
 }
 
 impl VM {
-    pub fn run(
-        &mut self,
-        source: &str,
-        stdout: &mut impl Write,
-    ) -> Result<(), Vec<ErrorS>> {
+    pub fn run(&mut self, source: &str, stdout: &mut impl Write) -> Result<(), Vec<ErrorS>> {
         let function = Compiler::compile(source, &mut self.gc)?;
         self.run_function(function, stdout).map_err(|e| vec![e])
     }
@@ -77,11 +71,7 @@ impl VM {
         let mut stack = self.stack_top;
 
         self.frames.clear();
-        self.frames.push(CallFrame {
-            closure,
-            ip: ptr::null(),
-            stack: ptr::null_mut(),
-        });
+        self.frames.push(CallFrame { closure, ip: ptr::null(), stack: ptr::null_mut() });
 
         /// Reads an instruction / byte from the current [`Chunk`].
         macro_rules! read_u8 {
@@ -110,9 +100,7 @@ impl VM {
                 {
                     let constant_idx = read_u8!() as usize;
                     let function = unsafe { (*closure).function };
-                    *unsafe {
-                        (*function).chunk.constants.get_unchecked(constant_idx)
-                    }
+                    *unsafe { (*function).chunk.constants.get_unchecked(constant_idx) }
                 }
             }};
         }
@@ -135,9 +123,7 @@ impl VM {
                 #[allow(unused_unsafe)]
                 {
                     let function = unsafe { (*closure).function };
-                    let idx = unsafe {
-                        ip.offset_from((*function).chunk.ops.as_ptr())
-                    } as usize;
+                    let idx = unsafe { ip.offset_from((*function).chunk.ops.as_ptr()) } as usize;
                     let span = unsafe { (*function).chunk.spans[idx].clone() };
                     return Err(($error.into(), span));
                 }
@@ -147,8 +133,7 @@ impl VM {
         loop {
             if cfg!(feature = "vm-trace") {
                 let function = unsafe { (*closure).function };
-                let idx =
-                    unsafe { ip.offset_from((*function).chunk.ops.as_ptr()) };
+                let idx = unsafe { ip.offset_from((*function).chunk.ops.as_ptr()) };
                 unsafe { (*function).chunk.debug_op(idx as usize) };
             }
 
@@ -204,9 +189,7 @@ impl VM {
                         Some(value) => self.push(*value),
                         None => {
                             bail!(NameError::NotDefined {
-                                name: unsafe {
-                                    (*name.string).value.to_string()
-                                }
+                                name: unsafe { (*name.string).value.to_string() }
                             })
                         }
                     }
@@ -220,31 +203,23 @@ impl VM {
                     let name = read_object!();
                     let value = self.peek(0);
                     match self.globals.entry(unsafe { name.string }) {
-                        Entry::Occupied(mut entry) => {
-                            entry.insert(unsafe { *value })
-                        }
+                        Entry::Occupied(mut entry) => entry.insert(unsafe { *value }),
                         Entry::Vacant(_) => {
                             bail!(NameError::NotDefined {
-                                name: unsafe {
-                                    (*name.string).value.to_string()
-                                }
+                                name: unsafe { (*name.string).value.to_string() }
                             })
                         }
                     };
                 }
                 op::GET_UPVALUE => {
                     let upvalue_idx = read_u8!() as usize;
-                    let object = *unsafe {
-                        (*closure).upvalues.get_unchecked(upvalue_idx)
-                    };
+                    let object = *unsafe { (*closure).upvalues.get_unchecked(upvalue_idx) };
                     let value = unsafe { *(*object).location };
                     self.push(value);
                 }
                 op::SET_UPVALUE => {
                     let upvalue_idx = read_u8!() as usize;
-                    let object = *unsafe {
-                        (*closure).upvalues.get_unchecked(upvalue_idx)
-                    };
+                    let object = *unsafe { (*closure).upvalues.get_unchecked(upvalue_idx) };
                     let value = unsafe { (*object).location };
                     unsafe { *value = *self.peek(0) };
                 }
@@ -253,9 +228,7 @@ impl VM {
                     let name = unsafe { read_object!().string };
                     let instance = match unsafe { *self.peek(0) } {
                         Value::Object(object)
-                            if unsafe {
-                                (*object.common).type_ == ObjectType::Instance
-                            } =>
+                            if unsafe { (*object.common).type_ == ObjectType::Instance } =>
                         unsafe { object.instance },
                         value => bail!(AttributeError::NoSuchAttribute {
                             type_: value.type_().to_string(),
@@ -270,9 +243,7 @@ impl VM {
                             self.push(*value);
                         }
                         None => bail!(AttributeError::NoSuchAttribute {
-                            type_: unsafe {
-                                (*(*(*instance).class).name).value.to_string()
-                            },
+                            type_: unsafe { (*(*(*instance).class).name).value.to_string() },
                             name: unsafe { (*name).value.to_string() },
                         }),
                     }
@@ -282,9 +253,7 @@ impl VM {
                     let name = unsafe { read_object!().string };
                     let instance = match unsafe { *self.peek(0) } {
                         Value::Object(object)
-                            if unsafe {
-                                (*object.common).type_ == ObjectType::Instance
-                            } =>
+                            if unsafe { (*object.common).type_ == ObjectType::Instance } =>
                         unsafe { object.instance },
                         value => bail!(AttributeError::NoSuchAttribute {
                             type_: value.type_().to_string(),
@@ -315,14 +284,11 @@ impl VM {
                             self.push((n1 + n2).into())
                         }
                         (Value::Object(o1), Value::Object(o2)) => {
-                            match unsafe {
-                                ((*o1.common).type_, (*o2.common).type_)
-                            } {
+                            match unsafe { ((*o1.common).type_, (*o2.common).type_) } {
                                 (ObjectType::String, ObjectType::String) => {
-                                    let string = unsafe {
-                                        [(*o1.string).value, (*o2.string).value]
-                                    }
-                                    .concat();
+                                    let string =
+                                        unsafe { [(*o1.string).value, (*o2.string).value] }
+                                            .concat();
                                     let string = self.alloc(string);
                                     self.pop();
                                     self.pop();
@@ -364,9 +330,7 @@ impl VM {
                 op::PRINT => {
                     let value = self.pop();
                     if writeln!(stdout, "{value}").is_err() {
-                        bail!(IoError::WriteError {
-                            file: "stdout".to_string()
-                        });
+                        bail!(IoError::WriteError { file: "stdout".to_string() });
                     };
                 }
                 op::JUMP => {
@@ -388,33 +352,23 @@ impl VM {
                     let arg_count = read_u8!();
                     let callee = unsafe { *self.peek(arg_count as usize) };
                     match callee {
-                        Value::Object(object) => match unsafe {
-                            (*object.common).type_
-                        } {
+                        Value::Object(object) => match unsafe { (*object.common).type_ } {
                             ObjectType::Class => {
                                 let instance =
-                                    self.alloc(ObjectInstance::new(unsafe {
-                                        object.class
-                                    }));
+                                    self.alloc(ObjectInstance::new(unsafe { object.class }));
                                 self.push(instance.into());
                             }
                             ObjectType::Closure => {
                                 // Save the current state of the VM.
-                                let frame = unsafe {
-                                    self.frames.last_mut().unwrap_unchecked()
-                                };
+                                let frame = unsafe { self.frames.last_mut().unwrap_unchecked() };
                                 frame.ip = ip;
                                 frame.stack = stack;
 
                                 // Check if the function arity is correct.
-                                let function =
-                                    unsafe { (*object.closure).function };
+                                let function = unsafe { (*object.closure).function };
                                 if arg_count != unsafe { (*function).arity } {
                                     bail!(TypeError::ArityMismatch {
-                                        name: unsafe {
-                                            (*(*function).name).value
-                                        }
-                                        .to_string(),
+                                        name: unsafe { (*(*function).name).value }.to_string(),
                                         exp_args: unsafe { (*function).arity },
                                         got_args: arg_count,
                                     });
@@ -429,17 +383,12 @@ impl VM {
                                 if self.frames.len() >= self.frames.capacity() {
                                     bail!(OverflowError::StackOverflow);
                                 }
-                                let frame = CallFrame {
-                                    closure,
-                                    ip: ptr::null(),
-                                    stack: ptr::null_mut(),
-                                };
+                                let frame =
+                                    CallFrame { closure, ip: ptr::null(), stack: ptr::null_mut() };
                                 unsafe { self.frames.push_unchecked(frame) };
                             }
                             _ => {
-                                bail!(TypeError::NotCallable {
-                                    type_: callee.type_().to_string()
-                                })
+                                bail!(TypeError::NotCallable { type_: callee.type_().to_string() })
                             }
                         },
                         Value::Native(native) => {
@@ -463,17 +412,14 @@ impl VM {
                             self.push(value);
                         }
                         _ => {
-                            bail!(TypeError::NotCallable {
-                                type_: callee.type_().to_string()
-                            })
+                            bail!(TypeError::NotCallable { type_: callee.type_().to_string() })
                         }
                     }
                 }
                 op::CLOSURE => {
                     let function = unsafe { read_object!().function };
 
-                    let upvalue_count =
-                        unsafe { (*function).upvalues } as usize;
+                    let upvalue_count = unsafe { (*function).upvalues } as usize;
                     let mut upvalues = Vec::with_capacity(upvalue_count);
 
                     for _ in 0..upvalue_count {
@@ -481,24 +427,18 @@ impl VM {
                         let upvalue_idx = read_u8!();
 
                         let upvalue = if is_local != 0 {
-                            let location =
-                                unsafe { stack.add(upvalue_idx as usize) };
+                            let location = unsafe { stack.add(upvalue_idx as usize) };
                             println!("capture location: {}", unsafe {
                                 location.offset_from(stack)
                             });
                             self.capture_upvalue(location)
                         } else {
-                            unsafe {
-                                *(*closure)
-                                    .upvalues
-                                    .get_unchecked(upvalue_idx as usize)
-                            }
+                            unsafe { *(*closure).upvalues.get_unchecked(upvalue_idx as usize) }
                         };
                         upvalues.push(upvalue);
                     }
 
-                    let closure =
-                        self.alloc(ObjectClosure::new(function, upvalues));
+                    let closure = self.alloc(ObjectClosure::new(function, upvalues));
                     self.push(closure.into());
                 }
                 op::CLOSE_UPVALUE => {
@@ -542,17 +482,13 @@ impl VM {
             }
         }
 
-        debug_assert!(
-            stack == self.stack_top,
-            "VM finished executing but stack is not empty"
-        );
+        debug_assert!(stack == self.stack_top, "VM finished executing but stack is not empty");
         Ok(())
     }
 
     fn alloc<T>(&mut self, object: impl GcAlloc<T>) -> T {
         if !cfg!(feature = "gc-off")
-            && (cfg!(feature = "gc-stress")
-                || GLOBAL.allocated_bytes() > self.next_gc)
+            && (cfg!(feature = "gc-stress") || GLOBAL.allocated_bytes() > self.next_gc)
         {
             self.gc();
         }
@@ -614,10 +550,7 @@ impl VM {
     }
 
     fn capture_upvalue(&mut self, location: *mut Value) -> *mut ObjectUpvalue {
-        match self
-            .open_upvalues
-            .iter()
-            .find(|&&upvalue| unsafe { (*upvalue).location } == location)
+        match self.open_upvalues.iter().find(|&&upvalue| unsafe { (*upvalue).location } == location)
         {
             Some(&upvalue) => upvalue,
             None => {
@@ -645,10 +578,7 @@ impl Default for VM {
         // TODO: tune these later.
         let mut gc = Gc::default();
 
-        let mut globals = HashMap::with_capacity_and_hasher(
-            256,
-            BuildHasherDefault::default(),
-        );
+        let mut globals = HashMap::with_capacity_and_hasher(256, BuildHasherDefault::default());
         let clock = gc.alloc("clock");
         globals.insert(clock, Native::Clock.into());
 

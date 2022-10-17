@@ -3,13 +3,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[cfg(any(miri, target_family = "wasm"))]
 #[global_allocator]
-pub static GLOBAL: Allocator<std::alloc::System> =
-    Allocator::new(std::alloc::System);
+pub static GLOBAL: Allocator<std::alloc::System> = Allocator::new(std::alloc::System);
 
 #[cfg(not(any(miri, target_family = "wasm")))]
 #[global_allocator]
-pub static GLOBAL: Allocator<mimalloc::MiMalloc> =
-    Allocator::new(mimalloc::MiMalloc);
+pub static GLOBAL: Allocator<mimalloc::MiMalloc> = Allocator::new(mimalloc::MiMalloc);
 
 pub struct Allocator<T> {
     inner: T,
@@ -42,14 +40,8 @@ unsafe impl<T: GlobalAlloc> GlobalAlloc for Allocator<T> {
         self.inner.alloc_zeroed(layout)
     }
 
-    unsafe fn realloc(
-        &self,
-        ptr: *mut u8,
-        layout: Layout,
-        new_size: usize,
-    ) -> *mut u8 {
-        self.allocated_bytes
-            .fetch_add(new_size.wrapping_sub(layout.size()), Ordering::Relaxed);
+    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+        self.allocated_bytes.fetch_add(new_size.wrapping_sub(layout.size()), Ordering::Relaxed);
         self.inner.realloc(ptr, layout, new_size)
     }
 }

@@ -1189,7 +1189,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap 4.0.12",
- "criterion",
  "dirs",
  "human-panic",
  "lox-common",
@@ -1264,6 +1263,7 @@ name = "lox-vm"
 version = "0.1.0"
 dependencies = [
  "arrayvec 0.7.2",
+ "criterion",
  "hashbrown",
  "iota",
  "lox-common",
