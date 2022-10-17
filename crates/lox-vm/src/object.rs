@@ -12,6 +12,8 @@ use crate::value::Value;
 #[repr(C)]
 pub union Object {
     pub common: *mut ObjectCommon,
+
+    pub bound_method: *mut ObjectBoundMethod,
     pub class: *mut ObjectClass,
     pub closure: *mut ObjectClosure,
     pub function: *mut ObjectFunction,
@@ -23,24 +25,21 @@ pub union Object {
 impl Object {
     pub fn type_(&self) -> &'static str {
         match unsafe { (*self.common).type_ } {
+            ObjectType::BoundMethod => "bound method",
             ObjectType::Class => "class",
             ObjectType::Closure => "function",
-            ObjectType::Function => "function_impl",
+            ObjectType::Function => "raw function",
             ObjectType::Instance => unsafe { (*(*(*self.instance).class).name).value },
             ObjectType::String => "string",
             ObjectType::Upvalue => unsafe { *(*self.upvalue).location }.type_(),
         }
     }
 
-    pub fn mark(&mut self) {
-        if unsafe { (*(*self).common).is_marked } {
-            return;
-        }
-        unsafe { (*(*self).common).is_marked = true };
-    }
-
     pub fn free(self) {
         match unsafe { (*self.common).type_ } {
+            ObjectType::BoundMethod => {
+                unsafe { Box::from_raw(self.bound_method) };
+            }
             ObjectType::Class => {
                 unsafe { Box::from_raw(self.class) };
             }
@@ -71,28 +70,31 @@ impl Debug for Object {
 
 impl Display for Object {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        unsafe {
-            match (*self.common).type_ {
-                ObjectType::Class => {
-                    write!(f, "<class {}>", (*(*self.class).name).value)
-                }
-                ObjectType::Closure => {
-                    write!(f, "{}", Object::from((*self.closure).function))
-                }
-                ObjectType::Function => {
-                    let name = (*(*self.function).name).value;
-                    if name.is_empty() {
-                        write!(f, "<script>")
-                    } else {
-                        write!(f, "<function {}>", name)
-                    }
-                }
-                ObjectType::Instance => {
-                    write!(f, "<instance {}>", (*(*(*self.instance).class).name).value)
-                }
-                ObjectType::String => write!(f, "{}", (*self.string).value),
-                ObjectType::Upvalue => write!(f, "<upvalue>"),
+        match unsafe { (*self.common).type_ } {
+            ObjectType::BoundMethod => {
+                write!(f, "<bound method {}>", unsafe {
+                    (*(*(*(*self.bound_method).closure).function).name).value
+                })
             }
+            ObjectType::Class => {
+                write!(f, "<class {}>", unsafe { (*(*self.class).name).value })
+            }
+            ObjectType::Closure => {
+                write!(f, "{}", unsafe { Object::from((*self.closure).function) })
+            }
+            ObjectType::Function => {
+                let name = unsafe { (*(*self.function).name).value };
+                if name.is_empty() {
+                    write!(f, "<script>")
+                } else {
+                    write!(f, "<function {}>", name)
+                }
+            }
+            ObjectType::Instance => {
+                write!(f, "<object {}>", unsafe { (*(*(*self.instance).class).name).value })
+            }
+            ObjectType::String => write!(f, "{}", unsafe { (*self.string).value }),
+            ObjectType::Upvalue => write!(f, "<upvalue>"),
         }
     }
 }
@@ -109,6 +111,7 @@ macro_rules! impl_from_object {
     };
 }
 
+impl_from_object!(bound_method, ObjectBoundMethod);
 impl_from_object!(class, ObjectClass);
 impl_from_object!(closure, ObjectClosure);
 impl_from_object!(function, ObjectFunction);
@@ -141,8 +144,24 @@ pub enum ObjectType {
     Closure,
     Function,
     Instance,
+    BoundMethod,
     String,
     Upvalue,
+}
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct ObjectBoundMethod {
+    pub type_: ObjectType,
+    pub is_marked: bool,
+    pub this: *mut ObjectInstance,
+    pub closure: *mut ObjectClosure,
+}
+
+impl ObjectBoundMethod {
+    pub fn new(this: *mut ObjectInstance, method: *mut ObjectClosure) -> Self {
+        Self { type_: ObjectType::BoundMethod, is_marked: false, this, closure: method }
+    }
 }
 
 #[derive(Debug)]
@@ -151,11 +170,12 @@ pub struct ObjectClass {
     pub type_: ObjectType,
     pub is_marked: bool,
     pub name: *mut ObjectString,
+    pub methods: HashMap<*mut ObjectString, *mut ObjectClosure, BuildHasherDefault<FxHasher>>,
 }
 
 impl ObjectClass {
     pub fn new(name: *mut ObjectString) -> Self {
-        Self { type_: ObjectType::Class, is_marked: false, name }
+        Self { type_: ObjectType::Class, is_marked: false, name, methods: HashMap::default() }
     }
 }
 

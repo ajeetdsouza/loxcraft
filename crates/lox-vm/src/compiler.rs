@@ -4,7 +4,7 @@ use std::mem;
 use arrayvec::ArrayVec;
 use lox_common::error::{ErrorS, NameError, OverflowError, Result, SyntaxError};
 use lox_common::types::Span;
-use lox_syntax::ast::{Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Stmt, StmtS};
+use lox_syntax::ast::{Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Stmt, StmtFun, StmtS};
 
 use crate::gc::Gc;
 use crate::object::ObjectFunction;
@@ -54,7 +54,6 @@ impl Compiler {
             }
             Stmt::Class(class) => {
                 let name = gc.alloc(&class.name).into();
-
                 self.emit_u8(op::CLASS, span);
                 self.emit_constant(name, span)?;
 
@@ -64,6 +63,19 @@ impl Compiler {
                 } else {
                     self.declare_local(&class.name, span)?;
                     self.define_local();
+                }
+
+                if !class.methods.is_empty() {
+                    self.get_variable(&class.name, span, gc)?;
+
+                    for (method, span) in &class.methods {
+                        self.compile_function(method, span, FunctionType::Method, gc)?;
+                        let name = gc.alloc(&method.name).into();
+                        self.emit_u8(op::METHOD, span);
+                        self.emit_constant(name, span)?;
+                    }
+
+                    self.emit_u8(op::POP, span);
                 }
             }
             Stmt::Expr(expr) => {
@@ -114,53 +126,11 @@ impl Compiler {
                 self.end_scope(span);
             }
             Stmt::Fun(fun) => {
-                let name = gc.alloc(&fun.name);
-                let arity = fun
-                    .params
-                    .len()
-                    .try_into()
-                    .map_err(|_| (OverflowError::TooManyParams.into(), span.clone()))?;
-
-                let ctx = CompilerCtx {
-                    function: gc.alloc(ObjectFunction::new(name, arity)),
-                    type_: FunctionType::Function,
-                    locals: ArrayVec::new(),
-                    upvalues: ArrayVec::new(),
-                    parent: None,
-                    scope_depth: self.ctx.scope_depth + 1,
-                };
-                self.begin_ctx(ctx);
-
-                self.declare_local(&fun.name, span)?;
-                self.define_local();
-                for param in &fun.params {
-                    self.declare_local(param, span)?;
-                    self.define_local();
-                }
-
-                for stmt in &fun.body.stmts {
-                    self.compile_stmt(stmt, gc)?;
-                }
-
-                // Implicit return at the end of the function.
-                if unsafe { (*self.ctx.function).chunk.ops.last() } != Some(&op::RETURN) {
-                    self.emit_u8(op::NIL, span);
-                    self.emit_u8(op::RETURN, span);
-                }
-
-                let (function, upvalues) = self.end_ctx();
-                let value = function.into();
-                self.emit_u8(op::CLOSURE, span);
-                self.emit_constant(value, span)?;
-
-                for upvalue in &upvalues {
-                    self.emit_u8(upvalue.is_local.into(), span);
-                    self.emit_u8(upvalue.idx, span);
-                }
-
+                self.compile_function(fun, span, FunctionType::Function, gc)?;
                 if self.is_global() {
+                    let name = gc.alloc(&fun.name).into();
                     self.emit_u8(op::DEFINE_GLOBAL, span);
-                    self.emit_constant(name.into(), span)?;
+                    self.emit_constant(name, span)?;
                 } else {
                     self.declare_local(&fun.name, span)?;
                     self.define_local();
@@ -243,6 +213,65 @@ impl Compiler {
             }
             _ => unimplemented!(),
         }
+        Ok(())
+    }
+
+    fn compile_function(
+        &mut self,
+        fun: &StmtFun,
+        span: &Span,
+        type_: FunctionType,
+        gc: &mut Gc,
+    ) -> Result<()> {
+        let name = gc.alloc(&fun.name);
+        let arity = fun
+            .params
+            .len()
+            .try_into()
+            .map_err(|_| (OverflowError::TooManyParams.into(), span.clone()))?;
+
+        let ctx = CompilerCtx {
+            function: gc.alloc(ObjectFunction::new(name, arity)),
+            type_,
+            locals: ArrayVec::new(),
+            upvalues: ArrayVec::new(),
+            parent: None,
+            scope_depth: self.ctx.scope_depth + 1,
+        };
+        self.begin_ctx(ctx);
+
+        if type_ == FunctionType::Method {
+            self.declare_local("this", span)?;
+        } else {
+            self.declare_local(&fun.name, span)?;
+        }
+        self.define_local();
+
+        for param in &fun.params {
+            self.declare_local(param, span)?;
+            self.define_local();
+        }
+
+        for stmt in &fun.body.stmts {
+            self.compile_stmt(stmt, gc)?;
+        }
+
+        // Implicit return at the end of the function.
+        if unsafe { (*self.ctx.function).chunk.ops.last() } != Some(&op::RETURN) {
+            self.emit_u8(op::NIL, span);
+            self.emit_u8(op::RETURN, span);
+        }
+
+        let (function, upvalues) = self.end_ctx();
+        let value = function.into();
+        self.emit_u8(op::CLOSURE, span);
+        self.emit_constant(value, span)?;
+
+        for upvalue in &upvalues {
+            self.emit_u8(upvalue.is_local.into(), span);
+            self.emit_u8(upvalue.idx, span);
+        }
+
         Ok(())
     }
 
@@ -635,10 +664,12 @@ struct Upvalue {
     is_local: bool,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum FunctionType {
     /// A function that has been defined in code.
     Function,
+    /// A bound method.
+    Method,
     /// The global-level function that is called when the program starts.
     Script,
 }

@@ -30,9 +30,18 @@ impl Gc {
                 println!("blacken {}: {object}", object.type_());
             }
             match unsafe { (*object.common).type_ } {
+                ObjectType::BoundMethod => {
+                    let method = unsafe { object.bound_method };
+                    self.mark(unsafe { (*method).this });
+                    self.mark(unsafe { (*method).closure });
+                }
                 ObjectType::Class => {
                     let class = unsafe { object.class };
                     self.mark(unsafe { (*class).name });
+                    for (&name, &method) in unsafe { &(*class).methods } {
+                        self.mark(name);
+                        self.mark(method);
+                    }
                 }
                 ObjectType::Closure => {
                     let closure = unsafe { object.closure };

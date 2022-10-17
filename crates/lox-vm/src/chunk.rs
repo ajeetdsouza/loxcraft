@@ -106,6 +106,7 @@ impl Chunk {
             op::CLOSE_UPVALUE => self.debug_op_simple("OP_CLOSE_UPVALUE", idx),
             op::RETURN => self.debug_op_simple("OP_RETURN", idx),
             op::CLASS => self.debug_op_constant("OP_CLASS", idx),
+            op::METHOD => self.debug_op_constant("OP_METHOD", idx),
             byte => self.debug_op_simple(&format!("OP_UNKNOWN({byte:#X})"), idx),
         }
     }

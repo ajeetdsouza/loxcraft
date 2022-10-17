@@ -9,11 +9,8 @@ use test_generator::test_resources;
 #[test_resources("examples/**/*.lox")]
 fn lox(path: &str) {
     // Miri is too slow to run these tests.
-    const MIRI_SKIP_PATHS: &[&str] = &[
-        "examples/field/many.lox",
-        "examples/limit/loop_too_large.lox",
-        "examples/limit/stack_overflow.lox",
-    ];
+    const MIRI_SKIP_PATHS: &[&str] =
+        &["examples/limit/loop_too_large.lox", "examples/limit/stack_overflow.lox"];
     if cfg!(miri) && MIRI_SKIP_PATHS.contains(&path) {
         return;
     }

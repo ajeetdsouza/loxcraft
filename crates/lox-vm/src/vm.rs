@@ -16,8 +16,8 @@ use crate::allocator::GLOBAL;
 use crate::compiler::Compiler;
 use crate::gc::{Gc, GcAlloc};
 use crate::object::{
-    ObjectClass, ObjectClosure, ObjectFunction, ObjectInstance, ObjectString, ObjectType,
-    ObjectUpvalue,
+    ObjectBoundMethod, ObjectClass, ObjectClosure, ObjectFunction, ObjectInstance, ObjectString,
+    ObjectType, ObjectUpvalue,
 };
 use crate::op;
 use crate::value::{Native, Value};
@@ -139,27 +139,62 @@ impl VM {
 
             /// Binary operator that acts on any [`Value`].
             macro_rules! binary_op {
-                    ($op:tt) => {{
-                        let b = self.pop();
-                        let a = self.pop();
-                        self.push((a $op b).into());
-                    }};
-                }
+                ($op:tt) => {{
+                    let b = self.pop();
+                    let a = self.pop();
+                    self.push((a $op b).into());
+                }};
+            }
             /// Binary operator that only acts on [`Value::Number`].
             macro_rules! binary_op_number {
-                    ($op:tt) => {{
-                        let b = self.pop();
-                        let a = self.pop();
-                        match (a, b) {
-                            (Value::Number(a), Value::Number(b)) => self.push((a $op b).into()),
-                            _ => bail!(TypeError::UnsupportedOperandInfix {
-                                op: stringify!($op).to_string(),
-                                lt_type: a.type_().to_string(),
-                                rt_type: b.type_().to_string(),
-                            }),
-                        };
-                    }};
-                }
+                ($op:tt) => {{
+                    let b = self.pop();
+                    let a = self.pop();
+                    match (a, b) {
+                        (Value::Number(a), Value::Number(b)) => self.push((a $op b).into()),
+                        _ => bail!(TypeError::UnsupportedOperandInfix {
+                            op: stringify!($op).to_string(),
+                            lt_type: a.type_().to_string(),
+                            rt_type: b.type_().to_string(),
+                        }),
+                    };
+                }};
+            }
+
+            macro_rules! call_closure {
+                ($closure:expr, $arg_count:expr) => {{
+                    // Save the current state of the VM.
+                    let frame = unsafe { self.frames.last_mut().unwrap_unchecked() };
+                    frame.ip = ip;
+                    frame.stack = stack;
+
+                    // Set up the next frame.
+                    if self.frames.len() >= self.frames.capacity() {
+                        bail!(OverflowError::StackOverflow);
+                    }
+                    let frame =
+                        CallFrame { closure: $closure, ip: ptr::null(), stack: ptr::null_mut() };
+
+                    // Check if the function arity is correct.
+                    let function = unsafe { (*frame.closure).function };
+                    let arg_count = $arg_count;
+                    if arg_count != unsafe { (*function).arity } {
+                        bail!(TypeError::ArityMismatch {
+                            name: unsafe { (*(*function).name).value }.to_string(),
+                            exp_args: unsafe { (*function).arity },
+                            got_args: arg_count,
+                        });
+                    }
+
+                    // Set up the current closure.
+                    closure = frame.closure;
+                    ip = unsafe { (*function).chunk.ops.as_ptr() };
+                    stack = self.peek(arg_count as usize);
+
+                    // Set up the current frame.
+                    unsafe { self.frames.push_unchecked(frame) };
+                }};
+            }
 
             match read_u8!() {
                 op::CONSTANT => {
@@ -236,16 +271,20 @@ impl VM {
                         }),
                     };
 
-                    match unsafe { (*instance).fields.get(&name) } {
-                        Some(value) => {
-                            // Pop the instance from the stack.
-                            self.pop();
-                            self.push(*value);
-                        }
-                        None => bail!(AttributeError::NoSuchAttribute {
+                    if let Some(&field) = unsafe { (*instance).fields.get(&name) } {
+                        // Pop the instance from the stack.
+                        self.pop();
+                        self.push(field);
+                    } else if let Some(&method) = unsafe { (*(*instance).class).methods.get(&name) }
+                    {
+                        let bound_method = self.alloc(ObjectBoundMethod::new(instance, method));
+                        self.pop();
+                        self.push(bound_method.into());
+                    } else {
+                        bail!(AttributeError::NoSuchAttribute {
                             type_: unsafe { (*(*(*instance).class).name).value.to_string() },
                             name: unsafe { (*name).value.to_string() },
-                        }),
+                        });
                     }
                 }
                 op::SET_PROPERTY => {
@@ -353,39 +392,18 @@ impl VM {
                     let callee = unsafe { *self.peek(arg_count as usize) };
                     match callee {
                         Value::Object(object) => match unsafe { (*object.common).type_ } {
+                            ObjectType::BoundMethod => {
+                                let method = unsafe { object.bound_method };
+                                unsafe { *self.peek(arg_count as usize) = (*method).this.into() };
+                                call_closure!(unsafe { (*method).closure }, arg_count);
+                            }
                             ObjectType::Class => {
                                 let instance =
                                     self.alloc(ObjectInstance::new(unsafe { object.class }));
                                 self.push(instance.into());
                             }
                             ObjectType::Closure => {
-                                // Save the current state of the VM.
-                                let frame = unsafe { self.frames.last_mut().unwrap_unchecked() };
-                                frame.ip = ip;
-                                frame.stack = stack;
-
-                                // Check if the function arity is correct.
-                                let function = unsafe { (*object.closure).function };
-                                if arg_count != unsafe { (*function).arity } {
-                                    bail!(TypeError::ArityMismatch {
-                                        name: unsafe { (*(*function).name).value }.to_string(),
-                                        exp_args: unsafe { (*function).arity },
-                                        got_args: arg_count,
-                                    });
-                                }
-
-                                // Set up the current closure.
-                                closure = unsafe { object.closure };
-                                ip = unsafe { (*function).chunk.ops.as_ptr() };
-                                stack = self.peek(arg_count as usize);
-
-                                // Set up the current frame.
-                                if self.frames.len() >= self.frames.capacity() {
-                                    bail!(OverflowError::StackOverflow);
-                                }
-                                let frame =
-                                    CallFrame { closure, ip: ptr::null(), stack: ptr::null_mut() };
-                                unsafe { self.frames.push_unchecked(frame) };
+                                call_closure!(unsafe { object.closure }, arg_count)
                             }
                             _ => {
                                 bail!(TypeError::NotCallable { type_: callee.type_().to_string() })
@@ -428,9 +446,6 @@ impl VM {
 
                         let upvalue = if is_local != 0 {
                             let location = unsafe { stack.add(upvalue_idx as usize) };
-                            println!("capture location: {}", unsafe {
-                                location.offset_from(stack)
-                            });
                             self.capture_upvalue(location)
                         } else {
                             unsafe { *(*closure).upvalues.get_unchecked(upvalue_idx as usize) }
@@ -467,6 +482,13 @@ impl VM {
                     let name = unsafe { read_object!().string };
                     let class = self.alloc(ObjectClass::new(name)).into();
                     self.push(class);
+                }
+                op::METHOD => {
+                    let name = unsafe { read_object!().string };
+                    let method = unsafe { (*self.peek(0)).object().closure };
+                    let class = unsafe { (*self.peek(1)).object().class };
+                    unsafe { (*class).methods.insert_unique_unchecked(name, method) };
+                    self.pop();
                 }
                 _ => unsafe { hint::unreachable_unchecked() },
             }

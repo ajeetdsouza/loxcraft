@@ -2,4 +2,4 @@ class Foo {
   method() { }
 }
 var foo = Foo();
-print foo.method; // out: <function method>
+print foo.method; // out: <bound method method>
