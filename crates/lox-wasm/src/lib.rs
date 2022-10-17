@@ -1,7 +1,7 @@
 use std::fmt::{self, Display, Formatter};
 use std::io::{self, Write};
 
-use lox_common::error::report_err;
+use lox_common::error::report_error;
 use lox_vm::VM;
 use serde::Serialize;
 use termcolor::{Color, WriteColor};
@@ -16,7 +16,7 @@ pub fn loxRun(source: &str) {
     if let Err(errors) = VM::default().run(source, &mut output) {
         let mut writer = HtmlWriter::new(&mut output);
         for e in errors.iter() {
-            report_err(&mut writer, source, e);
+            report_error(&mut writer, source, e);
         }
         postMessage(&Message::ExitFailure.to_string());
         return;

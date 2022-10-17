@@ -60,6 +60,8 @@ fn main() -> Result<()> {
                         "miri",
                         "nextest",
                         "run",
+                        "--features=gc-stress gc-trace vm-trace",
+                        "--no-default-features",
                         "--no-fail-fast",
                         "--package=lox-vm",
                     ])

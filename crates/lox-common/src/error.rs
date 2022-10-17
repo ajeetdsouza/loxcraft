@@ -1,3 +1,5 @@
+use std::io;
+
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;
@@ -219,14 +221,26 @@ fn one_of(tokens: &[String]) -> String {
     output
 }
 
-pub fn report_err(
-    writer: &mut dyn WriteColor,
+pub fn report_errors(
+    writer: &mut impl io::Write,
     source: &str,
-    (err, span): &ErrorS,
+    errors: &[ErrorS],
+) {
+    let mut buffer = termcolor::Buffer::ansi();
+    for err in errors {
+        report_error(&mut buffer, source, &err);
+    }
+    writer.write_all(buffer.as_slice()).expect("failed to write to output");
+}
+
+pub fn report_error(
+    writer: &mut impl WriteColor,
+    source: &str,
+    (error, span): &ErrorS,
 ) {
     let file = SimpleFile::new("<script>", source);
     let config = term::Config::default();
-    let diagnostic = err.as_diagnostic(span);
+    let diagnostic = error.as_diagnostic(span);
     term::emit(writer, &config, &file, &diagnostic)
         .expect("failed to write to output");
 }

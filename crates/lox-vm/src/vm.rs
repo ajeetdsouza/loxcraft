@@ -145,7 +145,7 @@ impl VM {
         }
 
         loop {
-            if cfg!(feature = "debug-trace") {
+            if cfg!(feature = "vm-trace") {
                 let function = unsafe { (*closure).function };
                 let idx =
                     unsafe { ip.offset_from((*function).chunk.ops.as_ptr()) };
@@ -531,7 +531,7 @@ impl VM {
                 _ => unsafe { hint::unreachable_unchecked() },
             }
 
-            if cfg!(feature = "debug-trace") {
+            if cfg!(feature = "vm-trace") {
                 eprint!("     ");
                 let mut stack_ptr = stack;
                 while stack_ptr < self.stack_top {
@@ -550,8 +550,8 @@ impl VM {
     }
 
     fn alloc<T>(&mut self, object: impl GcAlloc<T>) -> T {
-        if !cfg!(feature = "disable-gc")
-            && (cfg!(feature = "stress-gc")
+        if !cfg!(feature = "gc-off")
+            && (cfg!(feature = "gc-stress")
                 || GLOBAL.allocated_bytes() > self.next_gc)
         {
             self.gc();
@@ -560,7 +560,7 @@ impl VM {
     }
 
     fn gc(&mut self) {
-        if cfg!(feature = "debug-gc") {
+        if cfg!(feature = "gc-trace") {
             println!("-- gc begin");
         }
 
@@ -588,7 +588,7 @@ impl VM {
 
         self.next_gc = GLOBAL.allocated_bytes() * GC_HEAP_GROW_FACTOR;
 
-        if cfg!(feature = "debug-gc") {
+        if cfg!(feature = "gc-trace") {
             println!("-- gc end");
         }
     }

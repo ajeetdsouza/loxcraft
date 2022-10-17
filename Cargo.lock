@@ -1195,13 +1195,10 @@ dependencies = [
  "lox-common",
  "lox-lsp",
  "lox-playground",
+ "lox-repl",
  "lox-syntax",
  "lox-vm",
- "nu-ansi-term",
- "reedline",
  "termcolor",
- "tree-sitter-highlight",
- "tree-sitter-lox",
 ]
 
 [[package]]
@@ -1234,6 +1231,21 @@ dependencies = [
  "tokio",
  "warp",
  "webbrowser",
+]
+
+[[package]]
+name = "lox-repl"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "dirs",
+ "lox-common",
+ "lox-syntax",
+ "lox-vm",
+ "nu-ansi-term",
+ "reedline",
+ "tree-sitter-highlight",
+ "tree-sitter-lox",
 ]
 
 [[package]]

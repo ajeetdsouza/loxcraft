@@ -6,11 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = []
-debug-gc = []
-disable-gc = []
-stress-gc = []
-debug-trace = []
+gc-off = []
+gc-stress = []
+gc-trace = []
+vm-trace = []
 
 [dependencies]
 arrayvec.workspace = true

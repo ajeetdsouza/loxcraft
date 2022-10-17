@@ -1,6 +1,8 @@
 use std::borrow::Cow;
+use std::io;
 
 use anyhow::{Context, Result};
+use lox_vm::VM;
 use nu_ansi_term::{Color, Style};
 use reedline::{
     EditCommand, Emacs, FileBackedHistory, KeyCode, KeyModifiers,
@@ -10,7 +12,35 @@ use reedline::{
 use tree_sitter_highlight::{self, HighlightConfiguration, HighlightEvent};
 use tree_sitter_lox::{self, HIGHLIGHTS_QUERY};
 
-pub fn editor() -> Result<Reedline> {
+pub fn run() -> Result<()> {
+    let mut vm = VM::default();
+    let mut editor = editor().context("could not start REPL")?;
+    let stdout = &mut io::stdout().lock();
+    let stderr = &mut io::stderr().lock();
+
+    loop {
+        let line = editor.read_line(&Prompt);
+        editor.sync_history().unwrap();
+
+        match line {
+            Ok(reedline::Signal::Success(line)) => {
+                if let Err(errors) = vm.run(&line, stdout) {
+                    lox_common::error::report_errors(stderr, &line, &errors)
+                }
+            }
+            Ok(reedline::Signal::CtrlC) => eprintln!("^C"),
+            Ok(reedline::Signal::CtrlD) => break,
+            Err(e) => {
+                eprintln!("error: {e:?}");
+                break;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn editor() -> Result<Reedline> {
     let mut keybindings = reedline::default_emacs_keybindings();
     keybindings.add_binding(
         KeyModifiers::ALT,

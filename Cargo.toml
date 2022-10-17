@@ -57,10 +57,14 @@ wasm-bindgen = "0.2.80"
 webbrowser = "0.8.0"
 
 [features]
-default = ["playground"]
+default = ["lsp", "playground", "repl"]
+gc-off = ["lox-vm/gc-off"]
+gc-stress = ["lox-vm/gc-stress"]
+gc-trace = ["lox-vm/gc-trace"]
+lsp = ["dep:lox-lsp"]
 playground = ["dep:lox-playground"]
-profiling = []
-debug-trace = ["lox-vm/debug-trace"]
+repl = ["dep:lox-repl"]
+vm-trace = ["lox-vm/vm-trace"]
 
 [dependencies]
 anyhow.workspace = true
@@ -68,15 +72,12 @@ clap.workspace = true
 dirs.workspace = true
 human-panic.workspace = true
 lox-common.path = "crates/lox-common"
-lox-lsp.path = "crates/lox-lsp"
+lox-lsp = { path = "crates/lox-lsp", optional = true }
 lox-playground = { path = "crates/lox-playground", optional = true }
+lox-repl = { path = "crates/lox-repl", optional = true }
 lox-syntax.path = "crates/lox-syntax"
 lox-vm.path = "crates/lox-vm"
-nu-ansi-term.workspace = true
-reedline.workspace = true
 termcolor.workspace = true
-tree-sitter-highlight.workspace = true
-tree-sitter-lox.path = "crates/tree-sitter-lox"
 
 [dev-dependencies]
 criterion.workspace = true
@@ -84,11 +85,6 @@ criterion.workspace = true
 [[bench]]
 name = "lang"
 harness = false
-
-[profile.profiling]
-inherits = "release"
-debug = true
-strip = false
 
 [profile.release]
 codegen-units = 1
