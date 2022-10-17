@@ -24,7 +24,10 @@ lox-syntax.path = "../lox-syntax"
 rustc-hash.workspace = true
 
 [target.'cfg(not(any(miri, target_family = "wasm")))'.dependencies]
-mimalloc = { workspace = true }
+mimalloc.workspace = true
+
+[build-dependencies]
+build-deps.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true

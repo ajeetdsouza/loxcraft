@@ -22,6 +22,7 @@ members = ["crates/*", "xtask"]
 anyhow = "1.0.52"
 arrayvec = "0.7.2"
 askama_escape = "0.10.3"
+build-deps = "0.1.4"
 cc = "1.0.73"
 clap = { version = "4.0.0", features = ["derive"] }
 codespan-reporting = "0.11.1"
