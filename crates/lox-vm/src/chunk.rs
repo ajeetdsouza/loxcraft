@@ -11,6 +11,7 @@ use crate::value::Value;
 pub struct Chunk {
     pub ops: Vec<u8>,
     pub constants: ArrayVec<Value, 256>,
+    pub constant_count: usize,
     pub spans: VecRun<Span>,
 }
 
@@ -23,12 +24,15 @@ impl Chunk {
     /// Writes a constant to the [`Chunk`] and returns its index. If an equal
     /// [`Value`] is already present, then its index is returned instead.
     pub fn write_constant(&mut self, value: Value, span: &Span) -> Result<u8> {
+        if self.constant_count == 256 {
+            return Err((OverflowError::TooManyConstants.into(), span.clone()));
+        }
+        self.constant_count += 1;
+
         let idx = match self.constants.iter().position(|&constant| constant == value) {
             Some(idx) => idx,
             None => {
-                self.constants
-                    .try_push(value)
-                    .map_err(|_| (OverflowError::TooManyConstants.into(), span.clone()))?;
+                self.constants.push(value);
                 self.constants.len() - 1
             }
         };
@@ -84,7 +88,7 @@ impl Chunk {
                 eprintln!("{name:16} {constant_idx:>4} '{constant}'", name = "OP_CLOSURE");
 
                 let function = unsafe { constant.object().function };
-                for _ in 0..unsafe { (*function).upvalues } {
+                for _ in 0..unsafe { (*function).upvalue_count } {
                     let offset = idx;
 
                     idx += 1;
@@ -134,7 +138,7 @@ impl Chunk {
     }
 }
 
-/// Run-length encoded Vector. Useful for storing data with a lot of contiguous
+/// Run-length encoded [`Vec`]. Useful for storing data with a lot of contiguous
 /// runs of the same value.
 #[derive(Debug, Default)]
 pub struct VecRun<T> {

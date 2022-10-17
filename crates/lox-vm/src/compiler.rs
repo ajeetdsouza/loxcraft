@@ -393,7 +393,7 @@ impl Compiler {
     }
 
     /// Pops the current ctx and extracts a [`Function`] from it.
-    fn end_ctx(&mut self) -> (*mut ObjectFunction, ArrayVec<Upvalue, 255>) {
+    fn end_ctx(&mut self) -> (*mut ObjectFunction, ArrayVec<Upvalue, 256>) {
         let parent = self.ctx.parent.take().expect("tried to end context in a script");
         let ctx = mem::replace(&mut self.ctx, *parent);
         (ctx.function, ctx.upvalues)
@@ -549,7 +549,7 @@ pub struct CompilerCtx {
     type_: FunctionType,
     locals: ArrayVec<Local, 256>,
     // TODO: how is this 256 in the book?
-    upvalues: ArrayVec<Upvalue, 255>,
+    upvalues: ArrayVec<Upvalue, 256>,
     parent: Option<Box<CompilerCtx>>,
     scope_depth: usize,
 }
@@ -601,19 +601,19 @@ impl CompilerCtx {
     fn add_upvalue(&mut self, idx: u8, is_local: bool, span: &Span) -> Result<u8> {
         let upvalue = Upvalue { idx, is_local };
         let upvalue_idx = match self.upvalues.iter().position(|u| u == &upvalue) {
-            Some(upvalue_idx) => upvalue_idx.try_into().unwrap(),
+            Some(upvalue_idx) => upvalue_idx,
             None => {
                 self.upvalues
                     .try_push(upvalue)
                     .map_err(|_| (OverflowError::TooManyUpvalues.into(), span.clone()))?;
-                let upvalues = self.upvalues.len().try_into().unwrap();
+                let upvalues = self.upvalues.len();
 
-                unsafe { (*self.function).upvalues = upvalues };
+                unsafe { (*self.function).upvalue_count = upvalues.try_into().unwrap() };
                 upvalues - 1
             }
         };
 
-        Ok(upvalue_idx)
+        Ok(upvalue_idx.try_into().unwrap())
     }
 }
 

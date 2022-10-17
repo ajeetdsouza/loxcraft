@@ -64,7 +64,7 @@ impl VM {
         stdout: &mut impl Write,
     ) -> Result<()> {
         self.push(function.into());
-        let mut closure = self.alloc(ObjectClosure::new(function, Vec::new()));
+        let mut closure = self.alloc(ObjectClosure::new(function, ArrayVec::new()));
         self.pop();
 
         let mut ip = unsafe { (*(*closure).function).chunk.ops.as_ptr() };
@@ -419,8 +419,8 @@ impl VM {
                 op::CLOSURE => {
                     let function = unsafe { read_object!().function };
 
-                    let upvalue_count = unsafe { (*function).upvalues } as usize;
-                    let mut upvalues = Vec::with_capacity(upvalue_count);
+                    let upvalue_count = unsafe { (*function).upvalue_count };
+                    let mut upvalues = ArrayVec::new();
 
                     for _ in 0..upvalue_count {
                         let is_local = read_u8!();

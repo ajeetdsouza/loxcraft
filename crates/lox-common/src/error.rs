@@ -212,7 +212,7 @@ fn one_of(tokens: &[String]) -> String {
 pub fn report_errors(writer: &mut impl io::Write, source: &str, errors: &[ErrorS]) {
     let mut buffer = termcolor::Buffer::ansi();
     for err in errors {
-        report_error(&mut buffer, source, &err);
+        report_error(&mut buffer, source, err);
     }
     writer.write_all(buffer.as_slice()).expect("failed to write to output");
 }

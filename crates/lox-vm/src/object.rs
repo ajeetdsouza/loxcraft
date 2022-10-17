@@ -1,6 +1,7 @@
 use std::fmt::{self, Debug, Display, Formatter};
 use std::hash::{BuildHasherDefault, Hash, Hasher};
 
+use arrayvec::ArrayVec;
 use hashbrown::HashMap;
 use rustc_hash::FxHasher;
 
@@ -80,7 +81,7 @@ impl Display for Object {
                 }
                 ObjectType::Function => {
                     let name = (*(*self.function).name).value;
-                    if name == "" {
+                    if name.is_empty() {
                         write!(f, "<script>")
                     } else {
                         write!(f, "<function {}>", name)
@@ -164,11 +165,11 @@ pub struct ObjectClosure {
     pub type_: ObjectType,
     pub is_marked: bool,
     pub function: *mut ObjectFunction,
-    pub upvalues: Vec<*mut ObjectUpvalue>,
+    pub upvalues: ArrayVec<*mut ObjectUpvalue, 256>,
 }
 
 impl ObjectClosure {
-    pub fn new(function: *mut ObjectFunction, upvalues: Vec<*mut ObjectUpvalue>) -> Self {
+    pub fn new(function: *mut ObjectFunction, upvalues: ArrayVec<*mut ObjectUpvalue, 256>) -> Self {
         Self { type_: ObjectType::Closure, is_marked: false, function, upvalues }
     }
 }
@@ -180,7 +181,7 @@ pub struct ObjectFunction {
     pub is_marked: bool,
     pub name: *mut ObjectString,
     pub arity: u8,
-    pub upvalues: u8,
+    pub upvalue_count: u16,
     pub chunk: Chunk,
 }
 
@@ -191,7 +192,7 @@ impl ObjectFunction {
             is_marked: false,
             name,
             arity,
-            upvalues: 0,
+            upvalue_count: 0,
             chunk: Chunk::default(),
         }
     }
