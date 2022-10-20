@@ -50,6 +50,8 @@ pub struct VM {
     ///   guaranteed to never exceed this size.
     stack: Pin<Box<[Value; STACK_MAX]>>,
     stack_top: *mut Value,
+
+    init_string: *mut ObjectString,
 }
 
 impl VM {
@@ -398,9 +400,22 @@ impl VM {
                                 call_closure!(unsafe { (*method).closure }, arg_count);
                             }
                             ObjectType::Class => {
-                                let instance =
-                                    self.alloc(ObjectInstance::new(unsafe { object.class }));
-                                self.push(instance.into());
+                                let class = unsafe { object.class };
+                                let instance = self.alloc(ObjectInstance::new(class));
+                                unsafe { *self.peek(arg_count as usize) = instance.into() };
+
+                                match unsafe { (*class).methods.get(&self.init_string) } {
+                                    Some(&init) => call_closure!(init, arg_count),
+                                    None => {
+                                        if arg_count != 0 {
+                                            bail!(TypeError::ArityMismatch {
+                                                name: "init".to_string(),
+                                                exp_args: 0,
+                                                got_args: arg_count,
+                                            });
+                                        }
+                                    }
+                                }
                             }
                             ObjectType::Closure => {
                                 call_closure!(unsafe { object.closure }, arg_count)
@@ -509,9 +524,9 @@ impl VM {
     }
 
     fn alloc<T>(&mut self, object: impl GcAlloc<T>) -> T {
-        if !cfg!(feature = "gc-off")
-            && (cfg!(feature = "gc-stress") || GLOBAL.allocated_bytes() > self.next_gc)
-        {
+        let should_gc = !cfg!(feature = "gc-off")
+            && (cfg!(feature = "gc-stress") || GLOBAL.allocated_bytes() > self.next_gc);
+        if should_gc {
             self.gc();
         }
         self.gc.alloc(object)
@@ -521,6 +536,8 @@ impl VM {
         if cfg!(feature = "gc-trace") {
             println!("-- gc begin");
         }
+
+        self.gc.mark(self.init_string);
 
         let mut stack_ptr = self.stack.as_ptr();
         while stack_ptr < self.stack_top {
@@ -607,6 +624,8 @@ impl Default for VM {
         let mut stack = Box::pin([Value::default(); STACK_MAX]);
         let stack_top = stack.as_mut_ptr();
 
+        let init_string = gc.alloc("init");
+
         Self {
             globals,
             open_upvalues: Vec::with_capacity(256),
@@ -615,6 +634,7 @@ impl Default for VM {
             frames: ArrayVec::new(),
             stack,
             stack_top,
+            init_string,
         }
     }
 }

@@ -4,7 +4,9 @@ use std::mem;
 use arrayvec::ArrayVec;
 use lox_common::error::{ErrorS, NameError, OverflowError, Result, SyntaxError};
 use lox_common::types::Span;
-use lox_syntax::ast::{Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Stmt, StmtFun, StmtS};
+use lox_syntax::ast::{
+    Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Stmt, StmtFun, StmtReturn, StmtS,
+};
 
 use crate::gc::Gc;
 use crate::object::ObjectFunction;
@@ -162,14 +164,24 @@ impl Compiler {
                 self.emit_u8(op::PRINT, span);
             }
             Stmt::Return(return_) => {
-                if self.ctx.type_ == FunctionType::Script {
-                    return Err((SyntaxError::ReturnOutsideFunction.into(), span.clone()));
+                match self.ctx.type_ {
+                    FunctionType::Script => {
+                        return Err((SyntaxError::ReturnOutsideFunction.into(), span.clone()));
+                    }
+                    FunctionType::Initializer => match return_.value {
+                        Some(_) => {
+                            return Err((SyntaxError::ReturnInInitializer.into(), span.clone()));
+                        }
+                        None => {
+                            self.emit_u8(op::GET_LOCAL, span);
+                            self.emit_u8(0, span);
+                        }
+                    },
+                    FunctionType::Function | FunctionType::Method => match &return_.value {
+                        Some(value) => self.compile_expr(value, gc)?,
+                        None => self.emit_u8(op::NIL, span),
+                    },
                 }
-
-                match &return_.value {
-                    Some(value) => self.compile_expr(value, gc)?,
-                    None => self.emit_u8(op::NIL, span),
-                };
                 self.emit_u8(op::RETURN, span);
             }
             Stmt::Var(var) => {
@@ -220,9 +232,13 @@ impl Compiler {
         &mut self,
         fun: &StmtFun,
         span: &Span,
-        type_: FunctionType,
+        mut type_: FunctionType,
         gc: &mut Gc,
     ) -> Result<()> {
+        if type_ == FunctionType::Method && fun.name == "init" {
+            type_ = FunctionType::Initializer;
+        }
+
         let name = gc.alloc(&fun.name);
         let arity = fun
             .params
@@ -240,11 +256,10 @@ impl Compiler {
         };
         self.begin_ctx(ctx);
 
-        if type_ == FunctionType::Method {
-            self.declare_local("this", span)?;
-        } else {
-            self.declare_local(&fun.name, span)?;
-        }
+        match type_ {
+            FunctionType::Initializer | FunctionType::Method => self.declare_local("this", span),
+            FunctionType::Function | FunctionType::Script => self.declare_local(&fun.name, span),
+        }?;
         self.define_local();
 
         for param in &fun.params {
@@ -258,8 +273,8 @@ impl Compiler {
 
         // Implicit return at the end of the function.
         if unsafe { (*self.ctx.function).chunk.ops.last() } != Some(&op::RETURN) {
-            self.emit_u8(op::NIL, span);
-            self.emit_u8(op::RETURN, span);
+            let stmt = (Stmt::Return(StmtReturn { value: None }), (0..0));
+            self.compile_stmt(&stmt, gc)?;
         }
 
         let (function, upvalues) = self.end_ctx();
@@ -428,7 +443,24 @@ impl Compiler {
         (ctx.function, ctx.upvalues)
     }
 
+    /// Checks if the current `ctx` is inside a class.
+    fn is_inside_class(&self) -> bool {
+        let mut ctx = &self.ctx;
+        loop {
+            match ctx.type_ {
+                FunctionType::Initializer | FunctionType::Method => break true,
+                FunctionType::Function | FunctionType::Script => match ctx.parent.as_ref() {
+                    Some(parent) => ctx = parent,
+                    None => break false,
+                },
+            }
+        }
+    }
+
     fn get_variable(&mut self, name: &str, span: &Span, gc: &mut Gc) -> Result<()> {
+        if name == "this" && !self.is_inside_class() {
+            return Err((SyntaxError::ThisOutsideClass.into(), span.clone()));
+        }
         if let Some(local_idx) = self.ctx.resolve_local(name, false, span)? {
             self.emit_u8(op::GET_LOCAL, span);
             self.emit_u8(local_idx, span);
@@ -577,7 +609,6 @@ pub struct CompilerCtx {
     function: *mut ObjectFunction,
     type_: FunctionType,
     locals: ArrayVec<Local, 256>,
-    // TODO: how is this 256 in the book?
     upvalues: ArrayVec<Upvalue, 256>,
     parent: Option<Box<CompilerCtx>>,
     scope_depth: usize,
@@ -668,6 +699,8 @@ struct Upvalue {
 enum FunctionType {
     /// A function that has been defined in code.
     Function,
+    /// A class initializer.
+    Initializer,
     /// A bound method.
     Method,
     /// The global-level function that is called when the program starts.
