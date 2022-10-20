@@ -15,6 +15,7 @@ iota! {
             , SET_UPVALUE
             , GET_PROPERTY
             , SET_PROPERTY
+            , GET_SUPER
             , EQUAL
             , NOT_EQUAL
             , GREATER

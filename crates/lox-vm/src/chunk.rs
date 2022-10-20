@@ -64,6 +64,7 @@ impl Chunk {
             op::SET_UPVALUE => self.debug_op_byte("OP_SET_UPVALUE", idx),
             op::GET_PROPERTY => self.debug_op_constant("OP_GET_PROPERTY", idx),
             op::SET_PROPERTY => self.debug_op_constant("OP_SET_PROPERTY", idx),
+            op::GET_SUPER => self.debug_op_constant("OP_GET_SUPER", idx),
             op::EQUAL => self.debug_op_simple("OP_EQUAL", idx),
             op::NOT_EQUAL => self.debug_op_simple("OP_NOT_EQUAL", idx),
             op::GREATER => self.debug_op_simple("OP_GREATER", idx),

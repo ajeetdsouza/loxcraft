@@ -36,12 +36,15 @@ impl Compiler {
 
     pub fn compile(source: &str, gc: &mut Gc) -> Result<*mut ObjectFunction, Vec<ErrorS>> {
         let mut compiler = Self::new(gc);
+
         let program = lox_syntax::parse(source)?;
         for stmt in &program.stmts {
             compiler.compile_stmt(stmt, gc).map_err(|e| vec![e])?;
         }
-        compiler.emit_u8(op::NIL, &(0..0));
-        compiler.emit_u8(op::RETURN, &(0..0));
+
+        compiler.emit_u8(op::NIL, &NO_SPAN);
+        compiler.emit_u8(op::RETURN, &NO_SPAN);
+
         Ok(compiler.ctx.function)
     }
 
@@ -59,7 +62,7 @@ impl Compiler {
                 self.emit_u8(op::CLASS, span);
                 self.emit_constant(name, span)?;
 
-                if self.ctx_is_global() {
+                if self.is_global() {
                     self.emit_u8(op::DEFINE_GLOBAL, span);
                     self.emit_constant(name, span)?;
                 } else {
@@ -67,21 +70,30 @@ impl Compiler {
                     self.define_local();
                 }
 
-                self.get_variable(&class.name, span, gc)?;
-
                 if let Some(super_) = &class.super_ {
+                    self.begin_scope();
+                    self.declare_local("super", &NO_SPAN)?;
+                    self.define_local();
+
                     self.compile_expr(super_, gc)?;
+                    self.get_variable(&class.name, span, gc)?;
                     self.emit_u8(op::INHERIT, span);
                 }
 
-                for (method, span) in &class.methods {
-                    self.compile_function(method, span, FunctionType::Method, gc)?;
-                    let name = gc.alloc(&method.name).into();
-                    self.emit_u8(op::METHOD, span);
-                    self.emit_constant(name, span)?;
+                if !class.methods.is_empty() {
+                    self.get_variable(&class.name, span, gc)?;
+                    for (method, span) in &class.methods {
+                        self.compile_function(method, span, FunctionType::Method, gc)?;
+                        let name = gc.alloc(&method.name).into();
+                        self.emit_u8(op::METHOD, span);
+                        self.emit_constant(name, span)?;
+                    }
+                    self.emit_u8(op::POP, span);
                 }
 
-                self.emit_u8(op::POP, span);
+                if class.super_.is_some() {
+                    self.end_scope(&NO_SPAN);
+                }
             }
             Stmt::Expr(expr) => {
                 self.compile_expr(&expr.value, gc)?;
@@ -132,7 +144,7 @@ impl Compiler {
             }
             Stmt::Fun(fun) => {
                 self.compile_function(fun, span, FunctionType::Function, gc)?;
-                if self.ctx_is_global() {
+                if self.is_global() {
                     let name = gc.alloc(&fun.name).into();
                     self.emit_u8(op::DEFINE_GLOBAL, span);
                     self.emit_constant(name, span)?;
@@ -189,7 +201,7 @@ impl Compiler {
             }
             Stmt::Var(var) => {
                 let name = &var.var.name;
-                if self.ctx_is_global() {
+                if self.is_global() {
                     let name = gc.alloc(name);
                     match &var.value {
                         Some(value) => self.compile_expr(value, gc)?,
@@ -276,7 +288,7 @@ impl Compiler {
 
         // Implicit return at the end of the function.
         if unsafe { (*self.ctx.function).chunk.ops.last() } != Some(&op::RETURN) {
-            let stmt = (Stmt::Return(StmtReturn { value: None }), (0..0));
+            let stmt = (Stmt::Return(StmtReturn { value: None }), NO_SPAN);
             self.compile_stmt(&stmt, gc)?;
         }
 
@@ -427,8 +439,14 @@ impl Compiler {
                 self.emit_u8(op::SET_PROPERTY, span);
                 self.emit_constant(name, span)?;
             }
+            Expr::Super(super_) => {
+                let name = gc.alloc(&super_.name).into();
+                self.get_variable("this", span, gc)?;
+                self.get_variable("super", span, gc)?;
+                self.emit_u8(op::GET_SUPER, span);
+                self.emit_constant(name, span)?;
+            }
             Expr::Var(var) => self.get_variable(&var.var.name, span, gc)?,
-            _ => unimplemented!(),
         }
         Ok(())
     }
@@ -447,9 +465,6 @@ impl Compiler {
     }
 
     fn get_variable(&mut self, name: &str, span: &Span, gc: &mut Gc) -> Result<()> {
-        if name == "this" && !self.ctx_is_class() {
-            return Err((SyntaxError::ThisOutsideClass.into(), span.clone()));
-        }
         if let Some(local_idx) = self.ctx.resolve_local(name, false, span)? {
             self.emit_u8(op::GET_LOCAL, span);
             self.emit_u8(local_idx, span);
@@ -588,22 +603,8 @@ impl Compiler {
         Ok(())
     }
 
-    /// Checks if the current `ctx` is inside a class.
-    fn ctx_is_class(&self) -> bool {
-        let mut ctx = &self.ctx;
-        loop {
-            match ctx.type_ {
-                FunctionType::Initializer | FunctionType::Method => break true,
-                FunctionType::Function | FunctionType::Script => match ctx.parent.as_ref() {
-                    Some(parent) => ctx = parent,
-                    None => break false,
-                },
-            }
-        }
-    }
-
     /// Checks if the current `ctx` is global.
-    fn ctx_is_global(&self) -> bool {
+    fn is_global(&self) -> bool {
         self.ctx.scope_depth == 0
     }
 }
@@ -710,3 +711,5 @@ enum FunctionType {
     /// The global-level function that is called when the program starts.
     Script,
 }
+
+const NO_SPAN: Span = 0..0;

@@ -57,6 +57,7 @@ pub struct VM {
 impl VM {
     pub fn run(&mut self, source: &str, stdout: &mut impl Write) -> Result<(), Vec<ErrorS>> {
         let function = Compiler::compile(source, &mut self.gc)?;
+        unsafe { (*function).chunk.debug("DEBUG") };
         self.run_function(function, stdout).map_err(|e| vec![e])
     }
 
@@ -307,6 +308,24 @@ impl VM {
                     // Pop the instance.
                     self.pop();
                 }
+                op::GET_SUPER => {
+                    let name = unsafe { read_object!().string };
+                    let super_ = unsafe { self.pop().object().class };
+                    let instance = unsafe { (*self.peek(0)).object().instance };
+
+                    dbg!(unsafe { &(*super_).methods });
+
+                    if let Some(&method) = unsafe { (*super_).methods.get(&name) } {
+                        let bound_method = self.alloc(ObjectBoundMethod::new(instance, method));
+                        self.pop();
+                        self.push(bound_method.into());
+                    } else {
+                        bail!(AttributeError::NoSuchAttribute {
+                            type_: unsafe { (*(*super_).name).value.to_string() },
+                            name: unsafe { (*name).value.to_string() },
+                        });
+                    }
+                }
                 op::EQUAL => binary_op!(==),
                 op::NOT_EQUAL => binary_op!(!=),
                 op::GREATER => binary_op_number!(>),
@@ -499,7 +518,8 @@ impl VM {
                     self.push(class);
                 }
                 op::INHERIT => {
-                    let super_ = match unsafe { *self.peek(0) } {
+                    let class = unsafe { (*self.peek(0)).object().class };
+                    let super_ = match unsafe { *self.peek(1) } {
                         Value::Object(object)
                             if unsafe { (*object.common).type_ } == ObjectType::Class =>
                         unsafe { object.class },
@@ -507,8 +527,7 @@ impl VM {
                             type_: value.type_().to_string()
                         }),
                     };
-                    let class = unsafe { (*self.peek(1)).object().class };
-                    unsafe { (*class).methods = (*super_).methods.clone() };
+                    unsafe { (*class).methods.extend(&(*super_).methods) };
                     self.pop();
                 }
                 op::METHOD => {
@@ -547,7 +566,7 @@ impl VM {
 
     fn gc(&mut self) {
         if cfg!(feature = "gc-trace") {
-            println!("-- gc begin");
+            eprintln!("-- gc begin");
         }
 
         self.gc.mark(self.init_string);
@@ -577,7 +596,7 @@ impl VM {
         self.next_gc = GLOBAL.allocated_bytes() * GC_HEAP_GROW_FACTOR;
 
         if cfg!(feature = "gc-trace") {
-            println!("-- gc end");
+            eprintln!("-- gc end");
         }
     }
 

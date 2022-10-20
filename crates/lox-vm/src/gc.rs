@@ -27,7 +27,7 @@ impl Gc {
     pub fn trace(&mut self) {
         while let Some(object) = self.gray_objects.pop() {
             if cfg!(feature = "gc-trace") {
-                println!("blacken {}: {object}", object.type_());
+                eprintln!("blacken {}: {object}", object.type_());
             }
             match unsafe { (*object.common).type_ } {
                 ObjectType::BoundMethod => {
@@ -122,7 +122,7 @@ where
         let object = object_ptr.into();
 
         if cfg!(feature = "gc-trace") {
-            println!("allocate {}: {object}", object.type_());
+            eprintln!("allocate {}: {object}", object.type_());
         }
 
         gc.objects.push(object);
@@ -140,7 +140,7 @@ where
             RawEntryMut::Vacant(entry) => {
                 let string = self.into();
                 if cfg!(feature = "gc-trace") {
-                    println!("allocate string: {string}");
+                    eprintln!("allocate string: {string}");
                 }
                 let object = Box::into_raw(Box::new(ObjectString::new(unsafe {
                     mem::transmute(string.as_str())
@@ -169,7 +169,7 @@ impl<T: Into<Object>> GcMark for T {
         let object = self.into();
         if !unsafe { (*object.common).is_marked } {
             if cfg!(feature = "gc-trace") {
-                println!("mark {}: {object}", object.type_());
+                eprintln!("mark {}: {object}", object.type_());
             }
             unsafe { (*object.common).is_marked = true };
             gc.gray_objects.push(object);

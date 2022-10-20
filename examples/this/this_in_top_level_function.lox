@@ -2,5 +2,5 @@ fun foo() {
   this;
 }
 
-// out: SyntaxError: "this" outside class
+// out: NameError: name "this" is not defined
 foo();

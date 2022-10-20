@@ -146,8 +146,6 @@ pub enum SyntaxError {
     ReturnInInitializer,
     #[error(r#""return" outside function"#)]
     ReturnOutsideFunction,
-    #[error(r#""this" outside class"#)]
-    ThisOutsideClass,
 }
 
 impl AsDiagnostic for SyntaxError {

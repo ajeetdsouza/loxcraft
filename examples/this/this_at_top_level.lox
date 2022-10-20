@@ -1,1 +1,1 @@
-this; // out: SyntaxError: "this" outside class
+this; // out: NameError: name "this" is not defined
