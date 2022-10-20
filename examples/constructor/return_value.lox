@@ -4,5 +4,5 @@ class Foo {
   }
 }
 
-// out: TypeError: init() should use an empty return, not "string"
+// out: SyntaxError: init() should not return a value
 Foo();

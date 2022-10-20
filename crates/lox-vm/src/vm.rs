@@ -498,11 +498,24 @@ impl VM {
                     let class = self.alloc(ObjectClass::new(name)).into();
                     self.push(class);
                 }
+                op::INHERIT => {
+                    let super_ = match unsafe { *self.peek(0) } {
+                        Value::Object(object)
+                            if unsafe { (*object.common).type_ } == ObjectType::Class =>
+                        unsafe { object.class },
+                        value => bail!(TypeError::SuperclassInvalidType {
+                            type_: value.type_().to_string()
+                        }),
+                    };
+                    let class = unsafe { (*self.peek(1)).object().class };
+                    unsafe { (*class).methods = (*super_).methods.clone() };
+                    self.pop();
+                }
                 op::METHOD => {
                     let name = unsafe { read_object!().string };
                     let method = unsafe { (*self.peek(0)).object().closure };
                     let class = unsafe { (*self.peek(1)).object().class };
-                    unsafe { (*class).methods.insert_unique_unchecked(name, method) };
+                    unsafe { (*class).methods.insert(name, method) };
                     self.pop();
                 }
                 _ => unsafe { hint::unreachable_unchecked() },

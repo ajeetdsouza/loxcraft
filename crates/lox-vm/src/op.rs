@@ -36,5 +36,6 @@ iota! {
             , CLOSE_UPVALUE
             , RETURN
             , CLASS
+            , INHERIT
             , METHOD
 }

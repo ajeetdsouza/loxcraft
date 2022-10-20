@@ -59,7 +59,7 @@ impl Compiler {
                 self.emit_u8(op::CLASS, span);
                 self.emit_constant(name, span)?;
 
-                if self.is_global() {
+                if self.ctx_is_global() {
                     self.emit_u8(op::DEFINE_GLOBAL, span);
                     self.emit_constant(name, span)?;
                 } else {
@@ -67,18 +67,21 @@ impl Compiler {
                     self.define_local();
                 }
 
-                if !class.methods.is_empty() {
-                    self.get_variable(&class.name, span, gc)?;
+                self.get_variable(&class.name, span, gc)?;
 
-                    for (method, span) in &class.methods {
-                        self.compile_function(method, span, FunctionType::Method, gc)?;
-                        let name = gc.alloc(&method.name).into();
-                        self.emit_u8(op::METHOD, span);
-                        self.emit_constant(name, span)?;
-                    }
-
-                    self.emit_u8(op::POP, span);
+                if let Some(super_) = &class.super_ {
+                    self.compile_expr(super_, gc)?;
+                    self.emit_u8(op::INHERIT, span);
                 }
+
+                for (method, span) in &class.methods {
+                    self.compile_function(method, span, FunctionType::Method, gc)?;
+                    let name = gc.alloc(&method.name).into();
+                    self.emit_u8(op::METHOD, span);
+                    self.emit_constant(name, span)?;
+                }
+
+                self.emit_u8(op::POP, span);
             }
             Stmt::Expr(expr) => {
                 self.compile_expr(&expr.value, gc)?;
@@ -129,7 +132,7 @@ impl Compiler {
             }
             Stmt::Fun(fun) => {
                 self.compile_function(fun, span, FunctionType::Function, gc)?;
-                if self.is_global() {
+                if self.ctx_is_global() {
                     let name = gc.alloc(&fun.name).into();
                     self.emit_u8(op::DEFINE_GLOBAL, span);
                     self.emit_constant(name, span)?;
@@ -186,7 +189,7 @@ impl Compiler {
             }
             Stmt::Var(var) => {
                 let name = &var.var.name;
-                if self.is_global() {
+                if self.ctx_is_global() {
                     let name = gc.alloc(name);
                     match &var.value {
                         Some(value) => self.compile_expr(value, gc)?,
@@ -443,22 +446,8 @@ impl Compiler {
         (ctx.function, ctx.upvalues)
     }
 
-    /// Checks if the current `ctx` is inside a class.
-    fn is_inside_class(&self) -> bool {
-        let mut ctx = &self.ctx;
-        loop {
-            match ctx.type_ {
-                FunctionType::Initializer | FunctionType::Method => break true,
-                FunctionType::Function | FunctionType::Script => match ctx.parent.as_ref() {
-                    Some(parent) => ctx = parent,
-                    None => break false,
-                },
-            }
-        }
-    }
-
     fn get_variable(&mut self, name: &str, span: &Span, gc: &mut Gc) -> Result<()> {
-        if name == "this" && !self.is_inside_class() {
+        if name == "this" && !self.ctx_is_class() {
             return Err((SyntaxError::ThisOutsideClass.into(), span.clone()));
         }
         if let Some(local_idx) = self.ctx.resolve_local(name, false, span)? {
@@ -599,7 +588,22 @@ impl Compiler {
         Ok(())
     }
 
-    fn is_global(&self) -> bool {
+    /// Checks if the current `ctx` is inside a class.
+    fn ctx_is_class(&self) -> bool {
+        let mut ctx = &self.ctx;
+        loop {
+            match ctx.type_ {
+                FunctionType::Initializer | FunctionType::Method => break true,
+                FunctionType::Function | FunctionType::Script => match ctx.parent.as_ref() {
+                    Some(parent) => ctx = parent,
+                    None => break false,
+                },
+            }
+        }
+    }
+
+    /// Checks if the current `ctx` is global.
+    fn ctx_is_global(&self) -> bool {
         self.ctx.scope_depth == 0
     }
 }

@@ -142,7 +142,7 @@ pub enum SyntaxError {
     UnrecognizedToken { token: String, expected: Vec<String> },
     #[error("unterminated string")]
     UnterminatedString,
-    #[error(r#"init() should return "nil""#)]
+    #[error(r#"init() should not return a value"#)]
     ReturnInInitializer,
     #[error(r#""return" outside function"#)]
     ReturnOutsideFunction,
