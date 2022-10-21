@@ -88,6 +88,8 @@ pub enum NameError {
     AccessInsideInitializer { name: String },
     #[error("name {name:?} is already defined")]
     AlreadyDefined { name: String },
+    #[error("class {name:?} inherits from itself")]
+    ClassInheritFromSelf { name: String },
     #[error("name {name:?} is not defined")]
     NotDefined { name: String },
 }
@@ -144,8 +146,14 @@ pub enum SyntaxError {
     UnterminatedString,
     #[error(r#"init() should not return a value"#)]
     ReturnInInitializer,
-    #[error(r#""return" outside function"#)]
+    #[error(r#""return" used outside function"#)]
     ReturnOutsideFunction,
+    #[error(r#""super" used outside class"#)]
+    SuperOutsideClass,
+    #[error(r#""super" used in class without a superclass"#)]
+    SuperWithoutSuperclass,
+    #[error(r#""this" used outside class"#)]
+    ThisOutsideClass,
 }
 
 impl AsDiagnostic for SyntaxError {

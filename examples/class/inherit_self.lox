@@ -1,1 +1,1 @@
-class Foo < Foo {} // out: NameError: name "Foo" is not defined
+class Foo < Foo {} // out: NameError: class "Foo" inherits from itself

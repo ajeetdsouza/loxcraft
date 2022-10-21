@@ -16,6 +16,7 @@ use crate::value::Value;
 #[derive(Debug)]
 pub struct Compiler {
     ctx: CompilerCtx,
+    class_ctx: Vec<ClassCtx>,
 }
 
 impl Compiler {
@@ -31,6 +32,7 @@ impl Compiler {
                 parent: None,
                 scope_depth: 0,
             },
+            class_ctx: Vec::new(),
         }
     }
 
@@ -58,6 +60,8 @@ impl Compiler {
                 self.end_scope(span);
             }
             Stmt::Class(class) => {
+                let has_super = class.super_.is_some();
+
                 let name = gc.alloc(&class.name).into();
                 self.emit_u8(op::CLASS, span);
                 self.emit_constant(name, span)?;
@@ -70,7 +74,24 @@ impl Compiler {
                     self.define_local();
                 }
 
+                self.class_ctx.push(ClassCtx { has_super });
+
                 if let Some(super_) = &class.super_ {
+                    match &super_.0 {
+                        Expr::Var(var) => {
+                            if var.var.name == class.name {
+                                return Err((
+                                    NameError::ClassInheritFromSelf {
+                                        name: class.name.to_string(),
+                                    }
+                                    .into(),
+                                    span.clone(),
+                                ));
+                            }
+                        }
+                        _ => unreachable!(),
+                    };
+
                     self.begin_scope();
                     self.declare_local("super", &NO_SPAN)?;
                     self.define_local();
@@ -83,7 +104,13 @@ impl Compiler {
                 if !class.methods.is_empty() {
                     self.get_variable(&class.name, span, gc)?;
                     for (method, span) in &class.methods {
-                        self.compile_function(method, span, FunctionType::Method, gc)?;
+                        let type_ = if method.name == "init" {
+                            FunctionType::Initializer
+                        } else {
+                            FunctionType::Method
+                        };
+                        self.compile_function(method, span, type_, gc)?;
+
                         let name = gc.alloc(&method.name).into();
                         self.emit_u8(op::METHOD, span);
                         self.emit_constant(name, span)?;
@@ -91,9 +118,10 @@ impl Compiler {
                     self.emit_u8(op::POP, span);
                 }
 
-                if class.super_.is_some() {
+                if has_super {
                     self.end_scope(&NO_SPAN);
                 }
+                self.class_ctx.pop().unwrap();
             }
             Stmt::Expr(expr) => {
                 self.compile_expr(&expr.value, gc)?;
@@ -247,13 +275,9 @@ impl Compiler {
         &mut self,
         fun: &StmtFun,
         span: &Span,
-        mut type_: FunctionType,
+        type_: FunctionType,
         gc: &mut Gc,
     ) -> Result<()> {
-        if type_ == FunctionType::Method && fun.name == "init" {
-            type_ = FunctionType::Initializer;
-        }
-
         let name = gc.alloc(&fun.name);
         let arity = fun
             .params
@@ -440,6 +464,15 @@ impl Compiler {
                 self.emit_constant(name, span)?;
             }
             Expr::Super(super_) => {
+                match self.class_ctx.last() {
+                    Some(class_ctx) => {
+                        if !class_ctx.has_super {
+                            return Err((SyntaxError::SuperWithoutSuperclass.into(), span.clone()));
+                        }
+                    }
+                    None => return Err((SyntaxError::SuperOutsideClass.into(), span.clone())),
+                }
+
                 let name = gc.alloc(&super_.name).into();
                 self.get_variable("this", span, gc)?;
                 self.get_variable("super", span, gc)?;
@@ -465,6 +498,9 @@ impl Compiler {
     }
 
     fn get_variable(&mut self, name: &str, span: &Span, gc: &mut Gc) -> Result<()> {
+        if name == "this" && self.class_ctx.is_empty() {
+            return Err((SyntaxError::ThisOutsideClass.into(), span.clone()));
+        }
         if let Some(local_idx) = self.ctx.resolve_local(name, false, span)? {
             self.emit_u8(op::GET_LOCAL, span);
             self.emit_u8(local_idx, span);
@@ -680,6 +716,11 @@ impl CompilerCtx {
 
         Ok(upvalue_idx.try_into().unwrap())
     }
+}
+
+#[derive(Debug)]
+struct ClassCtx {
+    has_super: bool,
 }
 
 #[derive(Debug, Default)]

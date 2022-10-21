@@ -1,4 +1,4 @@
-// out: NameError: name "super" is not defined
+// out: SyntaxError: "super" used outside class
 super.bar();
 fun foo() {
 }
