@@ -57,7 +57,6 @@ pub struct VM {
 impl VM {
     pub fn run(&mut self, source: &str, stdout: &mut impl Write) -> Result<(), Vec<ErrorS>> {
         let function = Compiler::compile(source, &mut self.gc)?;
-        unsafe { (*function).chunk.debug("DEBUG") };
         self.run_function(function, stdout).map_err(|e| vec![e])
     }
 
@@ -199,6 +198,68 @@ impl VM {
                 }};
             }
 
+            macro_rules! call_value {
+                ($value:expr, $arg_count:expr) => {
+                    match $value {
+                        Value::Object(object) => match unsafe { (*object.common).type_ } {
+                            ObjectType::BoundMethod => {
+                                let method = unsafe { object.bound_method };
+                                unsafe { *self.peek($arg_count as usize) = (*method).this.into() };
+                                call_closure!(unsafe { (*method).closure }, $arg_count);
+                            }
+                            ObjectType::Class => {
+                                let class = unsafe { object.class };
+                                let instance = self.alloc(ObjectInstance::new(class));
+                                unsafe { *self.peek($arg_count as usize) = instance.into() };
+
+                                match unsafe { (*class).methods.get(&self.init_string) } {
+                                    Some(&init) => call_closure!(init, $arg_count),
+                                    None => {
+                                        if $arg_count != 0 {
+                                            bail!(TypeError::ArityMismatch {
+                                                name: "init".to_string(),
+                                                exp_args: 0,
+                                                got_args: $arg_count,
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                            ObjectType::Closure => {
+                                call_closure!(unsafe { object.closure }, $arg_count)
+                            }
+                            _ => {
+                                bail!(TypeError::NotCallable { type_: $value.type_().to_string() })
+                            }
+                        },
+                        Value::Native(native) => {
+                            self.pop();
+                            let value = match native {
+                                Native::Clock => {
+                                    if $arg_count != 0 {
+                                        bail!(TypeError::ArityMismatch {
+                                            name: "clock".to_string(),
+                                            exp_args: 0,
+                                            got_args: $arg_count,
+                                        });
+                                    }
+                                    // TODO: find an alternative that works on WASM.
+                                    SystemTime::now()
+                                        .duration_since(UNIX_EPOCH)
+                                        .unwrap_or_default()
+                                        .as_secs_f64()
+                                        .into()
+                                }
+                            };
+                            self.push(value);
+                        }
+                        _ => {
+                            bail!(TypeError::NotCallable { type_: $value.type_().to_string() })
+                        }
+                    }
+                };
+            }
+
             match read_u8!() {
                 op::CONSTANT => {
                     let constant = read_value!();
@@ -262,7 +323,6 @@ impl VM {
                     unsafe { *value = *self.peek(0) };
                 }
                 op::GET_PROPERTY => {
-                    // TODO: Do we really need to peek here?
                     let name = unsafe { read_object!().string };
                     let instance = match unsafe { *self.peek(0) } {
                         Value::Object(object)
@@ -291,7 +351,6 @@ impl VM {
                     }
                 }
                 op::SET_PROPERTY => {
-                    // TODO: Do we really need to peek here?
                     let name = unsafe { read_object!().string };
                     let instance = match unsafe { *self.peek(0) } {
                         Value::Object(object)
@@ -312,8 +371,6 @@ impl VM {
                     let name = unsafe { read_object!().string };
                     let super_ = unsafe { self.pop().object().class };
                     let instance = unsafe { (*self.peek(0)).object().instance };
-
-                    dbg!(unsafe { &(*super_).methods });
 
                     if let Some(&method) = unsafe { (*super_).methods.get(&name) } {
                         let bound_method = self.alloc(ObjectBoundMethod::new(instance, method));
@@ -411,61 +468,35 @@ impl VM {
                 op::CALL => {
                     let arg_count = read_u8!();
                     let callee = unsafe { *self.peek(arg_count as usize) };
-                    match callee {
-                        Value::Object(object) => match unsafe { (*object.common).type_ } {
-                            ObjectType::BoundMethod => {
-                                let method = unsafe { object.bound_method };
-                                unsafe { *self.peek(arg_count as usize) = (*method).this.into() };
-                                call_closure!(unsafe { (*method).closure }, arg_count);
-                            }
-                            ObjectType::Class => {
-                                let class = unsafe { object.class };
-                                let instance = self.alloc(ObjectInstance::new(class));
-                                unsafe { *self.peek(arg_count as usize) = instance.into() };
+                    call_value!(callee, arg_count);
+                }
+                op::INVOKE => {
+                    let name = unsafe { read_object!().string };
+                    let arg_count = read_u8!();
+                    let instance = unsafe { (*self.peek(arg_count as usize)).object().instance };
 
-                                match unsafe { (*class).methods.get(&self.init_string) } {
-                                    Some(&init) => call_closure!(init, arg_count),
-                                    None => {
-                                        if arg_count != 0 {
-                                            bail!(TypeError::ArityMismatch {
-                                                name: "init".to_string(),
-                                                exp_args: 0,
-                                                got_args: arg_count,
-                                            });
-                                        }
-                                    }
-                                }
-                            }
-                            ObjectType::Closure => {
-                                call_closure!(unsafe { object.closure }, arg_count)
-                            }
-                            _ => {
-                                bail!(TypeError::NotCallable { type_: callee.type_().to_string() })
-                            }
+                    match unsafe { (*instance).fields.get(&name) } {
+                        Some(value) => call_value!(value, arg_count),
+                        None => match unsafe { (*(*instance).class).methods.get(&name) } {
+                            Some(&method) => call_closure!(method, arg_count),
+                            None => bail!(AttributeError::NoSuchAttribute {
+                                type_: unsafe { (*(*(*instance).class).name).value.to_string() },
+                                name: unsafe { (*name).value.to_string() },
+                            }),
                         },
-                        Value::Native(native) => {
-                            self.pop();
-                            let value = match native {
-                                Native::Clock => {
-                                    if arg_count != 0 {
-                                        bail!(TypeError::ArityMismatch {
-                                            name: "clock".to_string(),
-                                            exp_args: 0,
-                                            got_args: arg_count,
-                                        });
-                                    }
-                                    SystemTime::now()
-                                        .duration_since(UNIX_EPOCH)
-                                        .unwrap_or_default()
-                                        .as_secs_f64()
-                                        .into()
-                                }
-                            };
-                            self.push(value);
-                        }
-                        _ => {
-                            bail!(TypeError::NotCallable { type_: callee.type_().to_string() })
-                        }
+                    }
+                }
+                op::SUPER_INVOKE => {
+                    let name = unsafe { read_object!().string };
+                    let arg_count = read_u8!();
+                    let super_ = unsafe { self.pop().object().class };
+
+                    match unsafe { (*super_).methods.get(&name) } {
+                        Some(&method) => call_closure!(method, arg_count),
+                        None => bail!(AttributeError::NoSuchAttribute {
+                            type_: unsafe { (*(*super_).name).value.to_string() },
+                            name: unsafe { (*name).value.to_string() },
+                        }),
                     }
                 }
                 op::CLOSURE => {
@@ -646,7 +677,6 @@ impl VM {
 
 impl Default for VM {
     fn default() -> Self {
-        // TODO: tune these later.
         let mut gc = Gc::default();
 
         let mut globals = HashMap::with_capacity_and_hasher(256, BuildHasherDefault::default());

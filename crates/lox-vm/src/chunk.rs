@@ -82,6 +82,8 @@ impl Chunk {
             op::JUMP_IF_FALSE => self.debug_op_jump("OP_JUMP_IF_FALSE", idx, true),
             op::LOOP => self.debug_op_jump("OP_LOOP", idx, false),
             op::CALL => self.debug_op_byte("OP_CALL", idx),
+            op::INVOKE => self.debug_op_invoke("OP_INVOKE", idx),
+            op::SUPER_INVOKE => self.debug_op_invoke("OP_SUPER_INVOKE", idx),
             op::CLOSURE => {
                 let mut idx = idx + 1;
                 let constant_idx = self.ops[idx];
@@ -129,6 +131,14 @@ impl Chunk {
         let constant = &self.constants[constant_idx as usize];
         eprintln!("{name:16} {constant_idx:>4} '{constant}'");
         idx + 2
+    }
+
+    fn debug_op_invoke(&self, name: &str, idx: usize) -> usize {
+        let constant_idx = self.ops[idx + 1];
+        let constant = &self.constants[constant_idx as usize];
+        let arg_count = self.ops[idx + 2];
+        eprintln!("{name:16} ({arg_count} args) {constant_idx:>4} '{constant}'");
+        idx + 3
     }
 
     fn debug_op_jump(&self, name: &str, idx: usize, is_forward: bool) -> usize {

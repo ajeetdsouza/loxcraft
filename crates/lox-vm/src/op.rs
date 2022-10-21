@@ -33,6 +33,8 @@ iota! {
             , JUMP_IF_FALSE
             , LOOP
             , CALL
+            , INVOKE
+            , SUPER_INVOKE
             , CLOSURE
             , CLOSE_UPVALUE
             , RETURN

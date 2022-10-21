@@ -123,6 +123,7 @@ impl Compiler {
                 }
                 self.class_ctx.pop().unwrap();
             }
+            Stmt::Error => panic!("tried to compile despite parser errors"),
             Stmt::Expr(expr) => {
                 self.compile_expr(&expr.value, gc)?;
                 self.emit_u8(op::POP, span);
@@ -266,7 +267,6 @@ impl Compiler {
                 // Discard the condition.
                 self.emit_u8(op::POP, span);
             }
-            _ => unimplemented!(),
         }
         Ok(())
     }
@@ -348,7 +348,12 @@ impl Compiler {
                     self.compile_expr(arg, gc)?;
                 }
 
-                self.emit_u8(op::CALL, span);
+                let ops = unsafe { &mut (*self.ctx.function).chunk.ops };
+                match ops.len().checked_sub(2) {
+                    Some(idx) if ops[idx] == op::GET_PROPERTY => ops[idx] = op::INVOKE,
+                    Some(idx) if ops[idx] == op::GET_SUPER => ops[idx] = op::SUPER_INVOKE,
+                    Some(_) | None => self.emit_u8(op::CALL, span),
+                }
                 self.emit_u8(arg_count, span);
             }
             Expr::Get(get) => {
