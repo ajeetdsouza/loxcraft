@@ -40,6 +40,7 @@ lalrpop-util = "0.19.6"
 logos = "0.12.0"
 mimalloc = { version = "0.1.27", default-features = false }
 nu-ansi-term = "0.46.0"
+pprof = { version = "0.10.1", features = ["flamegraph", "prost-codec"] }
 pretty_assertions = "1.1.0"
 reedline = "0.12.0"
 rust-embed = { version = "6.4.0", features = ["include-exclude"] }
@@ -64,6 +65,7 @@ gc-stress = ["lox-vm/gc-stress"]
 gc-trace = ["lox-vm/gc-trace"]
 lsp = ["dep:lox-lsp"]
 playground = ["dep:lox-playground"]
+pprof = ["lox-vm/pprof"]
 repl = ["dep:lox-repl"]
 vm-trace = ["lox-vm/vm-trace"]
 
@@ -79,6 +81,11 @@ lox-repl = { path = "crates/lox-repl", optional = true }
 lox-syntax.path = "crates/lox-syntax"
 lox-vm.path = "crates/lox-vm"
 termcolor.workspace = true
+
+[profile.pprof]
+debug = true
+inherits = "release"
+strip = false
 
 [profile.release]
 codegen-units = 1

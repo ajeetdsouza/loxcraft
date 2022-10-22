@@ -13,6 +13,7 @@ harness = false
 gc-off = []
 gc-stress = []
 gc-trace = []
+pprof = ["dep:pprof"]
 vm-trace = []
 
 [dependencies]
@@ -21,6 +22,7 @@ hashbrown.workspace = true
 iota.workspace = true
 lox-common.path = "../lox-common"
 lox-syntax.path = "../lox-syntax"
+pprof = { optional = true, workspace = true }
 rustc-hash.workspace = true
 
 [target.'cfg(not(any(miri, target_family = "wasm")))'.dependencies]

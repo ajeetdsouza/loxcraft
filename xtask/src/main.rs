@@ -15,6 +15,10 @@ pub enum Cmd {
         #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<String>,
     },
+    Pprof {
+        #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
+        args: Vec<String>,
+    },
 }
 
 fn main() -> Result<()> {
@@ -37,22 +41,25 @@ fn main() -> Result<()> {
             // cargo
             run_cmd(Command::new("cargo").arg("build").args(args))?;
         }
-        Cmd::MiriTest { args } => {
-            run_cmd(
-                Command::new("cargo")
-                    .args(&[
-                        "+nightly",
-                        "miri",
-                        "nextest",
-                        "run",
-                        "--no-default-features",
-                        "--no-fail-fast",
-                        "--package=lox-vm",
-                    ])
-                    .args(args)
-                    .envs([("RUST_BACKTRACE", "1"), ("MIRIFLAGS", "-Zmiri-disable-isolation")]),
-            )?;
-        }
+        Cmd::MiriTest { args } => run_cmd(
+            Command::new("cargo")
+                .args(&[
+                    "+nightly",
+                    "miri",
+                    "nextest",
+                    "run",
+                    "--no-default-features",
+                    "--no-fail-fast",
+                    "--package=lox-vm",
+                ])
+                .args(args)
+                .envs([("RUST_BACKTRACE", "1"), ("MIRIFLAGS", "-Zmiri-disable-isolation")]),
+        )?,
+        Cmd::Pprof { args } => run_cmd(
+            Command::new("cargo")
+                .args(&["run", "--features=pprof", "--no-default-features", "--profile=pprof"])
+                .args(args),
+        )?,
     }
     Ok(())
 }
