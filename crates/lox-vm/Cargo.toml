@@ -23,7 +23,11 @@ iota.workspace = true
 lox-common.path = "../lox-common"
 lox-syntax.path = "../lox-syntax"
 pprof = { optional = true, workspace = true }
+remain.workspace = true
 rustc-hash.workspace = true
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+wasm-bindgen.workspace = true
 
 [target.'cfg(not(any(miri, target_family = "wasm")))'.dependencies]
 mimalloc.workspace = true

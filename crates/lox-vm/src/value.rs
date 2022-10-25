@@ -23,14 +23,16 @@ impl Value {
     }
 
     pub fn bool(&self) -> bool {
-        !matches!(self, Self::Nil | Self::Boolean(false))
+        !matches!(self, Self::Boolean(false) | Self::Nil)
     }
 
+    #[remain::check]
     pub fn type_(&self) -> &'static str {
+        #[remain::sorted]
         match self {
-            Self::Nil => "nil",
             Self::Boolean(_) => "bool",
             Self::Native(_) => "native",
+            Self::Nil => "nil",
             Self::Number(_) => "number",
             Self::Object(object) => object.type_(),
         }
@@ -38,9 +40,10 @@ impl Value {
 }
 
 impl Display for Value {
+    #[remain::check]
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        #[remain::sorted]
         match self {
-            Self::Nil => write!(f, "nil"),
             Self::Boolean(boolean) => write!(f, "{boolean}"),
             Self::Native(native) => {
                 let name = match native {
@@ -48,6 +51,7 @@ impl Display for Value {
                 };
                 write!(f, "<native {}>", name)
             }
+            Self::Nil => write!(f, "nil"),
             Self::Number(number) => write!(f, "{number}"),
             Self::Object(object) => write!(f, "{object}"),
         }
@@ -99,6 +103,7 @@ impl PartialEq for Value {
 }
 
 #[derive(Clone, Copy, Debug)]
+#[remain::sorted]
 pub enum Native {
     Clock,
 }

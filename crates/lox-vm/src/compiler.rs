@@ -50,7 +50,9 @@ impl Compiler {
         Ok(compiler.ctx.function)
     }
 
+    #[remain::check]
     fn compile_stmt(&mut self, (stmt, span): &StmtS, gc: &mut Gc) -> Result<()> {
+        #[remain::sorted]
         match stmt {
             Stmt::Block(block) => {
                 self.begin_scope();
@@ -330,7 +332,9 @@ impl Compiler {
     }
 
     /// Compute an expression and push it onto the stack.
+    #[remain::check]
     fn compile_expr(&mut self, (expr, span): &ExprS, gc: &mut Gc) -> Result<()> {
+        #[remain::sorted]
         match expr {
             Expr::Assign(assign) => {
                 self.compile_expr(&assign.value, gc)?;
@@ -436,25 +440,30 @@ impl Compiler {
                     }
                 };
             }
-            Expr::Literal(literal) => match literal {
-                ExprLiteral::Bool(true) => self.emit_u8(op::TRUE, span),
-                ExprLiteral::Bool(false) => self.emit_u8(op::FALSE, span),
-                ExprLiteral::Nil => self.emit_u8(op::NIL, span),
-                ExprLiteral::Number(number) => {
-                    let value = (*number).into();
-                    self.emit_u8(op::CONSTANT, span);
-                    self.emit_constant(value, span)?;
+            Expr::Literal(literal) =>
+            {
+                #[remain::sorted]
+                match literal {
+                    ExprLiteral::Bool(true) => self.emit_u8(op::TRUE, span),
+                    ExprLiteral::Bool(false) => self.emit_u8(op::FALSE, span),
+                    ExprLiteral::Nil => self.emit_u8(op::NIL, span),
+                    ExprLiteral::Number(number) => {
+                        let value = (*number).into();
+                        self.emit_u8(op::CONSTANT, span);
+                        self.emit_constant(value, span)?;
+                    }
+                    ExprLiteral::String(string) => {
+                        let string = gc.alloc(string);
+                        unsafe { (*string).is_marked = true };
+                        let value = string.into();
+                        self.emit_u8(op::CONSTANT, span);
+                        self.emit_constant(value, span)?;
+                    }
                 }
-                ExprLiteral::String(string) => {
-                    let string = gc.alloc(string);
-                    unsafe { (*string).is_marked = true };
-                    let value = string.into();
-                    self.emit_u8(op::CONSTANT, span);
-                    self.emit_constant(value, span)?;
-                }
-            },
+            }
             Expr::Prefix(prefix) => {
                 self.compile_expr(&prefix.rt, gc)?;
+                #[remain::sorted]
                 match prefix.op {
                     OpPrefix::Negate => self.emit_u8(op::NEGATE, span),
                     OpPrefix::Not => self.emit_u8(op::NOT, span),
@@ -747,6 +756,7 @@ struct Upvalue {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[remain::sorted]
 enum FunctionType {
     /// A function that has been defined in code.
     Function,

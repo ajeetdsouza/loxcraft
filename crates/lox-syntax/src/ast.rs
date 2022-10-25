@@ -88,12 +88,13 @@ pub struct StmtWhile {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[remain::sorted]
 pub enum Expr {
     Assign(Box<ExprAssign>),
     Call(Box<ExprCall>),
     Get(Box<ExprGet>),
-    Literal(ExprLiteral),
     Infix(Box<ExprInfix>),
+    Literal(ExprLiteral),
     Prefix(Box<ExprPrefix>),
     Set(Box<ExprSet>),
     Super(ExprSuper),
@@ -119,9 +120,10 @@ pub struct ExprGet {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[remain::sorted]
 pub enum ExprLiteral {
-    Nil,
     Bool(bool),
+    Nil,
     Number(f64),
     String(String),
 }
@@ -176,6 +178,7 @@ pub struct ExprPrefix {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[remain::sorted]
 pub enum OpPrefix {
     Negate,
     Not,

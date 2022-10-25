@@ -1280,6 +1280,7 @@ dependencies = [
  "lox-repl",
  "lox-syntax",
  "lox-vm",
+ "remain",
  "termcolor",
 ]
 
@@ -1288,6 +1289,7 @@ name = "lox-common"
 version = "0.1.0"
 dependencies = [
  "codespan-reporting",
+ "remain",
  "termcolor",
  "thiserror",
 ]
@@ -1339,6 +1341,7 @@ dependencies = [
  "logos",
  "lox-common",
  "pretty_assertions",
+ "remain",
 ]
 
 [[package]]
@@ -1355,8 +1358,10 @@ dependencies = [
  "mimalloc",
  "pprof",
  "pretty_assertions",
+ "remain",
  "rustc-hash",
  "test-generator",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -1367,6 +1372,7 @@ dependencies = [
  "console_error_panic_hook",
  "lox-common",
  "lox-vm",
+ "remain",
  "serde",
  "serde_json",
  "termcolor",
@@ -2039,6 +2045,17 @@ name = "regex-syntax"
 version = "0.6.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a3f87b73ce11b1619a3c6332f45341e0047173771e8b8b73f87bfeefb7b56244"
+
+[[package]]
+name = "remain"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a81bc6a3aaeb180f767bd2bda8c03bac5b93b3b69a783c66f35d16a4df276cf"
+dependencies = [
+ "proc-macro2 1.0.46",
+ "quote 1.0.21",
+ "syn 1.0.102",
+]
 
 [[package]]
 name = "remove_dir_all"
@@ -3115,6 +3132,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap 4.0.12",
+ "remain",
 ]
 
 [[package]]

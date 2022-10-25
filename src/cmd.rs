@@ -7,6 +7,7 @@ use lox_common::error::ErrorS;
 use lox_vm::VM;
 
 #[derive(Debug, Parser)]
+#[remain::sorted]
 #[command(about, author, disable_help_subcommand = true, propagate_version = true, version)]
 pub enum Cmd {
     Lsp,
@@ -21,8 +22,10 @@ pub enum Cmd {
 }
 
 impl Cmd {
+    #[remain::check]
     pub fn run(&self) -> Result<()> {
         #[allow(unused_variables)]
+        #[remain::sorted]
         match self {
             Cmd::Lsp => {
                 #[cfg(not(feature = "lsp"))]

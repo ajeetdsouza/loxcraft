@@ -12,6 +12,7 @@ pub type Result<T, E = ErrorS> = std::result::Result<T, E>;
 pub type ErrorS = Spanned<Error>;
 
 #[derive(Debug, Error, Eq, PartialEq)]
+#[remain::sorted]
 pub enum Error {
     #[error("AttributeError: {0}")]
     AttributeError(AttributeError),
@@ -28,7 +29,9 @@ pub enum Error {
 }
 
 impl AsDiagnostic for Error {
+    #[remain::check]
     fn as_diagnostic(&self, span: &Span) -> Diagnostic<()> {
+        #[remain::sorted]
         match self {
             Error::AttributeError(e) => e.as_diagnostic(span),
             Error::IoError(e) => e.as_diagnostic(span),
@@ -53,6 +56,7 @@ macro_rules! impl_from_error {
 impl_from_error!(AttributeError, IoError, NameError, OverflowError, SyntaxError, TypeError);
 
 #[derive(Debug, Error, Eq, PartialEq)]
+#[remain::sorted]
 pub enum AttributeError {
     #[error("{type_:?} object has no attribute {name:?}")]
     NoSuchAttribute { type_: String, name: String },
@@ -68,6 +72,7 @@ impl AsDiagnostic for AttributeError {
 }
 
 #[derive(Debug, Error, Eq, PartialEq)]
+#[remain::sorted]
 pub enum IoError {
     #[error("unable to write to file: {file:?}")]
     WriteError { file: String },
@@ -83,6 +88,7 @@ impl AsDiagnostic for IoError {
 }
 
 #[derive(Debug, Error, Eq, PartialEq)]
+#[remain::sorted]
 pub enum NameError {
     #[error("cannot access variable {name:?} in its own initializer")]
     AccessInsideInitializer { name: String },
@@ -104,6 +110,7 @@ impl AsDiagnostic for NameError {
 }
 
 #[derive(Debug, Error, Eq, PartialEq)]
+#[remain::sorted]
 pub enum OverflowError {
     #[error("jump body is too large")]
     JumpTooLarge,
@@ -131,19 +138,12 @@ impl AsDiagnostic for OverflowError {
 }
 
 #[derive(Debug, Error, Eq, PartialEq)]
+#[remain::sorted]
 pub enum SyntaxError {
     #[error("extraneous input: {token:?}")]
     ExtraToken { token: String },
     #[error("invalid input")]
     InvalidToken,
-    #[error("unexpected input")]
-    UnexpectedInput { token: String },
-    #[error("unexpected end of file")]
-    UnrecognizedEOF { expected: Vec<String> },
-    #[error("unexpected {token:?}")]
-    UnrecognizedToken { token: String, expected: Vec<String> },
-    #[error("unterminated string")]
-    UnterminatedString,
     #[error(r#"init() should not return a value"#)]
     ReturnInInitializer,
     #[error(r#""return" used outside function"#)]
@@ -154,14 +154,24 @@ pub enum SyntaxError {
     SuperWithoutSuperclass,
     #[error(r#""this" used outside class"#)]
     ThisOutsideClass,
+    #[error("unexpected input")]
+    UnexpectedInput { token: String },
+    #[error("unexpected end of file")]
+    UnrecognizedEOF { expected: Vec<String> },
+    #[error("unexpected {token:?}")]
+    UnrecognizedToken { token: String, expected: Vec<String> },
+    #[error("unterminated string")]
+    UnterminatedString,
 }
 
 impl AsDiagnostic for SyntaxError {
+    #[remain::check]
     fn as_diagnostic(&self, span: &Span) -> Diagnostic<()> {
         let mut diagnostic = Diagnostic::error()
             .with_code("SyntaxError")
             .with_message(self.to_string())
             .with_labels(vec![Label::primary((), span.clone())]);
+        #[remain::sorted]
         match self {
             SyntaxError::UnrecognizedEOF { expected, .. }
             | SyntaxError::UnrecognizedToken { expected, .. } => {
@@ -174,6 +184,7 @@ impl AsDiagnostic for SyntaxError {
 }
 
 #[derive(Debug, Error, Eq, PartialEq)]
+#[remain::sorted]
 pub enum TypeError {
     #[error("{name}() takes {exp_args} arguments but {got_args} were given")]
     ArityMismatch { name: String, exp_args: u8, got_args: u8 },
@@ -183,10 +194,10 @@ pub enum TypeError {
     NotCallable { type_: String },
     #[error(r#"superclass should be of type "class", not {type_:?}"#)]
     SuperclassInvalidType { type_: String },
-    #[error("unsupported operand type for {op}: {rt_type:?}")]
-    UnsupportedOperandPrefix { op: String, rt_type: String },
     #[error("unsupported operand type(s) for {op}: {lt_type:?} and {rt_type:?}")]
     UnsupportedOperandInfix { op: String, lt_type: String, rt_type: String },
+    #[error("unsupported operand type for {op}: {rt_type:?}")]
+    UnsupportedOperandPrefix { op: String, rt_type: String },
 }
 
 impl AsDiagnostic for TypeError {

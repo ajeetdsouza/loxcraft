@@ -1,7 +1,6 @@
 use std::hash::BuildHasherDefault;
 use std::io::Write;
 use std::pin::Pin;
-use std::time::{SystemTime, UNIX_EPOCH};
 use std::{hint, ptr};
 
 use arrayvec::ArrayVec;
@@ -19,8 +18,8 @@ use crate::object::{
     ObjectBoundMethod, ObjectClass, ObjectClosure, ObjectFunction, ObjectInstance, ObjectString,
     ObjectType, ObjectUpvalue,
 };
-use crate::op;
 use crate::value::{Native, Value};
+use crate::{op, util};
 
 const GC_HEAP_GROW_FACTOR: usize = 2;
 const FRAMES_MAX: usize = 64;
@@ -271,11 +270,7 @@ impl VM {
                                         });
                                     }
                                     // TODO: find an alternative that works on WASM.
-                                    SystemTime::now()
-                                        .duration_since(UNIX_EPOCH)
-                                        .unwrap_or_default()
-                                        .as_secs_f64()
-                                        .into()
+                                    util::now().into()
                                 }
                             };
                             self.push(value);

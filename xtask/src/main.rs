@@ -5,6 +5,7 @@ use anyhow::{bail, Context, Result};
 use clap::Parser;
 
 #[derive(Debug, Parser)]
+#[remain::sorted]
 #[command(about, author, disable_help_subcommand = true, propagate_version = true, version)]
 pub enum Cmd {
     Build {
@@ -21,8 +22,10 @@ pub enum Cmd {
     },
 }
 
+#[remain::check]
 fn main() -> Result<()> {
     let cmd = Cmd::parse();
+    #[remain::sorted]
     match cmd {
         Cmd::Build { args } => {
             // wasm-pack
