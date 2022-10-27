@@ -107,16 +107,3 @@ impl PartialEq for Value {
 pub enum Native {
     Clock,
 }
-
-#[cfg(test)]
-mod tests {
-    use std::mem;
-
-    use super::*;
-
-    #[test]
-    fn sizes() {
-        assert_eq!(mem::size_of::<Value>(), 16);
-        assert_eq!(mem::size_of::<Object>(), 8);
-    }
-}

@@ -5,10 +5,6 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[[bench]]
-name = "lang"
-harness = false
-
 [features]
 gc-off = []
 gc-stress = []
@@ -36,6 +32,5 @@ mimalloc.workspace = true
 build-deps.workspace = true
 
 [dev-dependencies]
-criterion.workspace = true
 pretty_assertions.workspace = true
 test-generator.workspace = true

@@ -69,7 +69,7 @@ class Foo {
 var foo = Foo();
 var start = clock();
 var i = 0;
-while (i < 500000) {
+while (i < 12000000) {
   foo.method0();
   foo.method1();
   foo.method2();
