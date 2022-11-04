@@ -32,21 +32,21 @@ fn main() -> Result<()> {
             let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../crates/lox-wasm");
             run_cmd(
                 Command::new("wasm-pack")
-                    .args(&["build", "--out-dir=pkg", "--release", "--target=web"])
+                    .args(["build", "--out-dir=pkg", "--release", "--target=web"])
                     .current_dir(path),
             )?;
 
             // npm
             let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../crates/lox-playground/ui/");
             run_cmd(Command::new("npm").arg("ci").current_dir(&path))?;
-            run_cmd(Command::new("npm").args(&["run", "build"]).current_dir(path))?;
+            run_cmd(Command::new("npm").args(["run", "build"]).current_dir(path))?;
 
             // cargo
             run_cmd(Command::new("cargo").arg("build").args(args))?;
         }
         Cmd::MiriTest { args } => run_cmd(
             Command::new("cargo")
-                .args(&[
+                .args([
                     "+nightly",
                     "miri",
                     "nextest",
@@ -60,7 +60,7 @@ fn main() -> Result<()> {
         )?,
         Cmd::Pprof { args } => run_cmd(
             Command::new("cargo")
-                .args(&["run", "--features=pprof", "--no-default-features", "--profile=pprof"])
+                .args(["run", "--features=pprof", "--no-default-features", "--profile=pprof"])
                 .args(args),
         )?,
     }

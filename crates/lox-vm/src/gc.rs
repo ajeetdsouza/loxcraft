@@ -79,7 +79,7 @@ impl Gc {
 
     pub fn sweep(&mut self) {
         for idx in (0..self.objects.len()).rev() {
-            let object = self.objects[idx];
+            let object = *unsafe { self.objects.get_unchecked(idx) };
             if unsafe { (*object.common).is_marked } {
                 unsafe { (*object.common).is_marked = false };
             } else {

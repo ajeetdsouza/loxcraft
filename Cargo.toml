@@ -7,9 +7,9 @@ description = "A compiler / VM for the Lox programming language"
 edition = "2021"
 keywords = ["compiler", "interpreter", "language", "lox", "vm"]
 license = "MIT"
-name = "lox"
-repository = "https://github.com/ajeetdsouza/lox"
-rust-version = "1.64"
+name = "loxcraft"
+repository = "https://github.com/ajeetdsouza/loxcraft"
+rust-version = "1.65"
 version = "0.1.0"
 
 [badges]

@@ -124,14 +124,10 @@ impl reedline::Highlighter for Highlighter {
         let mut output = StyledText::new();
 
         let mut highlighter = tree_sitter_highlight::Highlighter::new();
-        let highlights = match highlighter.highlight(&self.config, line.as_bytes(), None, |_| None)
-        {
-            Ok(highlights) => highlights,
-            Err(_) => {
-                let style = Style::new().fg(PALETTE[0].fg);
-                output.push((style, line.to_string()));
-                return output;
-            }
+        let Ok(highlights) = highlighter.highlight(&self.config, line.as_bytes(), None, |_| None) else {
+            let style = Style::new().fg(PALETTE[0].fg);
+            output.push((style, line.to_string()));
+            return output;
         };
 
         let mut curr_fg = PALETTE[0].fg;

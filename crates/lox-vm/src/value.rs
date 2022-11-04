@@ -17,7 +17,7 @@ pub enum Value {
 impl Value {
     pub fn object(&self) -> Object {
         match self {
-            Value::Object(object) => *object,
+            Self::Object(object) => *object,
             _ => unsafe { hint::unreachable_unchecked() },
         }
     }

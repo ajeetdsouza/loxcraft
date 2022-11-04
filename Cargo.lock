@@ -1167,24 +1167,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lox"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "dirs",
- "human-panic",
- "lox-common",
- "lox-lsp",
- "lox-playground",
- "lox-repl",
- "lox-syntax",
- "lox-vm",
- "remain",
- "termcolor",
-]
-
-[[package]]
 name = "lox-common"
 version = "0.1.0"
 dependencies = [
@@ -1276,6 +1258,24 @@ dependencies = [
  "serde_json",
  "termcolor",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "loxcraft"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "dirs",
+ "human-panic",
+ "lox-common",
+ "lox-lsp",
+ "lox-playground",
+ "lox-repl",
+ "lox-syntax",
+ "lox-vm",
+ "remain",
+ "termcolor",
 ]
 
 [[package]]
