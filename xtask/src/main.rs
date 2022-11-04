@@ -1,3 +1,4 @@
+use std::fs;
 use std::path::Path;
 use std::process::Command;
 
@@ -13,6 +14,10 @@ pub enum Cmd {
         args: Vec<String>,
     },
     MiriTest {
+        #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
+        args: Vec<String>,
+    },
+    Pgo {
         #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<String>,
     },
@@ -58,11 +63,36 @@ fn main() -> Result<()> {
                 .args(args)
                 .envs([("RUST_BACKTRACE", "1"), ("MIRIFLAGS", "-Zmiri-disable-isolation")]),
         )?,
+        Cmd::Pgo { args } => {
+            let _ = fs::remove_dir_all("/tmp/loxcraft-pgo"); // TODO: handle errors
+
+            let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../benchmarks");
+            for dir in fs::read_dir(path)? {
+                let benchmark = dir?.path();
+                run_cmd(
+                    Command::new("cargo")
+                        .args(["run", "--release"])
+                        .args(&args)
+                        .args(["--", "run"])
+                        .arg(benchmark)
+                        .env("RUSTFLAGS", "-Cprofile-generate=/tmp/loxcraft-pgo"),
+                )?;
+            }
+            run_cmd(Command::new("cargo").args([
+                "profdata",
+                "--",
+                "merge",
+                "-o",
+                "/tmp/loxcraft-pgo.profdata",
+                "/tmp/loxcraft-pgo",
+            ]))?;
+        }
         Cmd::Pprof { args } => run_cmd(
             Command::new("cargo")
                 .args(["run", "--features=pprof", "--no-default-features", "--profile=pprof"])
                 .args(args),
         )?,
+        // RUSTFLAGS='-Ctarget-cpu=native -Cprofile-use=/tmp/loxcraft-pgo.profdata' cargo build --no-default-features --release
     }
     Ok(())
 }
