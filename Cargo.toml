@@ -39,9 +39,9 @@ lalrpop-util = "0.19.6"
 logos = "0.12.0"
 mimalloc = { version = "0.1.27", default-features = false }
 nu-ansi-term = "0.46.0"
-pprof = { version = "0.10.1", features = ["flamegraph", "prost-codec"] }
+pprof = { version = "0.11.0", features = ["flamegraph", "prost-codec"] }
 pretty_assertions = "1.1.0"
-reedline = "0.12.0"
+reedline = "0.13.0"
 remain = "0.2.5"
 rust-embed = { version = "6.4.0", features = ["include-exclude"] }
 rustc-hash = "1.1.0"

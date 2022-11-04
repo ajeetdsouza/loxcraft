@@ -75,7 +75,10 @@ fn main() -> Result<()> {
                         .args(&args)
                         .args(["--", "run"])
                         .arg(benchmark)
-                        .env("RUSTFLAGS", "-Cprofile-generate=/tmp/loxcraft-pgo"),
+                        .env(
+                            "RUSTFLAGS",
+                            "-Ctarget-cpu=native -Cprofile-generate=/tmp/loxcraft-pgo",
+                        ),
                 )?;
             }
             run_cmd(Command::new("cargo").args([
@@ -98,9 +101,13 @@ fn main() -> Result<()> {
 }
 
 fn run_cmd(cmd: &mut Command) -> Result<()> {
-    print!(">>> {:?}", cmd.get_program());
+    print!(">>>");
+    for (key, value) in cmd.get_envs() {
+        print!(" {key:?}={value:?}");
+    }
+    print!(" {:?}", cmd.get_program());
     for arg in cmd.get_args() {
-        print!(" {:?}", arg);
+        print!(" {arg:?}");
     }
     println!();
 
