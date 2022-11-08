@@ -1,109 +1,125 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 
 #[derive(Debug, Parser)]
-#[remain::sorted]
 #[command(about, author, disable_help_subcommand = true, propagate_version = true, version)]
 pub enum Cmd {
+    /// Compile TypeScript/WASM modules
+    Codegen,
+    /// Build a release binary
     Build {
-        #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
-        args: Vec<String>,
+        #[clap(long)]
+        native: bool,
+        #[clap(long)]
+        pgo: bool,
     },
-    MiriTest {
-        #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
-        args: Vec<String>,
-    },
-    Pgo {
-        #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
-        args: Vec<String>,
-    },
-    Pprof {
+    /// Run tests using Miri
+    Test {
         #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<String>,
     },
 }
 
-#[remain::check]
 fn main() -> Result<()> {
     let cmd = Cmd::parse();
-    #[remain::sorted]
     match cmd {
-        Cmd::Build { args } => {
-            // wasm-pack
-            let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../crates/lox-wasm");
-            run_cmd(
-                Command::new("wasm-pack")
-                    .args(["build", "--out-dir=pkg", "--release", "--target=web"])
-                    .current_dir(path),
-            )?;
+        Cmd::Build { native, pgo } => {
+            run_codegen()?;
 
-            // npm
-            let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../crates/lox-playground/ui/");
-            run_cmd(Command::new("npm").arg("ci").current_dir(&path))?;
-            run_cmd(Command::new("npm").args(["run", "build"]).current_dir(path))?;
-
-            // cargo
-            run_cmd(Command::new("cargo").arg("build").args(args))?;
-        }
-        Cmd::MiriTest { args } => run_cmd(
-            Command::new("cargo")
-                .args([
-                    "+nightly",
-                    "miri",
-                    "nextest",
-                    "run",
-                    "--no-default-features",
-                    "--no-fail-fast",
-                    "--package=lox-vm",
-                ])
-                .args(args)
-                .envs([("RUST_BACKTRACE", "1"), ("MIRIFLAGS", "-Zmiri-disable-isolation")]),
-        )?,
-        Cmd::Pgo { args } => {
-            let _ = fs::remove_dir_all("/tmp/loxcraft-pgo"); // TODO: handle errors
-
-            let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../benchmarks");
-            for dir in fs::read_dir(path)? {
-                let benchmark = dir?.path();
-                run_cmd(
-                    Command::new("cargo")
-                        .args(["run", "--release"])
-                        .args(&args)
-                        .args(["--", "run"])
-                        .arg(benchmark)
-                        .env(
-                            "RUSTFLAGS",
-                            "-Ctarget-cpu=native -Cprofile-generate=/tmp/loxcraft-pgo",
-                        ),
-                )?;
+            // Build optimized binary.
+            let mut rustflags = Vec::new();
+            if pgo {
+                let merged_path = run_pgo(native)?;
+                rustflags.push(format!(
+                    "-Cprofile-use={}",
+                    merged_path.to_str().expect("path contained invalid UTF-8")
+                ));
             }
-            run_cmd(Command::new("cargo").args([
-                "profdata",
-                "--",
-                "merge",
-                "-o",
-                "/tmp/loxcraft-pgo.profdata",
-                "/tmp/loxcraft-pgo",
-            ]))?;
+            if native {
+                rustflags.push("-Ctarget-cpu=native".to_string());
+            }
+
+            run_cmd(
+                Command::new("cargo")
+                    .args(["build", "--release"])
+                    .env("CARGO_ENCODED_RUSTFLAGS", rustflags.join("\x1f")),
+            )?;
         }
-        Cmd::Pprof { args } => run_cmd(
+        Cmd::Codegen => run_codegen()?,
+        Cmd::Test { args } => run_cmd(
             Command::new("cargo")
-                .args(["run", "--features=pprof", "--no-default-features", "--profile=pprof"])
-                .args(args),
+                .args(["+nightly", "miri", "nextest", "run", "--no-fail-fast"])
+                .args(args)
+                .env("MIRIFLAGS", "-Zmiri-disable-isolation"),
         )?,
-        // RUSTFLAGS='-Ctarget-cpu=native -Cprofile-use=/tmp/loxcraft-pgo.profdata' cargo build --no-default-features --release
     }
     Ok(())
+}
+
+fn run_codegen() -> Result<()> {
+    // wasm-pack
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../crates/lox-wasm");
+    run_cmd(
+        Command::new("wasm-pack")
+            .args(["build", "--out-dir=pkg/", "--release", "--target=web"])
+            .current_dir(path),
+    )?;
+
+    // npm
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../crates/lox-playground/ui/");
+    run_cmd(Command::new("npm").arg("ci").current_dir(&path))?;
+    run_cmd(Command::new("npm").args(["run", "build"]).current_dir(path))?;
+
+    Ok(())
+}
+
+fn run_pgo(native: bool) -> Result<PathBuf> {
+    // Clean existing profiling data.
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../pgo/");
+    match fs::remove_dir_all(&path) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => Err(e).expect("could not remove pgo directory"),
+    }
+
+    // Collect profiles for each benchmark.
+    let mut rustflags = vec![format!(
+        "-Cprofile-generate={}",
+        path.to_str().expect("path contained invalid UTF-8")
+    )];
+    if native {
+        rustflags.push("-Ctarget-cpu=native".to_string());
+    }
+    let benchmarks = Path::new(env!("CARGO_MANIFEST_DIR")).join("../benchmarks/");
+    for benchmark in fs::read_dir(benchmarks)? {
+        run_cmd(
+            Command::new("cargo")
+                .args(["run", "--release"])
+                .args(["--", "run"])
+                .arg(benchmark?.path())
+                .env("CARGO_ENCODED_RUSTFLAGS", rustflags.join("\x1f")),
+        )?;
+    }
+
+    // Merge collected profiles.
+    let merged_path = path.join("merged.profdata");
+    run_cmd(
+        Command::new("cargo").args(["profdata", "--", "merge", "-o"]).args([&merged_path, &path]),
+    )?;
+
+    Ok(merged_path)
 }
 
 fn run_cmd(cmd: &mut Command) -> Result<()> {
     print!(">>>");
     for (key, value) in cmd.get_envs() {
-        print!(" {key:?}={value:?}");
+        if let Some(value) = value {
+            print!(" {key:?}={value:?}");
+        }
     }
     print!(" {:?}", cmd.get_program());
     for arg in cmd.get_args() {

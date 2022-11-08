@@ -26,7 +26,6 @@ pub fn loxRun(source: &str) {
 
 #[allow(dead_code)]
 #[derive(Debug, Serialize)]
-#[remain::sorted]
 #[serde(tag = "type")]
 enum Message {
     ExitFailure,
@@ -97,7 +96,6 @@ impl<W: Write> WriteColor for HtmlWriter<W> {
         true
     }
 
-    #[remain::check]
     fn set_color(&mut self, spec: &termcolor::ColorSpec) -> io::Result<()> {
         if spec.reset() {
             self.reset()?;
@@ -105,7 +103,6 @@ impl<W: Write> WriteColor for HtmlWriter<W> {
 
         let mut classes = Vec::new();
         if let Some(fg) = spec.fg() {
-            #[remain::sorted]
             match fg {
                 Color::Black => classes.push("text-black"),
                 Color::Blue => classes.push("text-primary"),
@@ -117,7 +114,6 @@ impl<W: Write> WriteColor for HtmlWriter<W> {
             };
         }
         if let Some(bg) = spec.bg() {
-            #[remain::sorted]
             match bg {
                 Color::Black => classes.push("bg-black"),
                 Color::Blue => classes.push("bg-primary"),

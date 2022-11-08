@@ -56,34 +56,7 @@ pub struct VM {
 impl VM {
     pub fn run(&mut self, source: &str, stdout: &mut impl Write) -> Result<(), Vec<ErrorS>> {
         let function = Compiler::compile(source, &mut self.gc)?;
-
-        #[cfg(feature = "pprof")]
-        let guard = pprof::ProfilerGuardBuilder::default()
-            .frequency(1000)
-            .build()
-            .expect("unable to build profiler");
-
-        self.run_function(function, stdout).map_err(|e| vec![e])?;
-
-        #[cfg(feature = "pprof")]
-        {
-            let report = guard.report().build().expect("unable to build profiler report");
-
-            // pprof
-            let profile = report.pprof().expect("unable to generate pprof report");
-            let message = pprof::protos::Message::encode_to_vec(&profile);
-            std::fs::write("profile.pb", message)
-                .expect("unable to write pprof profile: profile.pb");
-            eprintln!("writing profile.pb");
-
-            // flamegraph
-            let file = std::fs::File::create("flamegraph.svg")
-                .expect("unable to create file: flamegraph.svg");
-            report.flamegraph(file).expect("unable to write flamegraph: flamegraph.svg");
-            eprintln!("writing flamegraph.svg");
-        }
-
-        Ok(())
+        self.run_function(function, stdout).map_err(|e| vec![e])
     }
 
     pub fn run_function(

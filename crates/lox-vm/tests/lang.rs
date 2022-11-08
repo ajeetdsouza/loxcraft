@@ -16,7 +16,7 @@ fn lox(path: &str) {
     }
 
     let path = Path::new("../..").join(path);
-    let source = fs::read_to_string(path).unwrap();
+    let source = fs::read_to_string(path).expect("unable to read test file");
     let mut exp_output = String::new();
     for line in source.lines() {
         const OUT_COMMENT: &str = "// out: ";

@@ -26,9 +26,7 @@ impl Value {
         !matches!(self, Self::Boolean(false) | Self::Nil)
     }
 
-    #[remain::check]
     pub fn type_(&self) -> &'static str {
-        #[remain::sorted]
         match self {
             Self::Boolean(_) => "bool",
             Self::Native(_) => "native",
@@ -40,9 +38,7 @@ impl Value {
 }
 
 impl Display for Value {
-    #[remain::check]
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        #[remain::sorted]
         match self {
             Self::Boolean(boolean) => write!(f, "{boolean}"),
             Self::Native(native) => {
@@ -103,7 +99,6 @@ impl PartialEq for Value {
 }
 
 #[derive(Clone, Copy, Debug)]
-#[remain::sorted]
 pub enum Native {
     Clock,
 }

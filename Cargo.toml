@@ -24,6 +24,7 @@ arrayvec = "0.7.2"
 askama_escape = "0.10.3"
 build-deps = "0.1.4"
 cc = "1.0.73"
+cfg-if = "1.0.0"
 clap = { version = "4.0.0", features = ["derive"] }
 codespan-reporting = "0.11.1"
 console_error_panic_hook = "0.1.1"
@@ -39,10 +40,8 @@ lalrpop-util = "0.19.6"
 logos = "0.12.0"
 mimalloc = { version = "0.1.27", default-features = false }
 nu-ansi-term = "0.46.0"
-pprof = { version = "0.11.0", features = ["flamegraph", "prost-codec"] }
 pretty_assertions = "1.1.0"
 reedline = "0.13.0"
-remain = "0.2.5"
 rust-embed = { version = "6.4.0", features = ["include-exclude"] }
 rustc-hash = "1.1.0"
 serde = { version = "1.0.136", features = ["derive"] }
@@ -65,12 +64,12 @@ gc-stress = ["lox-vm/gc-stress"]
 gc-trace = ["lox-vm/gc-trace"]
 lsp = ["dep:lox-lsp"]
 playground = ["dep:lox-playground"]
-pprof = ["lox-vm/pprof"]
 repl = ["dep:lox-repl"]
 vm-trace = ["lox-vm/vm-trace"]
 
 [dependencies]
 anyhow.workspace = true
+cfg-if.workspace = true
 clap.workspace = true
 dirs.workspace = true
 human-panic.workspace = true
@@ -80,13 +79,7 @@ lox-playground = { path = "crates/lox-playground", optional = true }
 lox-repl = { path = "crates/lox-repl", optional = true }
 lox-syntax.path = "crates/lox-syntax"
 lox-vm.path = "crates/lox-vm"
-remain.workspace = true
 termcolor.workspace = true
-
-[profile.pprof]
-debug = true
-inherits = "release"
-strip = false
 
 [profile.release]
 codegen-units = 1

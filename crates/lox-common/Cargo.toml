@@ -7,6 +7,5 @@ edition = "2021"
 
 [dependencies]
 codespan-reporting.workspace = true
-remain.workspace = true
 termcolor.workspace = true
 thiserror.workspace = true

@@ -50,9 +50,7 @@ impl Compiler {
         Ok(compiler.ctx.function)
     }
 
-    #[remain::check]
     fn compile_stmt(&mut self, (stmt, span): &StmtS, gc: &mut Gc) -> Result<()> {
-        #[remain::sorted]
         match stmt {
             Stmt::Block(block) => {
                 self.begin_scope();
@@ -123,7 +121,7 @@ impl Compiler {
                 if has_super {
                     self.end_scope(&NO_SPAN);
                 }
-                self.class_ctx.pop().unwrap();
+                self.class_ctx.pop().expect("attempted to pop the global context");
             }
             Stmt::Error => panic!("tried to compile despite parser errors"),
             Stmt::Expr(expr) => {
@@ -332,9 +330,7 @@ impl Compiler {
     }
 
     /// Compute an expression and push it onto the stack.
-    #[remain::check]
     fn compile_expr(&mut self, (expr, span): &ExprS, gc: &mut Gc) -> Result<()> {
-        #[remain::sorted]
         match expr {
             Expr::Assign(assign) => {
                 self.compile_expr(&assign.value, gc)?;
@@ -440,30 +436,25 @@ impl Compiler {
                     }
                 };
             }
-            Expr::Literal(literal) =>
-            {
-                #[remain::sorted]
-                match literal {
-                    ExprLiteral::Bool(true) => self.emit_u8(op::TRUE, span),
-                    ExprLiteral::Bool(false) => self.emit_u8(op::FALSE, span),
-                    ExprLiteral::Nil => self.emit_u8(op::NIL, span),
-                    ExprLiteral::Number(number) => {
-                        let value = (*number).into();
-                        self.emit_u8(op::CONSTANT, span);
-                        self.emit_constant(value, span)?;
-                    }
-                    ExprLiteral::String(string) => {
-                        let string = gc.alloc(string);
-                        unsafe { (*string).is_marked = true };
-                        let value = string.into();
-                        self.emit_u8(op::CONSTANT, span);
-                        self.emit_constant(value, span)?;
-                    }
+            Expr::Literal(literal) => match literal {
+                ExprLiteral::Bool(true) => self.emit_u8(op::TRUE, span),
+                ExprLiteral::Bool(false) => self.emit_u8(op::FALSE, span),
+                ExprLiteral::Nil => self.emit_u8(op::NIL, span),
+                ExprLiteral::Number(number) => {
+                    let value = (*number).into();
+                    self.emit_u8(op::CONSTANT, span);
+                    self.emit_constant(value, span)?;
                 }
-            }
+                ExprLiteral::String(string) => {
+                    let string = gc.alloc(string);
+                    unsafe { (*string).is_marked = true };
+                    let value = string.into();
+                    self.emit_u8(op::CONSTANT, span);
+                    self.emit_constant(value, span)?;
+                }
+            },
             Expr::Prefix(prefix) => {
                 self.compile_expr(&prefix.rt, gc)?;
-                #[remain::sorted]
                 match prefix.op {
                     OpPrefix::Negate => self.emit_u8(op::NEGATE, span),
                     OpPrefix::Not => self.emit_u8(op::NOT, span),
@@ -570,7 +561,11 @@ impl Compiler {
     }
 
     fn define_local(&mut self) {
-        self.ctx.locals.last_mut().unwrap().is_initialized = true;
+        self.ctx
+            .locals
+            .last_mut()
+            .expect("tried to define a local without declaring it")
+            .is_initialized = true;
     }
 
     /// A jump takes 1 byte for the instruction followed by 2 bytes for the
@@ -677,7 +672,7 @@ impl CompilerCtx {
                     if capture {
                         local.is_captured = true;
                     }
-                    Ok(Some(idx.try_into().unwrap()))
+                    Ok(Some(idx.try_into().expect("local index overflow")))
                 } else {
                     Err((
                         NameError::AccessInsideInitializer { name: name.to_string() }.into(),
@@ -722,13 +717,15 @@ impl CompilerCtx {
                     .try_push(upvalue)
                     .map_err(|_| (OverflowError::TooManyUpvalues.into(), span.clone()))?;
                 let upvalues = self.upvalues.len();
-
-                unsafe { (*self.function).upvalue_count = upvalues.try_into().unwrap() };
+                unsafe {
+                    (*self.function).upvalue_count =
+                        upvalues.try_into().expect("upvalue index overflow")
+                };
                 upvalues - 1
             }
         };
 
-        Ok(upvalue_idx.try_into().unwrap())
+        Ok(upvalue_idx.try_into().expect("upvalue index overflow"))
     }
 }
 
@@ -756,7 +753,6 @@ struct Upvalue {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[remain::sorted]
 enum FunctionType {
     /// A function that has been defined in code.
     Function,

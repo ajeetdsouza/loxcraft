@@ -32,7 +32,7 @@ impl Chunk {
                 self.constants.len() - 1
             }
         };
-        Ok(idx.try_into().unwrap())
+        Ok(idx.try_into().expect("constant index overflow"))
     }
 
     pub fn debug(&self, name: &str) {

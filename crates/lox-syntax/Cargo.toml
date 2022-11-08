@@ -7,7 +7,6 @@ version = "0.1.0"
 lalrpop-util.workspace = true
 logos.workspace = true
 lox-common.path = "../lox-common"
-remain.workspace = true
 
 [build-dependencies]
 lalrpop.workspace = true

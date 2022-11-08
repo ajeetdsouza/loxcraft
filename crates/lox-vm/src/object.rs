@@ -23,9 +23,7 @@ pub union Object {
 }
 
 impl Object {
-    #[remain::check]
     pub fn type_(&self) -> &'static str {
-        #[remain::sorted]
         match unsafe { (*self.common).type_ } {
             ObjectType::BoundMethod => "bound method",
             ObjectType::Class => "class",
@@ -37,9 +35,7 @@ impl Object {
         }
     }
 
-    #[remain::check]
     pub fn free(self) {
-        #[remain::sorted]
         match unsafe { (*self.common).type_ } {
             ObjectType::BoundMethod => {
                 unsafe { Box::from_raw(self.bound_method) };
@@ -73,9 +69,7 @@ impl Debug for Object {
 }
 
 impl Display for Object {
-    #[remain::check]
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        #[remain::sorted]
         match unsafe { (*self.common).type_ } {
             ObjectType::BoundMethod => {
                 write!(f, "<bound method {}>", unsafe {
@@ -145,7 +139,6 @@ pub struct ObjectCommon {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u8)]
-#[remain::sorted]
 pub enum ObjectType {
     BoundMethod,
     Class,

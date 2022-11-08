@@ -24,13 +24,11 @@ impl Gc {
         object.mark(self);
     }
 
-    #[remain::check]
     pub fn trace(&mut self) {
         while let Some(object) = self.gray_objects.pop() {
             if cfg!(feature = "gc-trace") {
                 eprintln!("blacken {}: {object}", object.type_());
             }
-            #[remain::sorted]
             match unsafe { (*object.common).type_ } {
                 ObjectType::BoundMethod => {
                     let method = unsafe { object.bound_method };

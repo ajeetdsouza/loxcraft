@@ -9,17 +9,15 @@ edition = "2021"
 gc-off = []
 gc-stress = []
 gc-trace = []
-pprof = ["dep:pprof"]
 vm-trace = []
 
 [dependencies]
 arrayvec.workspace = true
+cfg-if.workspace = true
 hashbrown.workspace = true
 iota.workspace = true
 lox-common.path = "../lox-common"
 lox-syntax.path = "../lox-syntax"
-pprof = { optional = true, workspace = true }
-remain.workspace = true
 rustc-hash.workspace = true
 
 [target.'cfg(target_family = "wasm")'.dependencies]

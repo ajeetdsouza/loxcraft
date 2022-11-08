@@ -19,7 +19,7 @@ pub fn run() -> Result<()> {
 
     loop {
         let line = editor.read_line(&Prompt);
-        editor.sync_history().unwrap();
+        editor.sync_history().context("could not sync history file")?;
 
         match line {
             Ok(reedline::Signal::Success(line)) => {
@@ -46,11 +46,12 @@ fn editor() -> Result<Reedline> {
         KeyCode::Enter,
         ReedlineEvent::Edit(vec![EditCommand::InsertNewline]),
     );
+    let edit_mode = Box::new(Emacs::new(keybindings));
 
     let highlighter = Box::new(Highlighter::new()?);
 
     let data_dir = dirs::data_dir().context("could not find data directory")?;
-    let history_path = data_dir.join("lox/history.txt");
+    let history_path = data_dir.join("loxcraft/history.txt");
     let history = Box::new(
         FileBackedHistory::with_file(10000, history_path.clone())
             .with_context(|| format!("could not open history file: {}", history_path.display()))?,
@@ -59,7 +60,7 @@ fn editor() -> Result<Reedline> {
     let validator = Box::new(Validator);
 
     let editor = Reedline::create()
-        .with_edit_mode(Box::new(Emacs::new(keybindings)))
+        .with_edit_mode(edit_mode)
         .with_highlighter(highlighter)
         .with_history(history)
         .with_validator(validator);

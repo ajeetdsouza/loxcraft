@@ -7,7 +7,6 @@ use lox_common::error::ErrorS;
 use lox_vm::VM;
 
 #[derive(Debug, Parser)]
-#[remain::sorted]
 #[command(about, author, disable_help_subcommand = true, propagate_version = true, version)]
 pub enum Cmd {
     Lsp,
@@ -22,31 +21,35 @@ pub enum Cmd {
 }
 
 impl Cmd {
-    #[remain::check]
     pub fn run(&self) -> Result<()> {
         #[allow(unused_variables)]
-        #[remain::sorted]
         match self {
             Cmd::Lsp => {
-                #[cfg(not(feature = "lsp"))]
-                bail!("'lsp' feature is not enabled");
-
-                #[cfg(feature = "lsp")]
-                lox_lsp::serve()
+                cfg_if::cfg_if! {
+                    if #[cfg(feature = "lsp")] {
+                        lox_lsp::serve()
+                    } else {
+                        bail!("'lsp' feature is not enabled");
+                    }
+                }
             }
             Cmd::Playground { port } => {
-                #[cfg(not(feature = "playground"))]
-                bail!("'playground' feature is not enabled");
-
-                #[cfg(feature = "playground")]
-                lox_playground::serve(*port)
+                cfg_if::cfg_if! {
+                    if #[cfg(feature = "playground")] {
+                        lox_playground::serve(*port)
+                    } else {
+                        bail!("'playground' feature is not enabled");
+                    }
+                }
             }
             Cmd::Repl => {
-                #[cfg(not(feature = "repl"))]
-                bail!("'repl' feature is not enabled");
-
-                #[cfg(feature = "repl")]
-                lox_repl::run()
+                cfg_if::cfg_if! {
+                    if #[cfg(feature = "repl")] {
+                        lox_repl::run()
+                    } else {
+                        bail!("'repl' feature is not enabled");
+                    }
+                }
             }
             Cmd::Run { path } => {
                 let source = fs::read_to_string(path)
@@ -55,7 +58,7 @@ impl Cmd {
                 let stdout = &mut io::stdout().lock();
                 if let Err(e) = vm.run(&source, stdout) {
                     report_err(&source, e);
-                    bail!("program exited with errors")
+                    bail!("program exited with errors");
                 }
                 Ok(())
             }

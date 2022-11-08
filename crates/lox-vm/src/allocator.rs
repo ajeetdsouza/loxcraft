@@ -1,13 +1,15 @@
 use std::alloc::{GlobalAlloc, Layout};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-#[cfg(any(miri, target_family = "wasm"))]
-#[global_allocator]
-pub static GLOBAL: Allocator<std::alloc::System> = Allocator::new(std::alloc::System);
-
-#[cfg(not(any(miri, target_family = "wasm")))]
-#[global_allocator]
-pub static GLOBAL: Allocator<mimalloc::MiMalloc> = Allocator::new(mimalloc::MiMalloc);
+cfg_if::cfg_if! {
+    if #[cfg(any(miri, target_family = "wasm"))] {
+        #[global_allocator]
+        pub static GLOBAL: Allocator<std::alloc::System> = Allocator::new(std::alloc::System);
+    } else {
+        #[global_allocator]
+        pub static GLOBAL: Allocator<mimalloc::MiMalloc> = Allocator::new(mimalloc::MiMalloc);
+    }
+}
 
 pub struct Allocator<T> {
     inner: T,
