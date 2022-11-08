@@ -7,40 +7,53 @@ on:
 env:
   CARGO_INCREMENTAL: 0
 jobs:
-  ci:
+  fmt:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
-      - name: Install Node
-        uses: actions/setup-node@v3
-        with:
-          node-version: 18
-          cache: 'npm'
-          cache-dependency-path: '**/package-lock.json'
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
-          components: clippy, rustfmt
+          components: rustfmt
           profile: minimal
-          toolchain: stable
-      - name: Setup Rust cache
-        uses: Swatinem/rust-cache@v1
-      - name: Install wasm-pack
-        uses: actions-rs/install@v0.1
-        with:
-          crate: wasm-pack
-          version: 0.10.2
+          toolchain: nightly
       - name: cargo fmt
         uses: actions-rs/cargo@v1
         with:
           command: fmt
           args: --all -- --check --color=always --files-with-diff
-      - name: cargo clippy
-        uses: actions-rs/cargo@v1
+          toolchain: nightly
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
         with:
-          command: clippy
-          args: --all --all-features --all-targets --color=always -- --deny=warnings
+          components: clippy
+          profile: minimal
+          toolchain: stable
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v1
+      - name: cargo clippy
+        uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: --all-features --all-targets --color=always --workspace -- --deny=warnings
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v1
       - name: cargo test
         uses: actions-rs/cargo@v1
         with:
