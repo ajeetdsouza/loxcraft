@@ -1,3 +1,4 @@
 .parcel-cache/
-dist/
+dist/*
+!dist/.gitkeep
 node_modules/

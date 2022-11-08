@@ -54,8 +54,13 @@ jobs:
           toolchain: stable
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@v1
-      - name: cargo test
+      - name: Install cargo-nextest
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-nextest
+          locked: true
+      - name: cargo nextest
         uses: actions-rs/cargo@v1
         with:
-          command: test
-          args: --all --all-features --all-targets --color=always --no-fail-fast
+          command: nextest
+          args: run --color=always --features=gc-stress,gc-trace,vm-trace --no-fail-fast --workspace
