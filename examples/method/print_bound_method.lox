@@ -1,0 +1,5 @@
+class Foo {
+  method() { }
+}
+var foo = Foo();
+print foo.method; // out: <bound method method>

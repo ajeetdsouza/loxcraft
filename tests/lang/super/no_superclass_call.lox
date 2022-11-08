@@ -1,8 +1,0 @@
-class Base {
-  foo() {
-    // out: NameError: name "super" is not defined
-    super.doesNotExist(1);
-  }
-}
-
-Base().foo();

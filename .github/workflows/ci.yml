@@ -4,45 +4,102 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
-env:
-  CARGO_INCREMENTAL: 0
 jobs:
-  ci:
+  fmt:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
-      - name: Install Node
-        uses: actions/setup-node@v3
-        with:
-          node-version: 18
-          cache: 'npm'
-          cache-dependency-path: '**/package-lock.json'
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
-          components: clippy, rustfmt
+          components: rustfmt
           profile: minimal
-          toolchain: stable
-      - name: Setup Rust cache
-        uses: Swatinem/rust-cache@v1
-      - name: Install wasm-pack
-        uses: actions-rs/install@v0.1
-        with:
-          crate: wasm-pack
-          version: 0.10.2
+          toolchain: nightly
       - name: cargo fmt
         uses: actions-rs/cargo@v1
         with:
           command: fmt
-          args: --all -- --check --color=always --files-with-diff
+          args: --all --
+            --check
+            --color=always
+            --files-with-diff
+          toolchain: nightly
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          components: clippy
+          profile: minimal
+          toolchain: stable
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v1
       - name: cargo clippy
+        uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: |
+            --all-features
+            --all-targets
+            --color=always
+            --workspace
+            -- --deny=warnings
+  miri:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        partition: [1, 2, 3, 4, 5, 6, 7, 8]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          components: miri
+          profile: minimal
+          toolchain: nightly
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v1
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+      - name: cargo nextest
         uses: actions-rs/cargo@v1
         with:
-          command: clippy
-          args: --all --all-features --all-targets --color=always -- --deny=warnings
-      - name: cargo test
+          command: miri
+          args: nextest run
+            --color=always
+            --features=gc-stress,gc-trace,vm-trace
+            --no-fail-fast
+            --partition=count:${{ matrix.partition }}/8
+            --test-threads=num-cpus
+            --workspace
+          toolchain: nightly
+        env:
+          MIRIFLAGS: -Zmiri-disable-isolation
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v1
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+      - name: cargo nextest
         uses: actions-rs/cargo@v1
         with:
-          command: test
-          args: --all --all-features --all-targets --color=always --no-fail-fast
+          command: nextest
+          args: run
+            --color=always
+            --features=gc-stress,gc-trace,vm-trace
+            --no-fail-fast
+            --workspace

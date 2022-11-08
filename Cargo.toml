@@ -7,51 +7,83 @@ description = "A compiler / VM for the Lox programming language"
 edition = "2021"
 keywords = ["compiler", "interpreter", "language", "lox", "vm"]
 license = "MIT"
-name = "lox"
-repository = "https://github.com/ajeetdsouza/lox"
-rust-version = "1.61"
+name = "loxcraft"
+repository = "https://github.com/ajeetdsouza/loxcraft"
+rust-version = "1.65"
 version = "0.1.0"
 
 [badges]
 maintenance = { status = "actively-developed" }
 
 [workspace]
-members = ["crates/*"]
-exclude = ["crates/lox-wasm"]
+members = ["crates/*", "xtask"]
 
-[features]
-default = ["playground"]
-playground = ["dep:lox-playground"]
-profiling = ["lox-interpreter/profiling"]
-
-[dependencies]
+[workspace.dependencies]
 anyhow = "1.0.52"
-clap = { version = "3.2.0", features = ["derive"] }
+arrayvec = "0.7.2"
+askama_escape = "0.10.3"
+build-deps = "0.1.4"
+cc = "1.0.73"
+cfg-if = "1.0.0"
+clap = { version = "4.0.0", features = ["derive"] }
+codespan-reporting = "0.11.1"
+console_error_panic_hook = "0.1.1"
 dirs = "4.0.0"
+hashbrown = { version = "0.12.3", default-features = false, features = [
+    "inline-more",
+] }
+http = "0.2.6"
 human-panic = "1.0.3"
-lox-common = { path = "crates/lox-common" }
-lox-lsp = { path = "crates/lox-lsp" }
-lox-interpreter = { path = "crates/lox-interpreter" }
-lox-playground = { path = "crates/lox-playground", optional = true }
-lox-syntax = { path = "crates/lox-syntax" }
+iota = "0.2.2"
+lalrpop = { version = "0.19.1", default-features = false }
+lalrpop-util = "0.19.6"
+logos = "0.12.0"
 mimalloc = { version = "0.1.27", default-features = false }
 nu-ansi-term = "0.46.0"
-reedline = "0.10.0"
-termcolor = "1.1.3"
-tree-sitter-highlight = "0.20.1"
-tree-sitter-lox = { path = "crates/tree-sitter-lox", version = "*" }
-
-[dev-dependencies]
 pretty_assertions = "1.1.0"
+reedline = "0.13.0"
+rust-embed = { version = "6.4.0", features = ["include-exclude"] }
+rustc-hash = "1.1.0"
+serde = { version = "1.0.136", features = ["derive"] }
+serde_json = "1.0.79"
+termcolor = "1.1.3"
 test-generator = "0.3.0"
+thiserror = "1.0.34"
+tokio = { version = "1.17.0", features = ["io-std", "rt"] }
+tower-lsp = "0.17.0"
+tree-sitter = "0.20.4"
+tree-sitter-highlight = "0.20.1"
+warp = "0.3.2"
+wasm-bindgen = "0.2.80"
+webbrowser = "0.8.0"
 
-[profile.profiling]
-inherits = "release"
-debug = true
-strip = false
+[features]
+default = ["lsp", "playground", "repl"]
+gc-off = ["lox-vm/gc-off"]
+gc-stress = ["lox-vm/gc-stress"]
+gc-trace = ["lox-vm/gc-trace"]
+lsp = ["dep:lox-lsp"]
+playground = ["dep:lox-playground"]
+repl = ["dep:lox-repl"]
+vm-trace = ["lox-vm/vm-trace"]
+
+[dependencies]
+anyhow.workspace = true
+cfg-if.workspace = true
+clap.workspace = true
+dirs.workspace = true
+human-panic.workspace = true
+lox-common.path = "crates/lox-common"
+lox-lsp = { path = "crates/lox-lsp", optional = true }
+lox-playground = { path = "crates/lox-playground", optional = true }
+lox-repl = { path = "crates/lox-repl", optional = true }
+lox-syntax.path = "crates/lox-syntax"
+lox-vm.path = "crates/lox-vm"
+termcolor.workspace = true
 
 [profile.release]
 codegen-units = 1
 debug = 0
 lto = true
+panic = "abort"
 strip = true

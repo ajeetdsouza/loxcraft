@@ -1,0 +1,8 @@
+class Base {
+  foo() {
+    // out: SyntaxError: "super" used in class without a superclass
+    super.doesNotExist(1);
+  }
+}
+
+Base().foo();

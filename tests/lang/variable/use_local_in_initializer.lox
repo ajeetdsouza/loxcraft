@@ -1,6 +1,0 @@
-// https://github.com/munificent/craftinginterpreters/issues/1083
-var a = "outer";
-{
-  // out: NameError: cannot access variable "a" in its own initializer
-  var a = a;
-}

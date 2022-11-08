@@ -1,5 +1,0 @@
-class Foo {
-  method() { }
-}
-var foo = Foo();
-print foo.method; // out: <function method>

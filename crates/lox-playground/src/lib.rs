@@ -1,11 +1,12 @@
+use std::path::Path;
+
 use anyhow::{Context, Result};
 use http::header::{CONTENT_ENCODING, CONTENT_TYPE};
 use http::HeaderValue;
 use rust_embed::RustEmbed;
+use warp::path::Tail;
 use warp::reply::Response;
-use warp::{path::Tail, Filter, Rejection, Reply};
-
-use std::path::Path;
+use warp::{Filter, Rejection, Reply};
 
 #[derive(RustEmbed)]
 #[folder = "ui/dist/"]

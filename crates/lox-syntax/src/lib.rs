@@ -2,12 +2,12 @@ pub mod ast;
 pub mod lexer;
 pub mod parser;
 
+use lalrpop_util::ParseError;
+use lox_common::error::{Error, ErrorS, SyntaxError};
+
 use crate::ast::Program;
 use crate::lexer::Lexer;
 use crate::parser::Parser;
-
-use lalrpop_util::ParseError;
-use lox_common::error::{Error, ErrorS, SyntaxError};
 
 pub fn is_complete(source: &str) -> bool {
     let lexer = Lexer::new(source);
@@ -16,11 +16,10 @@ pub fn is_complete(source: &str) -> bool {
     if let Err(e) = parser.parse(&mut errors, lexer) {
         errors.push(e);
     };
-    // !errors.iter().any(|e| matches!(e, ParseError::UnrecognizedEOF { .. }))
-    true
+    !errors.iter().any(|e| matches!(e, ParseError::UnrecognizedEOF { .. }))
 }
 
-pub fn parse(source: &str) -> (Program, Vec<ErrorS>) {
+pub fn parse(source: &str) -> Result<Program, Vec<ErrorS>> {
     let lexer = Lexer::new(source);
     let parser = Parser::new();
     let mut errors = Vec::new();
@@ -55,5 +54,5 @@ pub fn parse(source: &str) -> (Program, Vec<ErrorS>) {
         ParseError::User { error } => error,
     }));
 
-    (program, errors)
+    if errors.is_empty() { Ok(program) } else { Err(errors) }
 }

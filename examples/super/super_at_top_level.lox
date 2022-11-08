@@ -1,0 +1,3 @@
+// out: SyntaxError: "super" used outside class
+super.foo("bar");
+super.foo;

@@ -1,0 +1,11 @@
+mod allocator;
+mod chunk;
+mod compiler;
+mod gc;
+mod object;
+mod op;
+mod util;
+mod value;
+mod vm;
+
+pub use vm::VM;

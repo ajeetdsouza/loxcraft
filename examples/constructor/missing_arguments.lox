@@ -1,0 +1,5 @@
+class Foo {
+  init(a, b) {}
+}
+
+var foo = Foo(1); // out: TypeError: init() takes 2 arguments but 1 were given

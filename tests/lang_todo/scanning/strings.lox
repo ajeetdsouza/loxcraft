@@ -1,6 +1,0 @@
-""
-"string"
-
-// out: STRING ""
-// out: STRING "string" string
-// out: EOF  null

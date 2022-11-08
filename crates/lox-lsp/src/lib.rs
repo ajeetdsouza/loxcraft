@@ -1,13 +1,12 @@
 use anyhow::{Context, Result};
 use lox_common::error::ErrorS;
 use lox_common::types::Span;
-use tower_lsp::jsonrpc;
 use tower_lsp::lsp_types::{
     Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams, DidOpenTextDocumentParams,
     InitializeParams, InitializeResult, Position, Range, ServerCapabilities, ServerInfo,
     TextDocumentSyncKind, Url,
 };
-use tower_lsp::{Client, LanguageServer, LspService, Server};
+use tower_lsp::{jsonrpc, Client, LanguageServer, LspService, Server};
 
 struct Backend {
     client: Client,
@@ -19,8 +18,10 @@ impl Backend {
     }
 
     pub async fn publish_diagnostics(&self, source: &str, uri: Url, version: Option<i32>) {
-        let (mut program, mut errors) = lox_syntax::parse(source);
-        errors.extend(lox_interpreter::resolve(&mut program));
+        let errors = match lox_syntax::parse(source) {
+            Ok(mut _program) => todo!(),
+            Err(e) => e,
+        };
         let diagnostics = report_err(source, &errors);
         self.client.publish_diagnostics(uri, diagnostics, version).await;
     }
@@ -37,7 +38,6 @@ impl LanguageServer for Backend {
             server_info: Some(ServerInfo {
                 name: env!("CARGO_PKG_NAME").to_string(),
                 version: Some(env!("CARGO_PKG_VERSION").to_string()),
-                ..Default::default()
             }),
         })
     }

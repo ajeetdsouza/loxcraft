@@ -1,0 +1,1 @@
+this; // out: SyntaxError: "this" used outside class

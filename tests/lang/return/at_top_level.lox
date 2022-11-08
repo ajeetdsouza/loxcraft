@@ -1,2 +1,0 @@
-// out: SyntaxError: "return" outside function
-return "wat";

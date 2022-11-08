@@ -1,11 +1,11 @@
-use lox_common::error::report_err;
-use lox_interpreter::Interpreter;
+use std::fmt::{self, Display, Formatter};
+use std::io::{self, Write};
+
+use lox_common::error::report_error;
+use lox_vm::VM;
 use serde::Serialize;
 use termcolor::{Color, WriteColor};
 use wasm_bindgen::prelude::*;
-
-use std::fmt::{self, Display, Formatter};
-use std::io::{self, Write};
 
 #[wasm_bindgen]
 #[allow(non_snake_case)]
@@ -13,15 +13,14 @@ pub fn loxRun(source: &str) {
     console_error_panic_hook::set_once();
 
     let mut output = Output::new();
-    let errors = Interpreter::new(&mut output).run(source);
-    if !errors.is_empty() {
+    if let Err(errors) = VM::default().run(source, &mut output) {
         let mut writer = HtmlWriter::new(&mut output);
         for e in errors.iter() {
-            report_err(&mut writer, source, e);
+            report_error(&mut writer, source, e);
         }
         postMessage(&Message::ExitFailure.to_string());
         return;
-    };
+    }
     postMessage(&Message::ExitSuccess.to_string());
 }
 
@@ -29,9 +28,9 @@ pub fn loxRun(source: &str) {
 #[derive(Debug, Serialize)]
 #[serde(tag = "type")]
 enum Message {
-    Output { text: String },
-    ExitSuccess,
     ExitFailure,
+    ExitSuccess,
+    Output { text: String },
 }
 
 impl Display for Message {
@@ -116,8 +115,8 @@ impl<W: Write> WriteColor for HtmlWriter<W> {
         }
         if let Some(bg) = spec.bg() {
             match bg {
-                Color::Blue => classes.push("bg-primary"),
                 Color::Black => classes.push("bg-black"),
+                Color::Blue => classes.push("bg-primary"),
                 Color::Green => classes.push("bg-success"),
                 Color::Red => classes.push("bg-danger"),
                 Color::White => classes.push("bg-white"),

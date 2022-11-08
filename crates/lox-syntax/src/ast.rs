@@ -1,6 +1,6 @@
-pub use lox_common::types::Spanned;
-
 use std::fmt::{self, Display, Formatter};
+
+pub use lox_common::types::Spanned;
 
 pub type StmtS = Spanned<Stmt>;
 pub type ExprS = Spanned<Expr>;
@@ -92,8 +92,8 @@ pub enum Expr {
     Assign(Box<ExprAssign>),
     Call(Box<ExprCall>),
     Get(Box<ExprGet>),
-    Literal(ExprLiteral),
     Infix(Box<ExprInfix>),
+    Literal(ExprLiteral),
     Prefix(Box<ExprPrefix>),
     Set(Box<ExprSet>),
     Super(ExprSuper),
@@ -120,8 +120,8 @@ pub struct ExprGet {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ExprLiteral {
-    Nil,
     Bool(bool),
+    Nil,
     Number(f64),
     String(String),
 }
@@ -135,20 +135,18 @@ pub struct ExprInfix {
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum OpInfix {
-    /// Short-circuiting logical OR.
-    LogicOr,
-    /// Short-circuiting logical AND.
-    LogicAnd,
-    Equal,
-    NotEqual,
-    Greater,
-    GreaterEqual,
-    Less,
-    LessEqual,
     Add,
     Subtract,
     Multiply,
     Divide,
+    Less,
+    LessEqual,
+    Greater,
+    GreaterEqual,
+    Equal,
+    NotEqual,
+    LogicAnd,
+    LogicOr,
 }
 
 impl Display for OpInfix {
@@ -214,7 +212,7 @@ pub struct ExprVar {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Var {
     pub name: String,
-    /// This field is initialized as [`None`] by the parser, and is later filled
-    /// by the resolver.
+    /// This field is initialized as [`None`] by the parser, and is later
+    /// filled by the resolver.
     pub depth: Option<usize>,
 }

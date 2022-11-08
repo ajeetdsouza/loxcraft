@@ -1,4 +1,0 @@
-// out: NameError: name "super" is not defined
-super.bar();
-fun foo() {
-}

@@ -1,7 +1,7 @@
+use std::num::ParseFloatError;
+
 use logos::Logos;
 use lox_common::error::{Error, ErrorS, SyntaxError};
-
-use std::num::ParseFloatError;
 
 pub struct Lexer<'a> {
     inner: logos::Lexer<'a, Token>,
@@ -28,10 +28,7 @@ impl<'a> Iterator for Lexer<'a> {
 
                 // Check for unterminated string.
                 if self.inner.slice().starts_with('"') {
-                    return Some(Err((
-                        Error::SyntaxError(SyntaxError::UnterminatedString),
-                        span.clone(),
-                    )));
+                    return Some(Err((Error::SyntaxError(SyntaxError::UnterminatedString), span)));
                 }
 
                 // Recover error.
@@ -49,7 +46,7 @@ impl<'a> Iterator for Lexer<'a> {
                     Error::SyntaxError(SyntaxError::UnexpectedInput {
                         token: self.inner.source()[span.start..span.end].to_string(),
                     }),
-                    span.clone(),
+                    span,
                 )))
             }
             token => {
@@ -169,9 +166,9 @@ fn lex_identifier(lexer: &mut logos::Lexer<Token>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use pretty_assertions::assert_eq;
+
+    use super::*;
 
     #[test]
     fn lex_invalid_token() {

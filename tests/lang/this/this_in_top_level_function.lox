@@ -1,6 +1,0 @@
-fun foo() {
-  this;
-}
-
-// out: NameError: name "this" is not defined
-foo();

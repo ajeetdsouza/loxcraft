@@ -4,12 +4,12 @@ name = "lox-syntax"
 version = "0.1.0"
 
 [dependencies]
-lalrpop-util = "0.19.6"
-logos = "0.12.0"
-lox-common = { path = "../lox-common" }
+lalrpop-util.workspace = true
+logos.workspace = true
+lox-common.path = "../lox-common"
 
 [build-dependencies]
-lalrpop = { version = "0.19.1", default-features = false }
+lalrpop.workspace = true
 
 [dev-dependencies]
-pretty_assertions = "1.1.0"
+pretty_assertions.workspace = true
