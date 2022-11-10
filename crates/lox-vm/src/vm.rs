@@ -640,11 +640,12 @@ impl VM {
         }
     }
 
-    /// Wraps a value in a span by checking the instruction pointer offset.
+    /// Wraps an error in a span by checking the offset of the last executed
+    /// instruction.
     fn err(&self, err: impl Into<Error>) -> Result<()> {
         let function = unsafe { (*self.frame.closure).function };
         let idx = unsafe { self.frame.ip.offset_from((*function).chunk.ops.as_ptr()) } as usize;
-        let span = unsafe { (*function).chunk.spans[idx].clone() };
+        let span = unsafe { (*function).chunk.spans[idx - 1].clone() };
         Err((err.into(), span))
     }
 }
