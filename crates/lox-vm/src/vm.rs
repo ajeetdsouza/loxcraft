@@ -25,6 +25,7 @@ const FRAMES_MAX: usize = 64;
 const STACK_MAX: usize = FRAMES_MAX * STACK_MAX_PER_FRAME;
 const STACK_MAX_PER_FRAME: usize = u8::MAX as usize + 1;
 
+#[derive(Debug)]
 pub struct VM {
     pub globals: HashMap<*mut ObjectString, Value, BuildHasherDefault<FxHasher>>,
     pub open_upvalues: Vec<*mut ObjectUpvalue>,
@@ -51,16 +52,21 @@ pub struct VM {
     stack_top: *mut Value,
 
     init_string: *mut ObjectString,
+    pub source: String,
 }
 
 impl VM {
     pub fn run(&mut self, source: &str, stdout: &mut impl Write) -> Result<(), Vec<ErrorS>> {
-        let function = Compiler::compile(source, &mut self.gc)?;
+        let offset = self.source.len();
+
+        self.source.push_str(source);
+        self.source.push('\n');
+
+        let function = Compiler::compile(source, offset, &mut self.gc)?;
         self.run_function(function, stdout).map_err(|e| vec![e])
     }
 
-    #[allow(clippy::not_unsafe_ptr_arg_deref)]
-    pub fn run_function(
+    fn run_function(
         &mut self,
         function: *mut ObjectFunction,
         stdout: &mut impl Write,
@@ -108,7 +114,7 @@ impl VM {
                     match self.globals.get(unsafe { &name.string }) {
                         Some(value) => self.push(*value),
                         None => {
-                            return self.err(NameError::NotDefined {
+                            return self.make_error(NameError::NotDefined {
                                 name: unsafe { (*name.string).value.to_string() },
                             });
                         }
@@ -125,7 +131,7 @@ impl VM {
                     match self.globals.entry(unsafe { name.string }) {
                         Entry::Occupied(mut entry) => entry.insert(unsafe { *value }),
                         Entry::Vacant(_) => {
-                            return self.err(NameError::NotDefined {
+                            return self.make_error(NameError::NotDefined {
                                 name: unsafe { (*name.string).value.to_string() },
                             });
                         }
@@ -152,7 +158,7 @@ impl VM {
                             if unsafe { (*object.common).type_ == ObjectType::Instance } =>
                         unsafe { object.instance },
                         value => {
-                            return self.err(AttributeError::NoSuchAttribute {
+                            return self.make_error(AttributeError::NoSuchAttribute {
                                 type_: value.type_().to_string(),
                                 name: unsafe { (*name).value.to_string() },
                             });
@@ -169,7 +175,7 @@ impl VM {
                         self.pop();
                         self.push(bound_method.into());
                     } else {
-                        return self.err(AttributeError::NoSuchAttribute {
+                        return self.make_error(AttributeError::NoSuchAttribute {
                             type_: unsafe { (*(*(*instance).class).name).value.to_string() },
                             name: unsafe { (*name).value.to_string() },
                         });
@@ -182,7 +188,7 @@ impl VM {
                             if unsafe { (*object.common).type_ == ObjectType::Instance } =>
                         unsafe { object.instance },
                         value => {
-                            return self.err(AttributeError::NoSuchAttribute {
+                            return self.make_error(AttributeError::NoSuchAttribute {
                                 type_: value.type_().to_string(),
                                 name: unsafe { (*name).value.to_string() },
                             });
@@ -204,7 +210,7 @@ impl VM {
                         self.pop();
                         self.push(bound_method.into());
                     } else {
-                        return self.err(AttributeError::NoSuchAttribute {
+                        return self.make_error(AttributeError::NoSuchAttribute {
                             type_: unsafe { (*(*super_).name).value.to_string() },
                             name: unsafe { (*name).value.to_string() },
                         });
@@ -239,7 +245,7 @@ impl VM {
                                     self.push(string.into());
                                 }
                                 _ => {
-                                    return self.err(TypeError::UnsupportedOperandInfix {
+                                    return self.make_error(TypeError::UnsupportedOperandInfix {
                                         op: "+".to_string(),
                                         lt_type: a.type_().to_string(),
                                         rt_type: b.type_().to_string(),
@@ -248,7 +254,7 @@ impl VM {
                             };
                         }
                         _ => {
-                            return self.err(TypeError::UnsupportedOperandInfix {
+                            return self.make_error(TypeError::UnsupportedOperandInfix {
                                 op: "+".to_string(),
                                 lt_type: a.type_().to_string(),
                                 rt_type: b.type_().to_string(),
@@ -268,7 +274,7 @@ impl VM {
                     match value {
                         Value::Number(number) => self.push((-number).into()),
                         _ => {
-                            return self.err(TypeError::UnsupportedOperandPrefix {
+                            return self.make_error(TypeError::UnsupportedOperandPrefix {
                                 op: "-".to_string(),
                                 rt_type: value.type_().to_string(),
                             });
@@ -278,7 +284,7 @@ impl VM {
                 op::PRINT => {
                     let value = self.pop();
                     if writeln!(stdout, "{value}").is_err() {
-                        return self.err(IoError::WriteError { file: "stdout".to_string() });
+                        return self.make_error(IoError::WriteError { file: "stdout".to_string() });
                     };
                 }
                 op::JUMP => {
@@ -311,7 +317,7 @@ impl VM {
                         None => match unsafe { (*(*instance).class).methods.get(&name) } {
                             Some(&method) => self.call_closure(method, arg_count)?,
                             None => {
-                                return self.err(AttributeError::NoSuchAttribute {
+                                return self.make_error(AttributeError::NoSuchAttribute {
                                     type_: unsafe {
                                         (*(*(*instance).class).name).value.to_string()
                                     },
@@ -329,7 +335,7 @@ impl VM {
                     match unsafe { (*super_).methods.get(&name) } {
                         Some(&method) => self.call_closure(method, arg_count)?,
                         None => {
-                            return self.err(AttributeError::NoSuchAttribute {
+                            return self.make_error(AttributeError::NoSuchAttribute {
                                 type_: unsafe { (*(*super_).name).value.to_string() },
                                 name: unsafe { (*name).value.to_string() },
                             });
@@ -388,7 +394,7 @@ impl VM {
                             if unsafe { (*object.common).type_ } == ObjectType::Class =>
                         unsafe { object.class },
                         value => {
-                            return self.err(TypeError::SuperclassInvalidType {
+                            return self.make_error(TypeError::SuperclassInvalidType {
                                 type_: value.type_().to_string(),
                             });
                         }
@@ -452,7 +458,6 @@ impl VM {
         }
 
         self.gc.mark(self.frame.closure);
-        println!("done marking");
         for frame in &self.frames {
             self.gc.mark(frame.closure);
         }
@@ -488,7 +493,7 @@ impl VM {
                         Some(&init) => self.call_closure(init, arg_count)?,
                         None => {
                             if arg_count != 0 {
-                                return self.err(TypeError::ArityMismatch {
+                                return self.make_error(TypeError::ArityMismatch {
                                     name: "init".to_string(),
                                     exp_args: 0,
                                     got_args: arg_count,
@@ -498,26 +503,31 @@ impl VM {
                     }
                 }
                 ObjectType::Closure => self.call_closure(unsafe { object.closure }, arg_count)?,
-                _ => return self.err(TypeError::NotCallable { type_: value.type_().to_string() }),
+                _ => {
+                    return self
+                        .make_error(TypeError::NotCallable { type_: value.type_().to_string() });
+                }
             },
             Value::Native(native) => {
                 self.pop();
                 let value = match native {
                     Native::Clock => {
                         if arg_count != 0 {
-                            return self.err(TypeError::ArityMismatch {
+                            return self.make_error(TypeError::ArityMismatch {
                                 name: "clock".to_string(),
                                 exp_args: 0,
                                 got_args: arg_count,
                             });
                         }
-                        // TODO: find an alternative that works on WASM.
                         util::now().into()
                     }
                 };
                 self.push(value);
             }
-            _ => return self.err(TypeError::NotCallable { type_: value.type_().to_string() }),
+            _ => {
+                return self
+                    .make_error(TypeError::NotCallable { type_: value.type_().to_string() });
+            }
         }
         Ok(())
     }
@@ -525,7 +535,7 @@ impl VM {
     fn call_closure(&mut self, closure: *mut ObjectClosure, arg_count: u8) -> Result<()> {
         // Set up the next frame.
         if self.frames.len() >= self.frames.capacity() {
-            return self.err(OverflowError::StackOverflow);
+            return self.make_error(OverflowError::StackOverflow);
         }
 
         let function = unsafe { (*closure).function };
@@ -537,7 +547,7 @@ impl VM {
 
         // Check if the function arity is correct.
         if arg_count != unsafe { (*function).arity } {
-            return self.err(TypeError::ArityMismatch {
+            return self.make_error(TypeError::ArityMismatch {
                 name: unsafe { (*(*function).name).value }.to_string(),
                 exp_args: unsafe { (*function).arity },
                 got_args: arg_count,
@@ -546,7 +556,7 @@ impl VM {
 
         // Set up the current closure.
         mem::swap(&mut frame, &mut self.frame);
-        self.frames.push(frame);
+        unsafe { self.frames.push_unchecked(frame) };
 
         Ok(())
     }
@@ -562,19 +572,20 @@ impl VM {
     fn binary_op_number(&mut self, op: fn(f64, f64) -> Value, op_str: &str) -> Result<()> {
         let b = self.pop();
         let a = self.pop();
-        let (Value::Number(a), Value::Number( b)) = (a, b) else {
-            return self.err(TypeError::UnsupportedOperandInfix {
+        match (a, b) {
+            (Value::Number(a), Value::Number(b)) => {
+                self.push(op(a, b));
+                Ok(())
+            }
+            _ => self.make_error(TypeError::UnsupportedOperandInfix {
                 op: op_str.to_string(),
                 lt_type: a.type_().to_string(),
                 rt_type: b.type_().to_string(),
-            });
-        };
-        self.push(op(a, b));
-        Ok(())
+            }),
+        }
     }
 
     /// Reads an instruction / byte from the current [`Chunk`].
-    #[inline(always)]
     fn read_u8(&mut self) -> u8 {
         let byte = unsafe { *self.frame.ip };
         self.frame.ip = unsafe { self.frame.ip.add(1) };
@@ -582,7 +593,6 @@ impl VM {
     }
 
     /// Reads a 16-bit value from the current [`Chunk`].
-    #[inline(always)]
     fn read_u16(&mut self) -> u16 {
         let byte1 = self.read_u8();
         let byte2 = self.read_u8();
@@ -590,7 +600,6 @@ impl VM {
     }
 
     /// Reads a [`Value`] from the current [`Chunk`].
-    #[inline(always)]
     fn read_value(&mut self) -> Value {
         let constant_idx = self.read_u8() as usize;
         let function = unsafe { (*self.frame.closure).function };
@@ -598,21 +607,18 @@ impl VM {
     }
 
     /// Pushes a [`Value`] to the stack.
-    #[inline(always)]
     fn push(&mut self, value: Value) {
         unsafe { *self.stack_top = value };
         self.stack_top = unsafe { self.stack_top.add(1) };
     }
 
     /// Pops a [`Value`] from the stack.
-    #[inline(always)]
     fn pop(&mut self) -> Value {
         self.stack_top = unsafe { self.stack_top.sub(1) };
         unsafe { *self.stack_top }
     }
 
     /// Peeks a [`Value`] from the stack.
-    #[inline(always)]
     fn peek(&mut self, n: usize) -> *mut Value {
         unsafe { self.stack_top.sub(n + 1) }
     }
@@ -640,9 +646,9 @@ impl VM {
         }
     }
 
-    /// Wraps an error in a span by checking the offset of the last executed
+    /// Wraps an [`Error`] in a span using the offset of the last executed
     /// instruction.
-    fn err(&self, err: impl Into<Error>) -> Result<()> {
+    fn make_error(&self, err: impl Into<Error>) -> Result<()> {
         let function = unsafe { (*self.frame.closure).function };
         let idx = unsafe { self.frame.ip.offset_from((*function).chunk.ops.as_ptr()) } as usize;
         let span = unsafe { (*function).chunk.spans[idx - 1].clone() };
@@ -658,13 +664,6 @@ impl Default for VM {
         let clock = gc.alloc("clock");
         globals.insert(clock, Native::Clock.into());
 
-        let frames = ArrayVec::new();
-        let frame =
-            CallFrame { closure: ptr::null_mut(), ip: ptr::null_mut(), stack: ptr::null_mut() };
-
-        let stack = Box::new([Value::default(); STACK_MAX]);
-        let stack_top = ptr::null_mut();
-
         let init_string = gc.alloc("init");
 
         Self {
@@ -672,15 +671,21 @@ impl Default for VM {
             open_upvalues: Vec::with_capacity(256),
             gc,
             next_gc: 1024 * 1024,
-            frames,
-            frame,
-            stack,
-            stack_top,
+            frames: ArrayVec::new(),
+            frame: CallFrame {
+                closure: ptr::null_mut(),
+                ip: ptr::null_mut(),
+                stack: ptr::null_mut(),
+            },
+            stack: Box::new([Value::default(); STACK_MAX]),
+            stack_top: ptr::null_mut(),
             init_string,
+            source: String::new(),
         }
     }
 }
 
+#[derive(Debug)]
 pub struct CallFrame {
     closure: *mut ObjectClosure,
     /// Instruction pointer for the current Chunk.

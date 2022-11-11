@@ -11,6 +11,7 @@ cfg_if::cfg_if! {
     }
 }
 
+#[derive(Debug)]
 pub struct Allocator<T> {
     inner: T,
     allocated_bytes: AtomicUsize,

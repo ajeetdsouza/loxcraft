@@ -131,6 +131,7 @@ impl PartialEq for Object {
     }
 }
 
+#[derive(Debug)]
 #[repr(C)]
 pub struct ObjectCommon {
     pub type_: ObjectType,
