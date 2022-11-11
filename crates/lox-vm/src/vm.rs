@@ -648,6 +648,7 @@ impl VM {
 
     /// Wraps an [`Error`] in a span using the offset of the last executed
     /// instruction.
+    #[cold]
     fn make_error(&self, err: impl Into<Error>) -> Result<()> {
         let function = unsafe { (*self.frame.closure).function };
         let idx = unsafe { self.frame.ip.offset_from((*function).chunk.ops.as_ptr()) } as usize;
