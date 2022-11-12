@@ -8,7 +8,7 @@ use rustc_hash::FxHasher;
 use crate::object::{Object, ObjectString, ObjectType};
 use crate::value::Value;
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Gc {
     strings: HashMap<String, *mut ObjectString, BuildHasherDefault<FxHasher>>,
     objects: Vec<Object>,

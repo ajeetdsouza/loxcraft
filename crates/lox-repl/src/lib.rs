@@ -24,7 +24,7 @@ pub fn run() -> Result<()> {
         match line {
             Ok(reedline::Signal::Success(line)) => {
                 if let Err(errors) = vm.run(&line, stdout) {
-                    lox_common::error::report_errors(stderr, &line, &errors)
+                    lox_common::error::report_errors(stderr, &vm.source, &errors)
                 }
             }
             Ok(reedline::Signal::CtrlC) => eprintln!("^C"),
@@ -67,6 +67,7 @@ fn editor() -> Result<Reedline> {
     Ok(editor)
 }
 
+#[derive(Debug)]
 struct PaletteItem<'a> {
     name: &'a str,
     fg: Color,
@@ -161,6 +162,7 @@ impl reedline::Highlighter for Highlighter {
     }
 }
 
+#[derive(Debug)]
 struct Validator;
 
 impl reedline::Validator for Validator {
@@ -173,6 +175,7 @@ impl reedline::Validator for Validator {
     }
 }
 
+#[derive(Debug)]
 pub struct Prompt;
 
 impl reedline::Prompt for Prompt {

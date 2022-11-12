@@ -36,10 +36,14 @@ impl Compiler {
         }
     }
 
-    pub fn compile(source: &str, gc: &mut Gc) -> Result<*mut ObjectFunction, Vec<ErrorS>> {
+    pub fn compile(
+        source: &str,
+        offset: usize,
+        gc: &mut Gc,
+    ) -> Result<*mut ObjectFunction, Vec<ErrorS>> {
         let mut compiler = Self::new(gc);
 
-        let program = lox_syntax::parse(source)?;
+        let program = lox_syntax::parse(source, offset)?;
         for stmt in &program.stmts {
             compiler.compile_stmt(stmt, gc).map_err(|e| vec![e])?;
         }

@@ -8,6 +8,7 @@ use tower_lsp::lsp_types::{
 };
 use tower_lsp::{jsonrpc, Client, LanguageServer, LspService, Server};
 
+#[derive(Debug)]
 struct Backend {
     client: Client,
 }
@@ -18,7 +19,7 @@ impl Backend {
     }
 
     pub async fn publish_diagnostics(&self, source: &str, uri: Url, version: Option<i32>) {
-        let errors = match lox_syntax::parse(source) {
+        let errors = match lox_syntax::parse(source, 0) {
             Ok(mut _program) => todo!(),
             Err(e) => e,
         };

@@ -19,8 +19,11 @@ pub fn is_complete(source: &str) -> bool {
     !errors.iter().any(|e| matches!(e, ParseError::UnrecognizedEOF { .. }))
 }
 
-pub fn parse(source: &str) -> Result<Program, Vec<ErrorS>> {
-    let lexer = Lexer::new(source);
+pub fn parse(source: &str, offset: usize) -> Result<Program, Vec<ErrorS>> {
+    let lexer = Lexer::new(source).map(|token| match token {
+        Ok((l, token, r)) => Ok((l + offset, token, r + offset)),
+        Err((e, span)) => Err((e, span.start + offset..span.end + offset)),
+    });
     let parser = Parser::new();
     let mut errors = Vec::new();
 

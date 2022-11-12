@@ -3,6 +3,7 @@ use std::num::ParseFloatError;
 use logos::Logos;
 use lox_common::error::{Error, ErrorS, SyntaxError};
 
+#[derive(Debug)]
 pub struct Lexer<'a> {
     inner: logos::Lexer<'a, Token>,
     pending: Option<(usize, Token, usize)>,

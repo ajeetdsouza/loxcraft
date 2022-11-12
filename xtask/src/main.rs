@@ -52,7 +52,7 @@ fn main() -> Result<()> {
         Cmd::Codegen => run_codegen()?,
         Cmd::Test { args } => run_cmd(
             Command::new("cargo")
-                .args(["+nightly", "miri", "nextest", "run", "--no-fail-fast"])
+                .args(["+nightly", "miri", "nextest", "run", "--no-fail-fast", "--workspace"])
                 .args(args)
                 .env("MIRIFLAGS", "-Zmiri-disable-isolation"),
         )?,

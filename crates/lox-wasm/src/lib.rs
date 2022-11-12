@@ -12,16 +12,17 @@ use wasm_bindgen::prelude::*;
 pub fn loxRun(source: &str) {
     console_error_panic_hook::set_once();
 
-    let mut output = Output::new();
-    if let Err(errors) = VM::default().run(source, &mut output) {
-        let mut writer = HtmlWriter::new(&mut output);
-        for e in errors.iter() {
-            report_error(&mut writer, source, e);
+    let output = &mut Output::new();
+    match VM::default().run(source, output) {
+        Ok(()) => postMessage(&Message::ExitSuccess.to_string()),
+        Err(errors) => {
+            let mut writer = HtmlWriter::new(output);
+            for e in errors.iter() {
+                report_error(&mut writer, source, e);
+            }
+            postMessage(&Message::ExitFailure.to_string());
         }
-        postMessage(&Message::ExitFailure.to_string());
-        return;
     }
-    postMessage(&Message::ExitSuccess.to_string());
 }
 
 #[allow(dead_code)]
@@ -45,6 +46,7 @@ extern "C" {
     fn postMessage(s: &str);
 }
 
+#[derive(Debug)]
 struct Output;
 
 impl Output {
@@ -67,6 +69,7 @@ impl Write for Output {
 
 /// Provides a [`WriteColor`] implementation for HTML, using Bootstrap 5.1
 /// classes.
+#[derive(Debug)]
 struct HtmlWriter<W> {
     writer: W,
     span_count: usize,

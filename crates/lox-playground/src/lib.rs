@@ -8,7 +8,7 @@ use warp::path::Tail;
 use warp::reply::Response;
 use warp::{Filter, Rejection, Reply};
 
-#[derive(RustEmbed)]
+#[derive(Debug, RustEmbed)]
 #[folder = "ui/dist/"]
 #[exclude = "*.css"]
 #[exclude = "*.js"]
