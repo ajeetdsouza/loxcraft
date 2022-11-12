@@ -24,33 +24,21 @@ impl Cmd {
     pub fn run(&self) -> Result<()> {
         #[allow(unused_variables)]
         match self {
-            Cmd::Lsp => {
-                cfg_if::cfg_if! {
-                    if #[cfg(feature = "lsp")] {
-                        lox_lsp::serve()
-                    } else {
-                        bail!("'lsp' feature is not enabled");
-                    }
-                }
-            }
-            Cmd::Playground { port } => {
-                cfg_if::cfg_if! {
-                    if #[cfg(feature = "playground")] {
-                        lox_playground::serve(*port)
-                    } else {
-                        bail!("'playground' feature is not enabled");
-                    }
-                }
-            }
-            Cmd::Repl => {
-                cfg_if::cfg_if! {
-                    if #[cfg(feature = "repl")] {
-                        lox_repl::run()
-                    } else {
-                        bail!("'repl' feature is not enabled");
-                    }
-                }
-            }
+            #[cfg(feature = "lsp")]
+            Cmd::Lsp => lox_lsp::serve(),
+            #[cfg(not(feature = "lsp"))]
+            Cmd::Lsp => bail!("'lsp' feature is not enabled"),
+
+            #[cfg(feature = "playground")]
+            Cmd::Playground { port } => lox_playground::serve(*port),
+            #[cfg(not(feature = "playground"))]
+            Cmd::Playground { .. } => bail!("'playground' feature is not enabled"),
+
+            #[cfg(feature = "repl")]
+            Cmd::Repl => lox_repl::run(),
+            #[cfg(not(feature = "repl"))]
+            Cmd::Repl => bail!("'repl' feature is not enabled"),
+
             Cmd::Run { path } => {
                 let source = fs::read_to_string(path)
                     .with_context(|| format!("could not read file: {}", path))?;

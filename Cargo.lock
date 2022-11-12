@@ -1119,7 +1119,6 @@ version = "0.1.0"
 dependencies = [
  "arrayvec 0.7.2",
  "build-deps",
- "cfg-if",
  "codespan-reporting",
  "hashbrown 0.13.1",
  "iota",
@@ -1151,7 +1150,6 @@ name = "loxcraft"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "cfg-if",
  "clap",
  "dirs",
  "human-panic",
