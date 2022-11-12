@@ -2,7 +2,7 @@ var i = 0;
 
 var loopStart = clock();
 
-while (i < 100000000) {
+while (i < 50000000) {
   i = i + 1;
 
   1; 1; 1; 2; 1; nil; 1; "str"; 1; true;
@@ -16,7 +16,7 @@ var loopTime = clock() - loopStart;
 var start = clock();
 
 i = 0;
-while (i < 100000000) {
+while (i < 50000000) {
   i = i + 1;
 
   1 == 1; 1 == 2; 1 == nil; 1 == "str"; 1 == true;
