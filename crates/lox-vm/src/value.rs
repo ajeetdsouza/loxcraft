@@ -88,7 +88,13 @@ impl Not for Value {
 
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
-        unsafe { std::mem::transmute::<_, u128>(*self) == std::mem::transmute(*other) }
+        match (self, other) {
+            (Self::Nil, Self::Nil) => true,
+            (Self::Boolean(a), Self::Boolean(b)) => a == b,
+            (Self::Number(a), Self::Number(b)) => a == b,
+            (Self::Object(a), Self::Object(b)) => a == b,
+            _ => false,
+        }
     }
 }
 
