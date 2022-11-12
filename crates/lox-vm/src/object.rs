@@ -99,8 +99,6 @@ impl Display for Object {
     }
 }
 
-impl Eq for Object {}
-
 macro_rules! impl_from_object {
     ($name:tt, $type_:ty) => {
         impl From<*mut $type_> for Object {
@@ -122,12 +120,6 @@ impl_from_object!(upvalue, ObjectUpvalue);
 impl Hash for Object {
     fn hash<H: Hasher>(&self, state: &mut H) {
         unsafe { self.common }.hash(state)
-    }
-}
-
-impl PartialEq for Object {
-    fn eq(&self, other: &Self) -> bool {
-        unsafe { self.common == other.common }
     }
 }
 
