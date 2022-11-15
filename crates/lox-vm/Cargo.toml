@@ -13,7 +13,6 @@ vm-trace = []
 
 [dependencies]
 arrayvec.workspace = true
-codespan-reporting.workspace = true
 hashbrown.workspace = true
 iota.workspace = true
 lox-common.path = "../lox-common"

@@ -1,10 +1,10 @@
 use anyhow::{Context, Result};
-use lox_common::error::ErrorS;
 use lox_common::types::Span;
+use lox_vm::{Compiler, Gc};
 use tower_lsp::lsp_types::{
     Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams, DidOpenTextDocumentParams,
     InitializeParams, InitializeResult, Position, Range, ServerCapabilities, ServerInfo,
-    TextDocumentSyncKind, Url,
+    TextDocumentSyncKind,
 };
 use tower_lsp::{jsonrpc, Client, LanguageServer, LspService, Server};
 
@@ -18,13 +18,19 @@ impl Backend {
         Self { client }
     }
 
-    pub async fn publish_diagnostics(&self, source: &str, uri: Url, version: Option<i32>) {
-        let errors = match lox_syntax::parse(source, 0) {
-            Ok(mut _program) => todo!(),
-            Err(e) => e,
-        };
-        let diagnostics = report_err(source, &errors);
-        self.client.publish_diagnostics(uri, diagnostics, version).await;
+    pub fn get_diagnostics(&self, source: &str) -> Vec<Diagnostic> {
+        let mut gc = Gc::default();
+        Compiler::compile(source, 0, &mut gc)
+            .err()
+            .unwrap_or_default()
+            .iter()
+            .map(|(err, span)| Diagnostic {
+                range: get_range(source, span),
+                severity: Some(DiagnosticSeverity::ERROR),
+                message: err.to_string(),
+                ..Default::default()
+            })
+            .collect()
     }
 }
 
@@ -51,14 +57,16 @@ impl LanguageServer for Backend {
         let source = &params.text_document.text;
         let uri = params.text_document.uri;
         let version = Some(params.text_document.version);
-        self.publish_diagnostics(source, uri, version).await;
+        let diagnostics = self.get_diagnostics(source);
+        self.client.publish_diagnostics(uri, diagnostics, version).await;
     }
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
         let source = &params.content_changes.first().unwrap().text;
         let uri = params.text_document.uri;
         let version = Some(params.text_document.version);
-        self.publish_diagnostics(source, uri, version).await;
+        let diagnostics = self.get_diagnostics(source);
+        self.client.publish_diagnostics(uri, diagnostics, version).await;
     }
 }
 
@@ -71,18 +79,6 @@ fn get_position(source: &str, idx: usize) -> Position {
     let line = before.lines().count() - 1;
     let character = before.lines().last().unwrap().len();
     Position { line: line as _, character: character as _ }
-}
-
-fn report_err(source: &str, errors: &[ErrorS]) -> Vec<Diagnostic> {
-    errors
-        .iter()
-        .map(|(err, span)| Diagnostic {
-            range: get_range(source, span),
-            severity: Some(DiagnosticSeverity::ERROR),
-            message: err.to_string(),
-            ..Default::default()
-        })
-        .collect()
 }
 
 pub fn serve() -> Result<()> {

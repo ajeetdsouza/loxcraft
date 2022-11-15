@@ -100,12 +100,12 @@ function Nav(props: NavProps): JSX.Element {
     <nav className="navbar p-2" id="navbar">
       <div className="navbar-brand">
         <img alt="Logo" className="me-2" src={Logo} />
-        Lox Playground
+        Loxcraft Playground
       </div>
       <div>
         <a
           className="btn btn-dark bi bi-github me-1"
-          href="https://github.com/ajeetdsouza/lox"
+          href="https://github.com/ajeetdsouza/loxcraft"
           target="_blank"
         />
         <a id="run-btn" className={`btn ${runColor}`} onClick={props.runClick}>

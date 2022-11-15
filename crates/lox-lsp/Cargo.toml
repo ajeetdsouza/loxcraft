@@ -9,5 +9,6 @@ edition = "2021"
 anyhow.workspace = true
 lox-common.path = "../lox-common"
 lox-syntax.path = "../lox-syntax"
+lox-vm.path = "../lox-vm"
 tokio.workspace = true
 tower-lsp.workspace = true

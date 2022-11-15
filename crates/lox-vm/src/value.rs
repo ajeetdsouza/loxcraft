@@ -91,6 +91,7 @@ impl PartialEq for Value {
         match (self, other) {
             (Self::Nil, Self::Nil) => true,
             (Self::Boolean(a), Self::Boolean(b)) => a == b,
+            (Self::Native(a), Self::Native(b)) => a == b,
             (Self::Number(a), Self::Number(b)) => a == b,
             (Self::Object(a), Self::Object(b)) => a == b,
             _ => false,
@@ -98,7 +99,7 @@ impl PartialEq for Value {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Native {
     Clock,
 }

@@ -8,4 +8,6 @@ mod util;
 mod value;
 mod vm;
 
+pub use compiler::Compiler;
+pub use gc::Gc;
 pub use vm::VM;

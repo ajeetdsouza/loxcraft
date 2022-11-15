@@ -360,7 +360,7 @@ impl VM {
                                 *(*self.frame.closure).upvalues.get_unchecked(upvalue_idx as usize)
                             }
                         };
-                        upvalues.push(upvalue);
+                        unsafe { upvalues.push_unchecked(upvalue) };
                     }
 
                     let closure = self.alloc(ObjectClosure::new(function, upvalues));
