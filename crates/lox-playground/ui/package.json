@@ -2,7 +2,7 @@
 	"source": "src/index.html",
 	"scripts": {
 		"start": "npx parcel serve --open --port 3000",
-		"build": "npx rimraf dist/ && npx parcel build --no-source-maps"
+		"build": "npx rimraf dist/* && npx parcel build --no-source-maps --public-url=."
 	},
 	"dependencies": {
 		"@fontsource/ubuntu-mono": "^4.5.9",

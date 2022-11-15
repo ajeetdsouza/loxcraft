@@ -9,7 +9,7 @@ Language tooling for the
 - [x] Bytecode compiler + VM
 - [x] Language server
 - [x] REPL
-- [x] Online playground
+- [x] Online playground ([try it out!](https://ajeetdsouza.github.io/loxcraft/))
 - [x] Tree-sitter grammar
 
 ## Screenshots
