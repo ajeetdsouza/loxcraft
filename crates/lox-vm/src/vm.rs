@@ -59,6 +59,7 @@ impl VM {
     pub fn run(&mut self, source: &str, stdout: &mut impl Write) -> Result<(), Vec<ErrorS>> {
         let offset = self.source.len();
 
+        self.source.reserve(source.len() + 1);
         self.source.push_str(source);
         self.source.push('\n');
 
@@ -112,9 +113,9 @@ impl VM {
                 op::GET_GLOBAL => {
                     let name = unsafe { self.read_value().object().string };
                     match self.globals.get(&name) {
-                        Some(value) => self.push(*value),
+                        Some(&value) => self.push(value),
                         None => {
-                            return self.make_error(NameError::NotDefined {
+                            return self.error(NameError::NotDefined {
                                 name: unsafe { (*name).value.to_string() },
                             });
                         }
@@ -127,11 +128,11 @@ impl VM {
                 }
                 op::SET_GLOBAL => {
                     let name = unsafe { self.read_value().object().string };
-                    let value = self.peek(0);
+                    let value = unsafe { *self.peek(0) };
                     match self.globals.entry(name) {
-                        Entry::Occupied(mut entry) => entry.insert(unsafe { *value }),
+                        Entry::Occupied(mut entry) => entry.insert(value),
                         Entry::Vacant(_) => {
-                            return self.make_error(NameError::NotDefined {
+                            return self.error(NameError::NotDefined {
                                 name: unsafe { (*name).value.to_string() },
                             });
                         }
@@ -158,62 +159,68 @@ impl VM {
                             if unsafe { (*object.common).type_ == ObjectType::Instance } =>
                         unsafe { object.instance },
                         value => {
-                            return self.make_error(AttributeError::NoSuchAttribute {
-                                type_: value.type_().to_string(),
+                            return self.error(AttributeError::NoSuchAttribute {
+                                type_: value.type_(),
                                 name: unsafe { (*name).value.to_string() },
                             });
                         }
                     };
 
-                    if let Some(&field) = unsafe { (*instance).fields.get(&name) } {
-                        // Pop the instance from the stack.
-                        self.pop();
-                        self.push(field);
-                    } else if let Some(&method) = unsafe { (*(*instance).class).methods.get(&name) }
-                    {
-                        let bound_method = self.alloc(ObjectBoundMethod::new(instance, method));
-                        self.pop();
-                        self.push(bound_method.into());
-                    } else {
-                        return self.make_error(AttributeError::NoSuchAttribute {
-                            type_: unsafe { (*(*(*instance).class).name).value.to_string() },
-                            name: unsafe { (*name).value.to_string() },
-                        });
+                    match unsafe { (*instance).fields.get(&name) } {
+                        Some(&field) => {
+                            self.pop();
+                            self.push(field);
+                        }
+                        None => match unsafe { (*(*instance).class).methods.get(&name) } {
+                            Some(&method) => {
+                                let bound_method =
+                                    self.alloc(ObjectBoundMethod::new(instance, method));
+                                self.pop();
+                                self.push(bound_method.into());
+                            }
+                            None => {
+                                return self.error(AttributeError::NoSuchAttribute {
+                                    type_: unsafe {
+                                        (*(*(*instance).class).name).value.to_string()
+                                    },
+                                    name: unsafe { (*name).value.to_string() },
+                                });
+                            }
+                        },
                     }
                 }
                 op::SET_PROPERTY => {
                     let name = unsafe { self.read_value().object().string };
-                    let instance = match unsafe { *self.peek(0) } {
+                    let instance = match self.pop() {
                         Value::Object(object)
                             if unsafe { (*object.common).type_ == ObjectType::Instance } =>
                         unsafe { object.instance },
                         value => {
-                            return self.make_error(AttributeError::NoSuchAttribute {
-                                type_: value.type_().to_string(),
+                            return self.error(AttributeError::NoSuchAttribute {
+                                type_: value.type_(),
                                 name: unsafe { (*name).value.to_string() },
                             });
                         }
                     };
-                    let value = unsafe { *self.peek(1) };
+                    let value = unsafe { *self.peek(0) };
                     unsafe { (*instance).fields.insert(name, value) };
-
-                    // Pop the instance.
-                    self.pop();
                 }
                 op::GET_SUPER => {
                     let name = unsafe { self.read_value().object().string };
                     let super_ = unsafe { self.pop().object().class };
-                    let instance = unsafe { (*self.peek(0)).object().instance };
-
-                    if let Some(&method) = unsafe { (*super_).methods.get(&name) } {
-                        let bound_method = self.alloc(ObjectBoundMethod::new(instance, method));
-                        self.pop();
-                        self.push(bound_method.into());
-                    } else {
-                        return self.make_error(AttributeError::NoSuchAttribute {
-                            type_: unsafe { (*(*super_).name).value.to_string() },
-                            name: unsafe { (*name).value.to_string() },
-                        });
+                    match unsafe { (*super_).methods.get(&name) } {
+                        Some(&method) => {
+                            let instance = unsafe { (*self.peek(0)).object().instance };
+                            let bound_method = self.alloc(ObjectBoundMethod::new(instance, method));
+                            self.pop();
+                            self.push(bound_method.into());
+                        }
+                        None => {
+                            return self.error(AttributeError::NoSuchAttribute {
+                                type_: unsafe { (*(*super_).name).value.to_string() },
+                                name: unsafe { (*name).value.to_string() },
+                            });
+                        }
                     }
                 }
                 op::EQUAL => self.binary_op(|a, b| (a == b).into()),
@@ -222,42 +229,25 @@ impl VM {
                 op::GREATER_EQUAL => self.binary_op_number(|a, b| (a >= b).into(), ">=")?,
                 op::LESS => self.binary_op_number(|a, b| (a < b).into(), "<")?,
                 op::LESS_EQUAL => self.binary_op_number(|a, b| (a <= b).into(), "<=")?,
-                // op::ADD is a special case, because it works on strings as
-                // well as numbers.
                 op::ADD => {
-                    let b = unsafe { *self.peek(0) };
-                    let a = unsafe { *self.peek(1) };
+                    let b = self.pop();
+                    let a = self.pop();
                     match (a, b) {
-                        (Value::Number(n1), Value::Number(n2)) => {
-                            self.pop();
-                            self.pop();
-                            self.push((n1 + n2).into())
-                        }
-                        (Value::Object(o1), Value::Object(o2)) => {
-                            match unsafe { ((*o1.common).type_, (*o2.common).type_) } {
-                                (ObjectType::String, ObjectType::String) => {
-                                    let string =
-                                        unsafe { [(*o1.string).value, (*o2.string).value] }
-                                            .concat();
-                                    let string = self.alloc(string);
-                                    self.pop();
-                                    self.pop();
-                                    self.push(string.into());
-                                }
-                                _ => {
-                                    return self.make_error(TypeError::UnsupportedOperandInfix {
-                                        op: "+".to_string(),
-                                        lt_type: a.type_().to_string(),
-                                        rt_type: b.type_().to_string(),
-                                    });
-                                }
-                            };
+                        (Value::Number(n1), Value::Number(n2)) => self.push((n1 + n2).into()),
+                        (Value::Object(o1), Value::Object(o2))
+                            if unsafe { (*o1.common).type_ } == ObjectType::String
+                                && unsafe { (*o2.common).type_ } == ObjectType::String =>
+                        {
+                            let string =
+                                unsafe { [(*o1.string).value, (*o2.string).value] }.concat();
+                            let string = self.alloc(string).into();
+                            self.push(string);
                         }
                         _ => {
-                            return self.make_error(TypeError::UnsupportedOperandInfix {
+                            return self.error(TypeError::UnsupportedOperandInfix {
                                 op: "+".to_string(),
-                                lt_type: a.type_().to_string(),
-                                rt_type: b.type_().to_string(),
+                                lt_type: a.type_(),
+                                rt_type: b.type_(),
                             });
                         }
                     }
@@ -274,9 +264,9 @@ impl VM {
                     match value {
                         Value::Number(number) => self.push((-number).into()),
                         _ => {
-                            return self.make_error(TypeError::UnsupportedOperandPrefix {
+                            return self.error(TypeError::UnsupportedOperandPrefix {
                                 op: "-".to_string(),
-                                rt_type: value.type_().to_string(),
+                                rt_type: value.type_(),
                             });
                         }
                     }
@@ -284,7 +274,7 @@ impl VM {
                 op::PRINT => {
                     let value = self.pop();
                     if writeln!(stdout, "{value}").is_err() {
-                        return self.make_error(IoError::WriteError { file: "stdout".to_string() });
+                        return self.error(IoError::WriteError { file: "stdout".to_string() });
                     };
                 }
                 op::JUMP => {
@@ -303,21 +293,21 @@ impl VM {
                     self.frame.ip = unsafe { self.frame.ip.sub(offset) };
                 }
                 op::CALL => {
-                    let arg_count = self.read_u8();
-                    let callee = unsafe { *self.peek(arg_count as usize) };
+                    let arg_count = self.read_u8() as usize;
+                    let callee = unsafe { *self.peek(arg_count) };
                     self.call_value(callee, arg_count)?;
                 }
                 op::INVOKE => {
                     let name = unsafe { self.read_value().object().string };
-                    let arg_count = self.read_u8();
-                    let instance = unsafe { (*self.peek(arg_count as usize)).object().instance };
+                    let arg_count = self.read_u8() as usize;
+                    let instance = unsafe { (*self.peek(arg_count)).object().instance };
 
                     match unsafe { (*instance).fields.get(&name) } {
                         Some(&value) => self.call_value(value, arg_count)?,
                         None => match unsafe { (*(*instance).class).methods.get(&name) } {
                             Some(&method) => self.call_closure(method, arg_count)?,
                             None => {
-                                return self.make_error(AttributeError::NoSuchAttribute {
+                                return self.error(AttributeError::NoSuchAttribute {
                                     type_: unsafe {
                                         (*(*(*instance).class).name).value.to_string()
                                     },
@@ -329,13 +319,13 @@ impl VM {
                 }
                 op::SUPER_INVOKE => {
                     let name = unsafe { self.read_value().object().string };
-                    let arg_count = self.read_u8();
+                    let arg_count = self.read_u8() as usize;
                     let super_ = unsafe { self.pop().object().class };
 
                     match unsafe { (*super_).methods.get(&name) } {
                         Some(&method) => self.call_closure(method, arg_count)?,
                         None => {
-                            return self.make_error(AttributeError::NoSuchAttribute {
+                            return self.error(AttributeError::NoSuchAttribute {
                                 type_: unsafe { (*(*super_).name).value.to_string() },
                                 name: unsafe { (*name).value.to_string() },
                             });
@@ -350,15 +340,13 @@ impl VM {
 
                     for _ in 0..upvalue_count {
                         let is_local = self.read_u8();
-                        let upvalue_idx = self.read_u8();
+                        let upvalue_idx = self.read_u8() as usize;
 
                         let upvalue = if is_local != 0 {
-                            let location = unsafe { self.frame.stack.add(upvalue_idx as usize) };
+                            let location = unsafe { self.frame.stack.add(upvalue_idx) };
                             self.capture_upvalue(location)
                         } else {
-                            unsafe {
-                                *(*self.frame.closure).upvalues.get_unchecked(upvalue_idx as usize)
-                            }
+                            unsafe { *(*self.frame.closure).upvalues.get_unchecked(upvalue_idx) }
                         };
                         unsafe { upvalues.push_unchecked(upvalue) };
                     }
@@ -388,26 +376,23 @@ impl VM {
                     self.push(class);
                 }
                 op::INHERIT => {
-                    let class = unsafe { (*self.peek(0)).object().class };
-                    let super_ = match unsafe { *self.peek(1) } {
+                    let class = unsafe { self.pop().object().class };
+                    let super_ = match unsafe { *self.peek(0) } {
                         Value::Object(object)
                             if unsafe { (*object.common).type_ } == ObjectType::Class =>
                         unsafe { object.class },
                         value => {
-                            return self.make_error(TypeError::SuperclassInvalidType {
-                                type_: value.type_().to_string(),
-                            });
+                            return self
+                                .error(TypeError::SuperclassInvalidType { type_: value.type_() });
                         }
                     };
                     unsafe { (*class).methods = (*super_).methods.clone() };
-                    self.pop();
                 }
                 op::METHOD => {
                     let name = unsafe { self.read_value().object().string };
-                    let method = unsafe { (*self.peek(0)).object().closure };
-                    let class = unsafe { (*self.peek(1)).object().class };
+                    let method = unsafe { self.pop().object().closure };
+                    let class = unsafe { (*self.peek(0)).object().class };
                     unsafe { (*class).methods.insert(name, method) };
-                    self.pop();
                 }
                 _ => unsafe { hint::unreachable_unchecked() },
             }
@@ -476,24 +461,24 @@ impl VM {
         }
     }
 
-    fn call_value(&mut self, value: Value, arg_count: u8) -> Result<()> {
+    fn call_value(&mut self, value: Value, arg_count: usize) -> Result<()> {
         match value {
             Value::Object(object) => match unsafe { (*object.common).type_ } {
                 ObjectType::BoundMethod => {
                     let method = unsafe { object.bound_method };
-                    unsafe { *self.peek(arg_count as usize) = (*method).this.into() };
+                    unsafe { *self.peek(arg_count) = (*method).this.into() };
                     self.call_closure(unsafe { (*method).closure }, arg_count)?;
                 }
                 ObjectType::Class => {
                     let class = unsafe { object.class };
                     let instance = self.alloc(ObjectInstance::new(class));
-                    unsafe { *self.peek(arg_count as usize) = instance.into() };
+                    unsafe { *self.peek(arg_count) = instance.into() };
 
                     match unsafe { (*class).methods.get(&self.init_string) } {
                         Some(&init) => self.call_closure(init, arg_count)?,
                         None => {
                             if arg_count != 0 {
-                                return self.make_error(TypeError::ArityMismatch {
+                                return self.error(TypeError::ArityMismatch {
                                     name: "init".to_string(),
                                     exp_args: 0,
                                     got_args: arg_count,
@@ -504,8 +489,7 @@ impl VM {
                 }
                 ObjectType::Closure => self.call_closure(unsafe { object.closure }, arg_count)?,
                 _ => {
-                    return self
-                        .make_error(TypeError::NotCallable { type_: value.type_().to_string() });
+                    return self.error(TypeError::NotCallable { type_: value.type_() });
                 }
             },
             Value::Native(native) => {
@@ -513,7 +497,7 @@ impl VM {
                 let value = match native {
                     Native::Clock => {
                         if arg_count != 0 {
-                            return self.make_error(TypeError::ArityMismatch {
+                            return self.error(TypeError::ArityMismatch {
                                 name: "clock".to_string(),
                                 exp_args: 0,
                                 got_args: arg_count,
@@ -525,38 +509,33 @@ impl VM {
                 self.push(value);
             }
             _ => {
-                return self
-                    .make_error(TypeError::NotCallable { type_: value.type_().to_string() });
+                return self.error(TypeError::NotCallable { type_: value.type_() });
             }
         }
         Ok(())
     }
 
-    fn call_closure(&mut self, closure: *mut ObjectClosure, arg_count: u8) -> Result<()> {
-        // Set up the next frame.
+    fn call_closure(&mut self, closure: *mut ObjectClosure, arg_count: usize) -> Result<()> {
         if self.frames.len() >= self.frames.capacity() {
-            return self.make_error(OverflowError::StackOverflow);
+            return self.error(OverflowError::StackOverflow);
         }
 
         let function = unsafe { (*closure).function };
-        let mut frame = CallFrame {
-            closure,
-            ip: unsafe { (*function).chunk.ops.as_ptr() },
-            stack: self.peek(arg_count as usize),
-        };
-
-        // Check if the function arity is correct.
-        if arg_count != unsafe { (*function).arity } {
-            return self.make_error(TypeError::ArityMismatch {
+        let arity = unsafe { (*function).arity } as usize;
+        if arg_count != arity {
+            return self.error(TypeError::ArityMismatch {
                 name: unsafe { (*(*function).name).value }.to_string(),
-                exp_args: unsafe { (*function).arity },
+                exp_args: arity,
                 got_args: arg_count,
             });
         }
 
-        // Set up the current closure.
-        mem::swap(&mut frame, &mut self.frame);
-        unsafe { self.frames.push_unchecked(frame) };
+        let frame = CallFrame {
+            closure,
+            ip: unsafe { (*function).chunk.ops.as_ptr() },
+            stack: self.peek(arg_count),
+        };
+        unsafe { self.frames.push_unchecked(mem::replace(&mut self.frame, frame)) };
 
         Ok(())
     }
@@ -577,10 +556,10 @@ impl VM {
                 self.push(op(a, b));
                 Ok(())
             }
-            _ => self.make_error(TypeError::UnsupportedOperandInfix {
+            _ => self.error(TypeError::UnsupportedOperandInfix {
                 op: op_str.to_string(),
-                lt_type: a.type_().to_string(),
-                rt_type: b.type_().to_string(),
+                lt_type: a.type_(),
+                rt_type: b.type_(),
             }),
         }
     }
@@ -649,7 +628,7 @@ impl VM {
     /// Wraps an [`Error`] in a span using the offset of the last executed
     /// instruction.
     #[cold]
-    fn make_error(&self, err: impl Into<Error>) -> Result<()> {
+    fn error(&self, err: impl Into<Error>) -> Result<()> {
         let function = unsafe { (*self.frame.closure).function };
         let idx = unsafe { self.frame.ip.offset_from((*function).chunk.ops.as_ptr()) } as usize;
         let span = unsafe { (*function).chunk.spans[idx - 1].clone() };

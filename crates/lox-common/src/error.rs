@@ -176,7 +176,7 @@ impl AsDiagnostic for SyntaxError {
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum TypeError {
     #[error("{name}() takes {exp_args} arguments but {got_args} were given")]
-    ArityMismatch { name: String, exp_args: u8, got_args: u8 },
+    ArityMismatch { name: String, exp_args: usize, got_args: usize },
     #[error("init() should use an empty return, not {type_:?}")]
     InitInvalidReturnType { type_: String },
     #[error("{type_:?} object is not callable")]

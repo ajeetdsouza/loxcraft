@@ -25,14 +25,14 @@ pub union Object {
 impl Object {
     /// Returns the type of the [`Object`] as a string. Useful for error
     /// messages.
-    pub fn type_(&self) -> &'static str {
+    pub fn type_(&self) -> String {
         match unsafe { (*self.common).type_ } {
-            ObjectType::BoundMethod => "bound method",
-            ObjectType::Class => "class",
-            ObjectType::Closure => "function",
-            ObjectType::Function => "raw function",
-            ObjectType::Instance => unsafe { (*(*(*self.instance).class).name).value },
-            ObjectType::String => "string",
+            ObjectType::BoundMethod => "bound method".to_string(),
+            ObjectType::Class => "class".to_string(),
+            ObjectType::Closure => "function".to_string(),
+            ObjectType::Function => "raw function".to_string(),
+            ObjectType::Instance => unsafe { (*(*(*self.instance).class).name).value }.to_string(),
+            ObjectType::String => "string".to_string(),
             ObjectType::Upvalue => unsafe { *(*self.upvalue).location }.type_(),
         }
     }

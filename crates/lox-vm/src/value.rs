@@ -29,14 +29,14 @@ impl Value {
         !matches!(self, Self::Boolean(false) | Self::Nil)
     }
 
-    /// Returns the type of the [`Value`] as a string. Useful for error
+    /// Returns the type of the [`Value`] as a [`String`]. Useful for error
     /// messages.
-    pub fn type_(&self) -> &'static str {
+    pub fn type_(&self) -> String {
         match self {
-            Self::Boolean(_) => "bool",
-            Self::Native(_) => "native",
-            Self::Nil => "nil",
-            Self::Number(_) => "number",
+            Self::Boolean(_) => "bool".to_string(),
+            Self::Native(_) => "native".to_string(),
+            Self::Nil => "nil".to_string(),
+            Self::Number(_) => "number".to_string(),
             Self::Object(object) => object.type_(),
         }
     }
