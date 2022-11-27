@@ -1,7 +1,6 @@
 use std::fmt::{self, Debug, Display, Formatter};
 use std::hash::BuildHasherDefault;
 
-use arrayvec::ArrayVec;
 use hashbrown::HashMap;
 use rustc_hash::FxHasher;
 
@@ -183,11 +182,11 @@ pub struct ObjectClosure {
     pub type_: ObjectType,
     pub is_marked: bool,
     pub function: *mut ObjectFunction,
-    pub upvalues: ArrayVec<*mut ObjectUpvalue, 256>,
+    pub upvalues: Vec<*mut ObjectUpvalue>,
 }
 
 impl ObjectClosure {
-    pub fn new(function: *mut ObjectFunction, upvalues: ArrayVec<*mut ObjectUpvalue, 256>) -> Self {
+    pub fn new(function: *mut ObjectFunction, upvalues: Vec<*mut ObjectUpvalue>) -> Self {
         Self { type_: ObjectType::Closure, is_marked: false, function, upvalues }
     }
 }

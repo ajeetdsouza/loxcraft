@@ -76,7 +76,7 @@ impl VM {
 
         self.frames.clear();
         self.frame = CallFrame {
-            closure: self.gc.alloc(ObjectClosure::new(function, ArrayVec::new())),
+            closure: self.gc.alloc(ObjectClosure::new(function, Vec::new())),
             ip: unsafe { (*function).chunk.ops.as_ptr() },
             stack: self.stack_top,
         };
@@ -335,8 +335,8 @@ impl VM {
                 op::CLOSURE => {
                     let function = unsafe { self.read_value().object().function };
 
-                    let upvalue_count = unsafe { (*function).upvalue_count };
-                    let mut upvalues = ArrayVec::new();
+                    let upvalue_count = unsafe { (*function).upvalue_count } as usize;
+                    let mut upvalues = Vec::with_capacity(upvalue_count);
 
                     for _ in 0..upvalue_count {
                         let is_local = self.read_u8();
@@ -348,7 +348,7 @@ impl VM {
                         } else {
                             unsafe { *(*self.frame.closure).upvalues.get_unchecked(upvalue_idx) }
                         };
-                        unsafe { upvalues.push_unchecked(upvalue) };
+                        upvalues.push(upvalue);
                     }
 
                     let closure = self.alloc(ObjectClosure::new(function, upvalues));
