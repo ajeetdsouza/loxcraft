@@ -15,6 +15,8 @@ pub enum Value {
 }
 
 impl Value {
+    /// Accesses the [`Object`] variant of the [`Value`]. Calling this function
+    /// when the [`Value`] is not an [`Object`] is undefined behavior.
     pub fn object(&self) -> Object {
         match self {
             Self::Object(object) => *object,
@@ -22,10 +24,13 @@ impl Value {
         }
     }
 
+    /// Checks if the [`Value`] is "truthy".
     pub fn bool(&self) -> bool {
         !matches!(self, Self::Boolean(false) | Self::Nil)
     }
 
+    /// Returns the type of the [`Value`] as a string. Useful for error
+    /// messages.
     pub fn type_(&self) -> &'static str {
         match self {
             Self::Boolean(_) => "bool",

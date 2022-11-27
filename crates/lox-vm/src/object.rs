@@ -1,5 +1,5 @@
 use std::fmt::{self, Debug, Display, Formatter};
-use std::hash::{BuildHasherDefault, Hash, Hasher};
+use std::hash::BuildHasherDefault;
 
 use arrayvec::ArrayVec;
 use hashbrown::HashMap;
@@ -23,6 +23,8 @@ pub union Object {
 }
 
 impl Object {
+    /// Returns the type of the [`Object`] as a string. Useful for error
+    /// messages.
     pub fn type_(&self) -> &'static str {
         match unsafe { (*self.common).type_ } {
             ObjectType::BoundMethod => "bound method",
@@ -35,6 +37,7 @@ impl Object {
         }
     }
 
+    /// Frees the value being pointed to by the [`Object`], based on its type.
     pub fn free(self) {
         match unsafe { (*self.common).type_ } {
             ObjectType::BoundMethod => {
@@ -118,12 +121,6 @@ impl_from_object!(function, ObjectFunction);
 impl_from_object!(instance, ObjectInstance);
 impl_from_object!(string, ObjectString);
 impl_from_object!(upvalue, ObjectUpvalue);
-
-impl Hash for Object {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        unsafe { self.common }.hash(state)
-    }
-}
 
 impl PartialEq for Object {
     fn eq(&self, other: &Self) -> bool {

@@ -110,29 +110,29 @@ impl VM {
                     unsafe { *local = *value };
                 }
                 op::GET_GLOBAL => {
-                    let name = self.read_value().object();
-                    match self.globals.get(unsafe { &name.string }) {
+                    let name = unsafe { self.read_value().object().string };
+                    match self.globals.get(&name) {
                         Some(value) => self.push(*value),
                         None => {
                             return self.make_error(NameError::NotDefined {
-                                name: unsafe { (*name.string).value.to_string() },
+                                name: unsafe { (*name).value.to_string() },
                             });
                         }
                     }
                 }
                 op::DEFINE_GLOBAL => {
-                    let name = self.read_value().object();
+                    let name = unsafe { self.read_value().object().string };
                     let value = self.pop();
-                    self.globals.insert(unsafe { name.string }, value);
+                    self.globals.insert(name, value);
                 }
                 op::SET_GLOBAL => {
-                    let name = self.read_value().object();
+                    let name = unsafe { self.read_value().object().string };
                     let value = self.peek(0);
-                    match self.globals.entry(unsafe { name.string }) {
+                    match self.globals.entry(name) {
                         Entry::Occupied(mut entry) => entry.insert(unsafe { *value }),
                         Entry::Vacant(_) => {
                             return self.make_error(NameError::NotDefined {
-                                name: unsafe { (*name.string).value.to_string() },
+                                name: unsafe { (*name).value.to_string() },
                             });
                         }
                     };
