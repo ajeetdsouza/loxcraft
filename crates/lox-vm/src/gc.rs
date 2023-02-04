@@ -54,8 +54,8 @@ impl Gc {
                     let function = unsafe { object.function };
                     self.mark(unsafe { (*function).name });
                     for constant in unsafe { &(*function).chunk.constants } {
-                        if let &Value::Object(object) = constant {
-                            self.mark(object);
+                        if constant.is_object() {
+                            self.mark(constant.as_object());
                         }
                     }
                 }
@@ -66,6 +66,7 @@ impl Gc {
                         self.mark(value);
                     }
                 }
+                ObjectType::Native => {}
                 ObjectType::String => {}
                 ObjectType::Upvalue => {
                     let upvalue = unsafe { object.upvalue };
@@ -78,17 +79,14 @@ impl Gc {
     pub fn sweep(&mut self) {
         for idx in (0..self.objects.len()).rev() {
             let object = *unsafe { self.objects.get_unchecked(idx) };
-            if unsafe { (*object.common).is_marked } {
-                unsafe { (*object.common).is_marked = false };
-            } else {
+            if !mem::take(unsafe { &mut (*object.common).is_marked }) {
                 self.objects.swap_remove(idx);
                 object.free();
             }
         }
 
         self.strings.drain_filter(|_, &mut string| {
-            if unsafe { (*string).is_marked } {
-                unsafe { (*string).is_marked = false };
+            if mem::take(unsafe { &mut (*string).common.is_marked }) {
                 false
             } else {
                 unsafe { Box::from_raw(string) };
@@ -158,8 +156,8 @@ pub trait GcMark {
 
 impl GcMark for Value {
     fn mark(self, gc: &mut Gc) {
-        if let Value::Object(object) = self {
-            object.mark(gc);
+        if self.is_object() {
+            self.as_object().mark(gc);
         }
     }
 }

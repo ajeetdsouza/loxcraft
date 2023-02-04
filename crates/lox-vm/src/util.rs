@@ -1,3 +1,5 @@
+use std::hint;
+
 #[cfg(target_family = "wasm")]
 use wasm_bindgen::prelude::*;
 
@@ -19,4 +21,8 @@ pub fn now() -> f64 {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs_f64()
+}
+
+pub const fn unreachable() -> ! {
+    if cfg!(debug_assertions) { unreachable!() } else { unsafe { hint::unreachable_unchecked() } }
 }

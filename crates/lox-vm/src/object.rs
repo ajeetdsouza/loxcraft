@@ -1,5 +1,6 @@
 use std::fmt::{self, Debug, Display, Formatter};
 use std::hash::BuildHasherDefault;
+use std::mem;
 
 use hashbrown::HashMap;
 use rustc_hash::FxHasher;
@@ -7,16 +8,18 @@ use rustc_hash::FxHasher;
 use crate::chunk::Chunk;
 use crate::value::Value;
 
+const _: () = assert!(mem::size_of::<Object>() == 8);
+
 #[derive(Clone, Copy)]
 #[repr(C)]
 pub union Object {
     pub common: *mut ObjectCommon,
-
     pub bound_method: *mut ObjectBoundMethod,
     pub class: *mut ObjectClass,
     pub closure: *mut ObjectClosure,
     pub function: *mut ObjectFunction,
     pub instance: *mut ObjectInstance,
+    pub native: *mut ObjectNative,
     pub string: *mut ObjectString,
     pub upvalue: *mut ObjectUpvalue,
 }
@@ -24,16 +27,8 @@ pub union Object {
 impl Object {
     /// Returns the type of the [`Object`] as a string. Useful for error
     /// messages.
-    pub fn type_(&self) -> String {
-        match unsafe { (*self.common).type_ } {
-            ObjectType::BoundMethod => "bound method".to_string(),
-            ObjectType::Class => "class".to_string(),
-            ObjectType::Closure => "function".to_string(),
-            ObjectType::Function => "raw function".to_string(),
-            ObjectType::Instance => unsafe { (*(*(*self.instance).class).name).value }.to_string(),
-            ObjectType::String => "string".to_string(),
-            ObjectType::Upvalue => unsafe { *(*self.upvalue).location }.type_(),
-        }
+    pub fn type_(&self) -> ObjectType {
+        unsafe { (*self.common).type_ }
     }
 
     /// Frees the value being pointed to by the [`Object`], based on its type.
@@ -53,6 +48,9 @@ impl Object {
             }
             ObjectType::Instance => {
                 unsafe { Box::from_raw(self.instance) };
+            }
+            ObjectType::Native => {
+                unsafe { Box::from_raw(self.native) };
             }
             ObjectType::String => {
                 unsafe { Box::from_raw(self.string) };
@@ -95,6 +93,7 @@ impl Display for Object {
             ObjectType::Instance => {
                 write!(f, "<object {}>", unsafe { (*(*(*self.instance).class).name).value })
             }
+            ObjectType::Native => write!(f, "<native {}>", unsafe { (*self.native).native }),
             ObjectType::String => write!(f, "{}", unsafe { (*self.string).value }),
             ObjectType::Upvalue => write!(f, "<upvalue>"),
         }
@@ -113,11 +112,13 @@ macro_rules! impl_from_object {
     };
 }
 
+impl_from_object!(common, ObjectCommon);
 impl_from_object!(bound_method, ObjectBoundMethod);
 impl_from_object!(class, ObjectClass);
 impl_from_object!(closure, ObjectClosure);
 impl_from_object!(function, ObjectFunction);
 impl_from_object!(instance, ObjectInstance);
+impl_from_object!(native, ObjectNative);
 impl_from_object!(string, ObjectString);
 impl_from_object!(upvalue, ObjectUpvalue);
 
@@ -141,61 +142,76 @@ pub enum ObjectType {
     Class,
     Closure,
     Function,
+    Native,
     Instance,
     String,
     Upvalue,
 }
 
+impl Display for ObjectType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            ObjectType::BoundMethod => write!(f, "bound method"),
+            ObjectType::Class => write!(f, "class"),
+            ObjectType::Closure => write!(f, "function"),
+            ObjectType::Function => write!(f, "function"),
+            ObjectType::Instance => write!(f, "instance"),
+            ObjectType::Native => write!(f, "native"),
+            ObjectType::String => write!(f, "string"),
+            ObjectType::Upvalue => write!(f, "upvalue"),
+        }
+    }
+}
+
 #[derive(Debug)]
 #[repr(C)]
 pub struct ObjectBoundMethod {
-    pub type_: ObjectType,
-    pub is_marked: bool,
+    pub common: ObjectCommon,
     pub this: *mut ObjectInstance,
     pub closure: *mut ObjectClosure,
 }
 
 impl ObjectBoundMethod {
     pub fn new(this: *mut ObjectInstance, method: *mut ObjectClosure) -> Self {
-        Self { type_: ObjectType::BoundMethod, is_marked: false, this, closure: method }
+        let common = ObjectCommon { type_: ObjectType::BoundMethod, is_marked: false };
+        Self { common, this, closure: method }
     }
 }
 
 #[derive(Debug)]
 #[repr(C)]
 pub struct ObjectClass {
-    pub type_: ObjectType,
-    pub is_marked: bool,
+    pub common: ObjectCommon,
     pub name: *mut ObjectString,
     pub methods: HashMap<*mut ObjectString, *mut ObjectClosure, BuildHasherDefault<FxHasher>>,
 }
 
 impl ObjectClass {
     pub fn new(name: *mut ObjectString) -> Self {
-        Self { type_: ObjectType::Class, is_marked: false, name, methods: HashMap::default() }
+        let common = ObjectCommon { type_: ObjectType::Class, is_marked: false };
+        Self { common, name, methods: HashMap::default() }
     }
 }
 
 #[derive(Debug)]
 #[repr(C)]
 pub struct ObjectClosure {
-    pub type_: ObjectType,
-    pub is_marked: bool,
+    pub common: ObjectCommon,
     pub function: *mut ObjectFunction,
     pub upvalues: Vec<*mut ObjectUpvalue>,
 }
 
 impl ObjectClosure {
     pub fn new(function: *mut ObjectFunction, upvalues: Vec<*mut ObjectUpvalue>) -> Self {
-        Self { type_: ObjectType::Closure, is_marked: false, function, upvalues }
+        let common = ObjectCommon { type_: ObjectType::Closure, is_marked: false };
+        Self { common, function, upvalues }
     }
 }
 
 #[derive(Debug)]
 #[repr(C)]
 pub struct ObjectFunction {
-    pub type_: ObjectType,
-    pub is_marked: bool,
+    pub common: ObjectCommon,
     pub name: *mut ObjectString,
     pub arity: u8,
     pub upvalue_count: u16,
@@ -204,57 +220,76 @@ pub struct ObjectFunction {
 
 impl ObjectFunction {
     pub fn new(name: *mut ObjectString, arity: u8) -> Self {
-        Self {
-            type_: ObjectType::Function,
-            is_marked: false,
-            name,
-            arity,
-            upvalue_count: 0,
-            chunk: Chunk::default(),
-        }
+        let common = ObjectCommon { type_: ObjectType::Function, is_marked: false };
+        Self { common, name, arity, upvalue_count: 0, chunk: Chunk::default() }
     }
 }
 
 #[derive(Debug)]
 #[repr(C)]
 pub struct ObjectInstance {
-    pub type_: ObjectType,
-    pub is_marked: bool,
+    pub common: ObjectCommon,
     pub class: *mut ObjectClass,
     pub fields: HashMap<*mut ObjectString, Value, BuildHasherDefault<FxHasher>>,
 }
 
 impl ObjectInstance {
     pub fn new(class: *mut ObjectClass) -> Self {
-        Self { type_: ObjectType::Instance, is_marked: false, class, fields: HashMap::default() }
+        let common = ObjectCommon { type_: ObjectType::Instance, is_marked: false };
+        Self { common, class, fields: HashMap::default() }
+    }
+}
+
+pub struct ObjectNative {
+    pub common: ObjectCommon,
+    pub native: Native,
+}
+
+impl ObjectNative {
+    pub fn new(native: Native) -> Self {
+        let common = ObjectCommon { type_: ObjectType::Native, is_marked: false };
+        Self { common, native }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Native {
+    Clock,
+}
+
+impl Display for Native {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Native::Clock => write!(f, "clock"),
+        }
     }
 }
 
 #[derive(Debug)]
 #[repr(C)]
 pub struct ObjectString {
-    pub type_: ObjectType,
-    pub is_marked: bool,
+    pub common: ObjectCommon,
     pub value: &'static str,
 }
 
 impl ObjectString {
     pub fn new(value: &'static str) -> Self {
-        Self { type_: ObjectType::String, is_marked: false, value }
+        let common = ObjectCommon { type_: ObjectType::String, is_marked: false };
+        Self { common, value }
     }
 }
 
 #[derive(Debug)]
 #[repr(C)]
 pub struct ObjectUpvalue {
-    pub type_: ObjectType,
-    pub is_marked: bool,
+    pub common: ObjectCommon,
     pub location: *mut Value,
     pub closed: Value,
 }
 
 impl ObjectUpvalue {
     pub fn new(location: *mut Value) -> Self {
-        Self { type_: ObjectType::Upvalue, is_marked: false, location, closed: Value::default() }
+        let common = ObjectCommon { type_: ObjectType::Upvalue, is_marked: false };
+        Self { common, location, closed: Value::default() }
     }
 }

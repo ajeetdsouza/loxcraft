@@ -86,7 +86,7 @@ impl Chunk {
                 let constant = &self.constants[constant_idx as usize];
                 eprintln!("{name:16} {constant_idx:>4} '{constant}'", name = "OP_CLOSURE");
 
-                let function = unsafe { constant.object().function };
+                let function = unsafe { constant.as_object().function };
                 for _ in 0..unsafe { (*function).upvalue_count } {
                     let offset = idx;
 

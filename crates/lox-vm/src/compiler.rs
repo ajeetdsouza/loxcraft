@@ -451,7 +451,7 @@ impl Compiler {
                 }
                 ExprLiteral::String(string) => {
                     let string = gc.alloc(string);
-                    unsafe { (*string).is_marked = true };
+                    unsafe { (*string).common.is_marked = true };
                     let value = string.into();
                     self.emit_u8(op::CONSTANT, span);
                     self.emit_constant(value, span)?;
