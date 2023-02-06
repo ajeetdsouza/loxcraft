@@ -30,7 +30,7 @@ class NthToggle < Toggle {
 }
 
 var start = clock();
-var n = 6000000;
+var n = 4000000;
 var val = true;
 var toggle = Toggle(val);
 

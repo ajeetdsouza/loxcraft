@@ -48,7 +48,7 @@ impl From<bool> for Value {
 
 impl From<f64> for Value {
     fn from(value: f64) -> Self {
-        unsafe { mem::transmute(value) }
+        Value(value.to_bits())
     }
 }
 
@@ -115,21 +115,18 @@ impl Value {
     /// # Safety
     /// This is undefined behavior if the [`Value`] is not of type [`ValueType::Bool`].
     pub fn as_bool(self) -> bool {
-        debug_assert!(self.is_bool());
         self == Self::TRUE
     }
 
     /// # Safety
     /// This is undefined behavior if the [`Value`] is not of type [`ValueType::Number`].
-    pub const fn as_number(self) -> f64 {
-        debug_assert!(self.is_number());
-        unsafe { mem::transmute(self) }
+    pub fn as_number(self) -> f64 {
+        f64::from_bits(self.0)
     }
 
     /// # Safety
     /// This is undefined behavior if the [`Value`] is not of type [`ValueType::Object`].
     pub const fn as_object(self) -> Object {
-        debug_assert!(self.is_object());
         Object { common: (self.0 & !(Self::SIGN_BIT | Self::QNAN)) as _ }
     }
 

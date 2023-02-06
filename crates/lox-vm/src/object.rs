@@ -8,9 +8,9 @@ use rustc_hash::FxHasher;
 use crate::chunk::Chunk;
 use crate::value::Value;
 
-const _: () = assert!(mem::size_of::<Object>() == 8);
+const _: () = assert!(mem::size_of::<Object>() == 4 || mem::size_of::<Object>() == 8);
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Eq)]
 #[repr(C)]
 pub union Object {
     pub common: *mut ObjectCommon,
@@ -33,7 +33,7 @@ impl Object {
 
     /// Frees the value being pointed to by the [`Object`], based on its type.
     pub fn free(self) {
-        match unsafe { (*self.common).type_ } {
+        match self.type_() {
             ObjectType::BoundMethod => {
                 unsafe { Box::from_raw(self.bound_method) };
             }
@@ -64,13 +64,13 @@ impl Object {
 
 impl Debug for Object {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self)
+        write!(f, "{self}")
     }
 }
 
 impl Display for Object {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match unsafe { (*self.common).type_ } {
+        match self.type_() {
             ObjectType::BoundMethod => {
                 write!(f, "<bound method {}>", unsafe {
                     (*(*(*(*self.bound_method).closure).function).name).value
@@ -84,11 +84,7 @@ impl Display for Object {
             }
             ObjectType::Function => {
                 let name = unsafe { (*(*self.function).name).value };
-                if name.is_empty() {
-                    write!(f, "<script>")
-                } else {
-                    write!(f, "<function {}>", name)
-                }
+                if name.is_empty() { write!(f, "<script>") } else { write!(f, "<function {name}>") }
             }
             ObjectType::Instance => {
                 write!(f, "<object {}>", unsafe { (*(*(*self.instance).class).name).value })
@@ -99,8 +95,6 @@ impl Display for Object {
         }
     }
 }
-
-impl Eq for Object {}
 
 macro_rules! impl_from_object {
     ($name:tt, $type_:ty) => {

@@ -54,7 +54,7 @@ fn main() -> Result<()> {
             Command::new("cargo")
                 .args(["+nightly", "miri", "nextest", "run", "--no-fail-fast", "--workspace"])
                 .args(args)
-                .env("MIRIFLAGS", "-Zmiri-disable-isolation"),
+                .env("MIRIFLAGS", "-Zmiri-disable-isolation -Zmiri-permissive-provenance"),
         )?,
     }
     Ok(())

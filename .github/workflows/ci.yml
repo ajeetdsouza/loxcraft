@@ -35,7 +35,7 @@ jobs:
         with:
           components: clippy
           profile: minimal
-          toolchain: stable
+          toolchain: 1.67.0
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@v1
       - name: cargo clippy
@@ -79,7 +79,7 @@ jobs:
             --workspace
           toolchain: nightly
         env:
-          MIRIFLAGS: -Zmiri-disable-isolation
+          MIRIFLAGS: -Zmiri-disable-isolation -Zmiri-permissive-provenance
   test:
     runs-on: ubuntu-latest
     steps:

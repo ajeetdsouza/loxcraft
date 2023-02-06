@@ -85,7 +85,7 @@ impl<W: Write> Write for HtmlWriter<W> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         let escaped = String::from_utf8_lossy(buf);
         let escaped = askama_escape::escape(&escaped, askama_escape::Html).to_string();
-        write!(self.writer, "{}", escaped)?;
+        write!(self.writer, "{escaped}")?;
         Ok(buf.len())
     }
 

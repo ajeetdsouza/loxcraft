@@ -165,7 +165,7 @@ impl Display for OpInfix {
             OpInfix::LogicAnd => "and",
             OpInfix::LogicOr => "or",
         };
-        write!(f, "{}", op)
+        write!(f, "{op}")
     }
 }
 
@@ -187,7 +187,7 @@ impl Display for OpPrefix {
             OpPrefix::Negate => "-",
             OpPrefix::Not => "!",
         };
-        write!(f, "{}", op)
+        write!(f, "{op}")
     }
 }
 

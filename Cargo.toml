@@ -32,7 +32,6 @@ hashbrown = { version = "0.13.1", default-features = false, features = [
     "inline-more",
 ] }
 http = "0.2.6"
-human-panic = "1.0.3"
 iota = "0.2.2"
 lalrpop = { version = "0.19.1", default-features = false }
 lalrpop-util = "0.19.6"
@@ -40,7 +39,7 @@ logos = "0.12.0"
 mimalloc = { version = "0.1.27", default-features = false }
 nu-ansi-term = "0.46.0"
 pretty_assertions = "1.1.0"
-reedline = "0.14.0"
+reedline = "0.15.0"
 rust-embed = { version = "6.4.0", features = ["include-exclude"] }
 rustc-hash = "1.1.0"
 serde = { version = "1.0.136", features = ["derive"] }
@@ -49,11 +48,11 @@ termcolor = "1.1.3"
 test-generator = "0.3.0"
 thiserror = "1.0.34"
 tokio = { version = "1.17.0", features = ["io-std", "rt"] }
-tower-lsp = "0.17.0"
+tower-lsp = "0.18.0"
 tree-sitter = "0.20.4"
 tree-sitter-highlight = "0.20.1"
 warp = "0.3.2"
-wasm-bindgen = "0.2.80"
+wasm-bindgen = "0.2.67"
 webbrowser = "0.8.0"
 
 [features]
@@ -70,7 +69,6 @@ vm-trace = ["lox-vm/vm-trace"]
 anyhow.workspace = true
 clap.workspace = true
 dirs.workspace = true
-human-panic.workspace = true
 lox-common.path = "crates/lox-common"
 lox-lsp = { path = "crates/lox-lsp", optional = true }
 lox-playground = { path = "crates/lox-playground", optional = true }

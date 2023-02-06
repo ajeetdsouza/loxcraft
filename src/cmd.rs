@@ -41,7 +41,7 @@ impl Cmd {
 
             Cmd::Run { path } => {
                 let source = fs::read_to_string(path)
-                    .with_context(|| format!("could not read file: {}", path))?;
+                    .with_context(|| format!("could not read file: {path}"))?;
                 let mut vm = VM::default();
                 let stdout = &mut io::stdout().lock();
                 if let Err(e) = vm.run(&source, stdout) {

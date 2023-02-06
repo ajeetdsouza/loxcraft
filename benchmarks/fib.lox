@@ -4,5 +4,5 @@ fun fib(n) {
 }
 
 var start = clock();
-print fib(40) == 102334155;
+print fib(39) == 63245986;
 print clock() - start;
