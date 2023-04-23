@@ -1,21 +1,16 @@
 import React from 'react';
 import Logo from '../../assets/lox.png';
 
-/**
- * Interface defining props for {@link Navbar} component
- */
 interface NavBarProps {
   /**
-   * If lox vm is executing bytecode
+   * Set to `true` if VM is currently running.
    */
   isRunning: boolean;
   onRunClick: () => void;
 };
 
 /**
- * Navbar component for lox playground page
- * @param props - Props for navbar component
- * @returns A navbar component
+ * Navbar component
  */
 const Navbar = ({ onRunClick, isRunning }: NavBarProps) => {
   let runColor = 'btn-success';

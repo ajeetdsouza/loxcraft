@@ -42,8 +42,8 @@ type LoxOutMessage =
 const Playground: React.FC = () => {
   /**
    * @remarks
-   * Sends resize signal to editor on initialization
-   * refer to {@link https://github.com/securingsincity/react-ace/issues/70}
+   * Sends resize signal to editor on initialization.
+   * Refer to {@link https://github.com/securingsincity/react-ace/issues/70}
    */
   useEffect(() => {
     window.dispatchEvent(new Event('resize'));
@@ -81,7 +81,9 @@ const Playground: React.FC = () => {
     });
 
     webWorker.onmessage = (event) => {
-      const msg: LoxOutMessage = JSON.parse(event.data as string) as LoxOutMessage;
+      const msg: LoxOutMessage = JSON.parse(
+        event.data as string
+      ) as LoxOutMessage;
 
       switch (msg.type) {
         case 'Output':
@@ -112,15 +114,17 @@ const Playground: React.FC = () => {
   const isRunning = worker !== null;
   /**
    * @remarks
-   * Send resize signal to editor on split resize
-   * refer to {@link https://github.com/securingsincity/react-ace/issues/708}
+   * Send resize signal to editor on split resize.
+   * Refer to {@link https://github.com/securingsincity/react-ace/issues/708}
    */
-
-  const resizeHandler = () => window.dispatchEvent(new Event('resize'))
+  const resizeHandler = () => window.dispatchEvent(new Event('resize'));
 
   return (
     <>
-      <Navbar isRunning={isRunning} onRunClick={isRunning ? stopLox : startLox} />
+      <Navbar
+        isRunning={isRunning}
+        onRunClick={isRunning ? stopLox : startLox}
+      />
       <Split
         className="d-flex"
         cursor="col-resize"

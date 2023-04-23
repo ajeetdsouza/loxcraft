@@ -84,11 +84,7 @@ impl Display for Object {
             }
             ObjectType::Function => {
                 let name = unsafe { (*(*self.function).name).value };
-                if name.is_empty() {
-                    write!(f, "<script>")
-                } else {
-                    write!(f, "<function {name}>")
-                }
+                if name.is_empty() { write!(f, "<script>") } else { write!(f, "<function {name}>") }
             }
             ObjectType::Instance => {
                 write!(f, "<object {}>", unsafe { (*(*(*self.instance).class).name).value })

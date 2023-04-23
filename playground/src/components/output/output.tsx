@@ -1,16 +1,11 @@
 import React from 'react';
 
-/**
- * Interface defining props for code output
- */
 interface OutputProps {
   text: string;
 };
 
 /**
- * Component for displaying code execution output
- * @param props - Props for code output section
- * @returns An output section
+ * Code execution output component
  */
 const Output = ({ text }: OutputProps) =>
 (

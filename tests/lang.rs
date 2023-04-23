@@ -1,10 +1,9 @@
 use std::io::Write;
 use std::{fs, str};
 
+use loxcraft::vm::VM;
 use pretty_assertions::assert_eq;
 use test_generator::test_resources;
-
-use loxcraft::vm::VM;
 
 #[test_resources("res/examples/**/*.lox")]
 fn lox(path: &str) {

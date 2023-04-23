@@ -7,14 +7,13 @@ mod op;
 mod util;
 mod value;
 
-pub use compiler::Compiler;
-pub use gc::Gc;
-
 use std::hash::BuildHasherDefault;
 use std::io::Write;
 use std::{mem, ptr};
 
 use arrayvec::ArrayVec;
+pub use compiler::Compiler;
+pub use gc::Gc;
 use hashbrown::hash_map::Entry;
 use hashbrown::HashMap;
 use rustc_hash::FxHasher;

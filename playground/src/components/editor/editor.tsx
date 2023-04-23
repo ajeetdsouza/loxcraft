@@ -1,9 +1,6 @@
 import React from 'react';
 import AceEditor from 'react-ace';
 
-/**
- * Interface defines props for {@link Editor} component
- */
 interface EditorProps {
   text: string;
   // eslint-disable-next-line no-unused-vars
@@ -11,9 +8,7 @@ interface EditorProps {
 }
 
 /**
- * A code editor component for lox playground
- * @param props - Props for code editor 
- * @returns An editor component
+ * Code editor component
  */
 const Editor = ({ onChange, text }: EditorProps) =>
 (
