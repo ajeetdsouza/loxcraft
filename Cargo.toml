@@ -15,9 +15,6 @@ version = "0.1.0"
 [badges]
 maintenance = { status = "actively-developed" }
 
-[workspace]
-members = ["crates/*"]
-
 [features]
 default = ["lsp", "repl"]
 gc-off = []
@@ -60,7 +57,7 @@ tokio = { version = "1.17.0", features = ["io-std", "rt"], optional = true }
 tower-lsp = { version = "0.19.0", optional = true }
 tree-sitter = { version = "0.20.4", optional = true }
 tree-sitter-highlight = { version = "0.20.1", optional = true }
-tree-sitter-lox = { path = "crates/tree-sitter-lox", optional = true }
+tree-sitter-lox = { version = "0.1.0", optional = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 wasm-bindgen = "0.2.67"

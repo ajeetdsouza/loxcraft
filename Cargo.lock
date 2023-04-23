@@ -1870,6 +1870,8 @@ dependencies = [
 [[package]]
 name = "tree-sitter-lox"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73a2d27e4d5c1f443e95f3fb00bdcc851d360f0a08744c5996b1c53c18153f37"
 dependencies = [
  "cc",
  "tree-sitter",
