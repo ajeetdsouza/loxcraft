@@ -14,7 +14,7 @@ version = "0.1.0"
 path = "bindings/rust/lib.rs"
 
 [dependencies]
-tree-sitter.workspace = true
+tree-sitter = "0.20.4"
 
 [build-dependencies]
-cc.workspace = true
+cc = "1.0.79"
