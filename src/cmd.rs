@@ -3,21 +3,16 @@ use std::io::{self, Write};
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
-use lox_common::error::ErrorS;
-use lox_vm::VM;
+
+use crate::error::ErrorS;
+use crate::vm::VM;
 
 #[derive(Debug, Parser)]
 #[command(about, author, disable_help_subcommand = true, propagate_version = true, version)]
 pub enum Cmd {
     Lsp,
-    Playground {
-        #[arg(long, default_value = "3000")]
-        port: u16,
-    },
     Repl,
-    Run {
-        path: String,
-    },
+    Run { path: String },
 }
 
 impl Cmd {
@@ -25,19 +20,14 @@ impl Cmd {
         #[allow(unused_variables)]
         match self {
             #[cfg(feature = "lsp")]
-            Cmd::Lsp => lox_lsp::serve(),
+            Cmd::Lsp => crate::lsp::serve(),
             #[cfg(not(feature = "lsp"))]
-            Cmd::Lsp => bail!("'lsp' feature is not enabled"),
-
-            #[cfg(feature = "playground")]
-            Cmd::Playground { port } => lox_playground::serve(*port),
-            #[cfg(not(feature = "playground"))]
-            Cmd::Playground { .. } => bail!("'playground' feature is not enabled"),
+            Cmd::Lsp => bail!("loxcraft was not compiled with the lsp feature"),
 
             #[cfg(feature = "repl")]
-            Cmd::Repl => lox_repl::run(),
+            Cmd::Repl => crate::repl::run(),
             #[cfg(not(feature = "repl"))]
-            Cmd::Repl => bail!("'repl' feature is not enabled"),
+            Cmd::Repl => bail!("loxcraft was not compiled with the repl feature"),
 
             Cmd::Run { path } => {
                 let source = fs::read_to_string(path)
@@ -57,7 +47,7 @@ impl Cmd {
 fn report_err(source: &str, errors: Vec<ErrorS>) {
     let mut buffer = termcolor::Buffer::ansi();
     for err in errors {
-        lox_common::error::report_error(&mut buffer, source, &err);
+        crate::error::report_error(&mut buffer, source, &err);
     }
     io::stderr().write_all(buffer.as_slice()).expect("failed to write to stderr");
 }

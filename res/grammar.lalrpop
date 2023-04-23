@@ -1,0 +1,277 @@
+// This grammar has been adapted from
+// https://craftinginterpreters.com/appendix-i.html#syntax-grammar.
+
+use lalrpop_util::ParseError;
+use crate::error::ErrorS;
+
+use crate::syntax::{ast, lexer};
+
+grammar<'err>(
+    errors: &'err mut Vec<ParseError<usize, lexer::Token, ErrorS>>
+);
+
+pub Program: ast::Program = <stmts:DeclS*> => ast::Program { <> };
+
+// Declarations
+DeclS = Spanned<Decl>;
+
+Decl = {
+    DeclClass,
+    DeclFun,
+    DeclVar,
+    Stmt,
+}
+
+DeclClass: ast::Stmt =
+    "class" <name:identifier> <super_:("<" <Spanned<ExprVar>>)?> "{" <methods:Spanned<Function>*> "}" =>
+        ast::Stmt::Class(ast::StmtClass { <> });
+
+DeclFun: ast::Stmt = "fun" <function:Function> => ast::Stmt::Fun(<>);
+
+DeclVar: ast::Stmt = "var" <name:identifier> <value:("=" <ExprS>)?> ";" =>
+    ast::Stmt::Var(ast::StmtVar {
+        var: ast::Var { name, depth: None },
+        value,
+    });
+
+// Statements
+// https://en.wikipedia.org/wiki/Dangling_else#Avoiding_the_conflict_in_LR_parsers
+Stmt: ast::Stmt = {
+    StmtOpen,
+    StmtClosed,
+    <e:!> => {
+        errors.push(e.error);
+        ast::Stmt::Error
+    },
+}
+
+StmtOpen: ast::Stmt = {
+    "if" "(" <cond:ExprS> ")" <then:Spanned<Stmt>> =>
+        ast::Stmt::If(Box::new(ast::StmtIf { <>, else_: None })),
+    "if" "(" <cond:ExprS> ")" <then:Spanned<StmtClosed>> "else" <else_:Spanned<StmtOpen>> =>
+        ast::Stmt::If(Box::new(ast::StmtIf { cond, then, else_: Some(else_) })),
+    "while" "(" <cond:ExprS> ")" <body:Spanned<StmtOpen>> =>
+        ast::Stmt::While(Box::new(ast::StmtWhile { <> })),
+    "for" "(" <init:ForInit> <cond:ForCond> <incr:ForIncr> ")" <body:Spanned<StmtOpen>> =>
+        ast::Stmt::For(Box::new(ast::StmtFor { <> })),
+}
+
+StmtClosed: ast::Stmt = {
+    "if" "(" <cond:ExprS> ")" <then:Spanned<StmtClosed>> "else" <else_:Spanned<StmtClosed>> =>
+        ast::Stmt::If(Box::new(ast::StmtIf { cond, then, else_: Some(else_) })),
+    "while" "(" <cond:ExprS> ")" <body:Spanned<StmtClosed>> =>
+        ast::Stmt::While(Box::new(ast::StmtWhile { <> })),
+    "for" "(" <init:ForInit> <cond:ForCond> <incr:ForIncr> ")" <body:Spanned<StmtClosed>> =>
+        ast::Stmt::For(Box::new(ast::StmtFor { <> })),
+    StmtSimple,
+}
+
+ForInit: Option<ast::StmtS> = {
+    <Spanned<DeclVar>> => Some(<>),
+    <Spanned<StmtExpr>> => Some(<>),
+    ";" => None,
+}
+
+ForCond = <ExprS?> ";";
+
+ForIncr = <ExprS?>;
+
+StmtSimple = {
+    StmtBlock,
+    StmtExpr,
+    StmtPrint,
+    StmtReturn,
+}
+
+StmtBlock: ast::Stmt = StmtBlockInternal => ast::Stmt::Block(<>);
+
+StmtBlockInternal: ast::StmtBlock = "{" <stmts:DeclS*> "}" =>
+    ast::StmtBlock { <> };
+
+StmtExpr: ast::Stmt = <value:ExprS> ";" =>
+    ast::Stmt::Expr(ast::StmtExpr { <> });
+
+StmtPrint: ast::Stmt = "print" <value:ExprS> ";" =>
+    ast::Stmt::Print(ast::StmtPrint { <> });
+
+StmtReturn: ast::Stmt = "return" <value:ExprS?> ";" =>
+    ast::Stmt::Return(ast::StmtReturn { <> });
+
+// Expressions
+ExprS = Spanned<Expr>;
+
+Expr = ExprAssign;
+
+ExprAssign = {
+    <name:identifier> "=" <value:ExprS> =>
+        ast::Expr::Assign(Box::new(ast::ExprAssign {
+            var: ast::Var { name, depth: None },
+            value,
+        })),
+    <object:Spanned<ExprCall>> "." <name:identifier> "=" <value:ExprS> =>
+        ast::Expr::Set(Box::new(ast::ExprSet { <> })),
+    ExprLogicOr,
+}
+
+ExprLogicOr = ExprInfix<ExprLogicOr, OpLogicOr, ExprLogicAnd>;
+OpLogicOr: ast::OpInfix = "or" => ast::OpInfix::LogicOr;
+
+ExprLogicAnd = ExprInfix<ExprLogicAnd, OpLogicAnd, ExprEquality>;
+OpLogicAnd: ast::OpInfix = "and" => ast::OpInfix::LogicAnd;
+
+ExprEquality = ExprInfix<ExprEquality, OpEquality, ExprComparison>;
+OpEquality: ast::OpInfix = {
+    "==" => ast::OpInfix::Equal,
+    "!=" => ast::OpInfix::NotEqual,
+}
+
+ExprComparison = ExprInfix<ExprComparison, OpComparison, ExprTerm>;
+OpComparison: ast::OpInfix = {
+    ">" => ast::OpInfix::Greater,
+    ">=" => ast::OpInfix::GreaterEqual,
+    "<" => ast::OpInfix::Less,
+    "<=" => ast::OpInfix::LessEqual,
+}
+
+ExprTerm = ExprInfix<ExprTerm, OpTerm, ExprFactor>;
+OpTerm: ast::OpInfix = {
+    "+" => ast::OpInfix::Add,
+    "-" => ast::OpInfix::Subtract,
+}
+
+ExprFactor = ExprInfix<ExprFactor, OpFactor, ExprPrefix>;
+OpFactor: ast::OpInfix = {
+    "*" => ast::OpInfix::Multiply,
+    "/" => ast::OpInfix::Divide,
+}
+
+ExprPrefix: ast::Expr = {
+    <op:OpPrefix> <rt:Spanned<ExprPrefix>> =>
+        ast::Expr::Prefix(Box::new(ast::ExprPrefix { <> })),
+    ExprCall,
+}
+OpPrefix: ast::OpPrefix = {
+    "-" => ast::OpPrefix::Negate,
+    "!" => ast::OpPrefix::Not,
+}
+
+ExprCall: ast::Expr = {
+    <callee:Spanned<ExprCall>> "(" <args:Args> ")" =>
+        ast::Expr::Call(Box::new(ast::ExprCall { callee, args })),
+    <object:Spanned<ExprCall>> "." <name:identifier> =>
+        ast::Expr::Get(Box::new(ast::ExprGet { <> })),
+    "super" "." <name:identifier> =>
+        ast::Expr::Super(ast::ExprSuper {
+            super_: ast::Var {
+                name: "super".to_string(),
+                depth: None,
+            },
+            name,
+        }),
+    ExprPrimary,
+}
+
+ExprPrimary: ast::Expr = {
+    // Literals
+    "nil" => ast::Expr::Literal(ast::ExprLiteral::Nil),
+    "false" => ast::Expr::Literal(ast::ExprLiteral::Bool(false)),
+    "true" => ast::Expr::Literal(ast::ExprLiteral::Bool(true)),
+    string => ast::Expr::Literal(ast::ExprLiteral::String(<>)),
+    number => ast::Expr::Literal(ast::ExprLiteral::Number(<>)),
+
+    // Variables
+    ExprVar,
+    ExprThis,
+
+    // Grouping
+    "(" <Expr> ")",
+}
+
+ExprVar: ast::Expr = <name:identifier> =>
+    ast::Expr::Var(ast::ExprVar { var: ast::Var { name, depth: None } });
+ExprThis: ast::Expr = "this" => ast::Expr::Var(ast::ExprVar { var: ast::Var {
+    name: "this".to_string(),
+    depth: None,
+}});
+
+// Utilities
+Spanned<T>: ast::Spanned<T> = <l:@L> <t:T> <r:@R> => (t, l..r);
+
+Function: ast::StmtFun =
+    <name:identifier> "(" <params:Params> ")" <body:StmtBlockInternal> =>
+        ast::StmtFun { <> };
+
+Params: Vec<String> = {
+    <first:identifier> <mut params:("," <identifier>)*> => {
+        params.insert(0, first);
+        params
+    },
+    () => Vec::new(),
+};
+
+Args: Vec<ast::ExprS> = {
+    <first:ExprS> <mut args:("," <ExprS>)*> => {
+        args.insert(0, first);
+        args
+    },
+    () => Vec::new(),
+}
+
+ExprInfix<Lt, Op, Rt>: ast::Expr = {
+    <lt:Spanned<Lt>> <op:Op> <rt:Spanned<Rt>> =>
+        ast::Expr::Infix(Box::new(ast::ExprInfix { <> })),
+    Rt,
+}
+
+extern {
+    type Location = usize;
+    type Error = ErrorS;
+
+    enum lexer::Token {
+        // Single-character tokens.
+        "(" => lexer::Token::LtParen,
+        ")" => lexer::Token::RtParen,
+        "{" => lexer::Token::LtBrace,
+        "}" => lexer::Token::RtBrace,
+        "," => lexer::Token::Comma,
+        "." => lexer::Token::Dot,
+        "-" => lexer::Token::Minus,
+        "+" => lexer::Token::Plus,
+        ";" => lexer::Token::Semicolon,
+        "/" => lexer::Token::Slash,
+        "*" => lexer::Token::Asterisk,
+
+        // One or two character tokens.
+        "!" => lexer::Token::Bang,
+        "!=" => lexer::Token::BangEqual,
+        "=" => lexer::Token::Equal,
+        "==" => lexer::Token::EqualEqual,
+        ">" => lexer::Token::Greater,
+        ">=" => lexer::Token::GreaterEqual,
+        "<" => lexer::Token::Less,
+        "<=" => lexer::Token::LessEqual,
+
+        // Literals.
+        identifier => lexer::Token::Identifier(<String>),
+        string => lexer::Token::String(<String>),
+        number => lexer::Token::Number(<f64>),
+
+        // Keywords.
+        "and" => lexer::Token::And,
+        "class" => lexer::Token::Class,
+        "else" => lexer::Token::Else,
+        "false" => lexer::Token::False,
+        "for" => lexer::Token::For,
+        "fun" => lexer::Token::Fun,
+        "if" => lexer::Token::If,
+        "nil" => lexer::Token::Nil,
+        "or" => lexer::Token::Or,
+        "print" => lexer::Token::Print,
+        "return" => lexer::Token::Return,
+        "super" => lexer::Token::Super,
+        "this" => lexer::Token::This,
+        "true" => lexer::Token::True,
+        "var" => lexer::Token::Var,
+        "while" => lexer::Token::While,
+    }
+}

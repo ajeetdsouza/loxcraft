@@ -6,7 +6,7 @@ Language tooling for the
 
 ## Features
 
-- [x] Bytecode compiler + VM
+- [x] Bytecode compiler + VM + garbage collector
 - [x] Language server
 - [x] REPL
 - [x] Online playground ([try it out!](https://ajeetdsouza.github.io/loxcraft/))

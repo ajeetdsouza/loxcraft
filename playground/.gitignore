@@ -1,0 +1,5 @@
+.parcel-cache/
+dist/*
+!dist/.gitkeep
+node_modules/
+pkg/
