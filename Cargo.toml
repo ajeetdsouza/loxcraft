@@ -10,7 +10,7 @@ license = "MIT"
 name = "loxcraft"
 repository = "https://github.com/ajeetdsouza/loxcraft"
 rust-version = "1.65"
-version = "0.1.0"
+version = "0.2.0"
 
 [badges]
 maintenance = { status = "actively-developed" }
