@@ -1,11 +1,22 @@
+<!-- markdownlint-configure-file {
+  "MD033": false,
+  "MD041": false
+} -->
+
+<div align="center">
+
 # loxcraft
 
-Language tooling for the [Lox programming language], created by [Bob Nystrom].
+[![crates.io][crates.io-badge]][crates.io]
+
+**Language tooling** for the **[Lox programming language]**.
+
+</div>
 
 ## Features
 
 - [x] Bytecode compiler + garbage collected runtime
-- [x] Online playground ([try it out!][lox playground])
+- [x] Online playground, via WebAssembly ([try it out!][lox playground])
 - [x] REPL
 - [x] Syntax highlighting, via [tree-sitter-lox]
 - [x] IDE integration, via the [Language Server Protocol]
@@ -47,9 +58,10 @@ Benchmarks were run with the following configuration:
 - Apple Clang: 14.0.0
 - Oracle JDK: 19.0.2
 
-[benchmarks]: https://user-images.githubusercontent.com/1777663/216903842-5d626770-e599-491e-8e09-83b2f956cf34.svg
 [benchmark suite]: https://github.com/ajeetdsouza/loxcraft/tree/main/res/benchmarks
-[bob nystrom]: https://github.com/munificent
+[benchmarks]: https://user-images.githubusercontent.com/1777663/216903842-5d626770-e599-491e-8e09-83b2f956cf34.svg
+[crates.io-badge]: https://img.shields.io/crates/v/loxcraft
+[crates.io]: https://crates.io/crates/loxcraft
 [language server protocol]: https://microsoft.github.io/language-server-protocol/
 [lox playground]: https://ajeetdsouza.github.io/loxcraft/
 [lox programming language]: http://craftinginterpreters.com/
