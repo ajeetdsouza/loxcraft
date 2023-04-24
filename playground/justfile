@@ -1,0 +1,26 @@
+default:
+  @just --list
+
+build:
+    cd rust/lox-wasm/ && just build
+    npm ci
+    npx parcel build --no-source-maps --public-url=.
+
+clean:
+    cd rust/lox-wasm/ && just clean
+    rm -rf dist/* node_modules/
+
+fmt:
+    cd rust/lox-wasm/ && just fmt
+    npm ci
+    npx prettier --write .
+    npx eslint --fix .
+
+lint:
+    cd rust/lox-wasm/ && just lint build
+    npm ci
+    npx prettier --check .
+    npx eslint .
+
+serve: build
+    npx parcel serve --open --port 3000

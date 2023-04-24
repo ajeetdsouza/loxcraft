@@ -2,4 +2,4 @@
 dist/*
 !dist/.gitkeep
 node_modules/
-pkg/
+rust/pkg/

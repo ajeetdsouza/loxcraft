@@ -7,7 +7,7 @@ interface NavBarProps {
    */
   isRunning: boolean;
   onRunClick: () => void;
-};
+}
 
 /**
  * Navbar component
@@ -33,16 +33,24 @@ const Navbar = ({ onRunClick, isRunning }: NavBarProps) => {
         <button
           className="btn btn-dark bi bi-github me-1"
           type="button"
-          onClick={() => { window.open('https://github.com/ajeetdsouza/loxcraft', '_blank'); }}
+          onClick={() => {
+            window.open('https://github.com/ajeetdsouza/loxcraft', '_blank');
+          }}
           aria-label="Github repository"
         />
-        <button id="run-btn" className={`btn ${runColor}`} onClick={onRunClick} type="button" aria-label="Run code">
+        <button
+          id="run-btn"
+          className={`btn ${runColor}`}
+          onClick={onRunClick}
+          type="button"
+          aria-label="Run code"
+        >
           <span className={runIcon} role="status" aria-hidden="true" />
           {runText}
         </button>
       </div>
     </nav>
   );
-}
+};
 
 export { Navbar, NavBarProps };

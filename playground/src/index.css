@@ -1,9 +1,9 @@
-@import "npm:@fontsource/ubuntu-mono/latin-400.css";
-@import "npm:bootstrap-icons/font/bootstrap-icons.css";
-@import "npm:bootstrap/dist/css/bootstrap.min.css";
+@import 'npm:@fontsource/ubuntu-mono/latin-400.css';
+@import 'npm:bootstrap-icons/font/bootstrap-icons.css';
+@import 'npm:bootstrap/dist/css/bootstrap.min.css';
 
 :root {
-  --bs-font-monospace: "Ubuntu Mono", monospace;
+  --bs-font-monospace: 'Ubuntu Mono', monospace;
   --header-height: 60px;
 }
 
@@ -43,6 +43,6 @@
 }
 
 .gutter.gutter-horizontal {
-  background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAeCAYAAADkftS9AAAAIklEQVQoU2M4c+bMfxAGAgYYmwGrIIiDjrELjpo5aiZeMwF+yNnOs5KSvgAAAABJRU5ErkJggg==");
+  background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAeCAYAAADkftS9AAAAIklEQVQoU2M4c+bMfxAGAgYYmwGrIIiDjrELjpo5aiZeMwF+yNnOs5KSvgAAAABJRU5ErkJggg==');
   cursor: col-resize;
 }

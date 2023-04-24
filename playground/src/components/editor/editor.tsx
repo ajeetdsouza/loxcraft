@@ -10,8 +10,7 @@ interface EditorProps {
 /**
  * Code editor component
  */
-const Editor = ({ onChange, text }: EditorProps) =>
-(
+const Editor = ({ onChange, text }: EditorProps) => (
   <AceEditor
     className="h-100 font-monospace fs-6"
     focus
@@ -20,7 +19,7 @@ const Editor = ({ onChange, text }: EditorProps) =>
     onChange={onChange}
     showPrintMargin={false}
     value={text}
-  />)
-
+  />
+);
 
 export { Editor, EditorProps };

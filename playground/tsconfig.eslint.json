@@ -1,14 +1,10 @@
 {
-    "extends": "./tsconfig",
-    "include": [
-        "src/**/*",
-        ".eslintrc.js",
-        "tsconfig.json",
-        "tsconfig.eslint.json"
-    ],
-    "exclude": [
-        ".parcel-cache",
-        "dist",
-        "node_modules"
-    ]
+  "extends": "./tsconfig",
+  "include": [
+    "src/**/*",
+    ".eslintrc.js",
+    "tsconfig.json",
+    "tsconfig.eslint.json"
+  ],
+  "exclude": [".parcel-cache", "dist", "node_modules"]
 }

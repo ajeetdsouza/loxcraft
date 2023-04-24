@@ -12,26 +12,21 @@ module.exports = {
   parserOptions: {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     tsconfigRootDir: __dirname,
-    project: ['./tsconfig.eslint.json']
+    project: ['./tsconfig.eslint.json'],
   },
   plugins: [
     'react',
     'react-hooks',
     'jsx-a11y',
     '@typescript-eslint',
-    'eslint-plugin-tsdoc'
+    'eslint-plugin-tsdoc',
   ],
   rules: {
     'import/extensions': 0,
-    '@typescript-eslint/no-use-before-define': [
-      'error',
-    ],
+    '@typescript-eslint/no-use-before-define': ['error'],
     'react/jsx-filename-extension': [0, { extensions: ['.jsx', '.tsx'] }],
     'no-unused-vars': ['error'],
-    quotes: [
-      'error',
-      'single',
-    ],
+    quotes: ['error', 'single'],
     'import/no-extraneous-dependencies': 0,
     'react-hooks/rules-of-hooks': 'error',
     'react-hooks/exhaustive-deps': 'warn',
@@ -60,7 +55,7 @@ module.exports = {
         unnamedComponents: 'arrow-function',
       },
     ],
-    'tsdoc/syntax': 'warn'
+    'tsdoc/syntax': 'warn',
   },
   settings: {
     'import/resolver': {

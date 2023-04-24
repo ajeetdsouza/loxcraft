@@ -4,28 +4,10 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+env:
+  CARGO_TERM_COLOR: always
 jobs:
-  fmt:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          components: rustfmt
-          profile: minimal
-          toolchain: nightly
-      - name: cargo fmt
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all --
-            --check
-            --color=always
-            --files-with-diff
-          toolchain: nightly
-  clippy:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -35,20 +17,28 @@ jobs:
         with:
           components: clippy
           profile: minimal
-          toolchain: 1.67.0
+          toolchain: 1.69.0
+      - name: Install Rust (nightly)
+        uses: actions-rs/toolchain@v1
+        with:
+          components: rustfmt
+          profile: minimal
+          toolchain: nightly
+      - name: Install Node
+        uses: actions/setup-node@v3
+        with:
+          cache: npm
+          cache-dependency-path: playground/package-lock.json
+          node-version: 18
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@v1
-      - name: cargo clippy
-        uses: actions-rs/clippy-check@v1
+      - name: Install just + wasm-pack
+        uses: taiki-e/install-action@v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: |
-            --all-features
-            --all-targets
-            --color=always
-            --workspace
-            -- --deny=warnings
-  miri:
+          tool: just,wasm-pack
+      - name: Run linters
+        run: just lint-all
+  test-miri:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -64,22 +54,12 @@ jobs:
           toolchain: nightly
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@v1
-      - name: Install cargo-nextest
-        uses: taiki-e/install-action@nextest
-      - name: cargo nextest
-        uses: actions-rs/cargo@v1
+      - name: Install cargo-nextest + just
+        uses: taiki-e/install-action@v2
         with:
-          command: miri
-          args: nextest run
-            --color=always
-            --features=gc-stress,gc-trace,vm-trace
-            --no-fail-fast
-            --partition=count:${{ matrix.partition }}/8
-            --test-threads=num-cpus
-            --workspace
-          toolchain: nightly
-        env:
-          MIRIFLAGS: -Zmiri-disable-isolation -Zmiri-permissive-provenance
+          tool: cargo-nextest,just
+      - name: Run tests
+        run: just test-miri --no-fail-fast --partition=count:${{ matrix.partition }}/8 --test-threads=num-cpus
   test:
     runs-on: ubuntu-latest
     steps:
@@ -92,14 +72,9 @@ jobs:
           toolchain: stable
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@v1
-      - name: Install cargo-nextest
-        uses: taiki-e/install-action@nextest
-      - name: cargo nextest
-        uses: actions-rs/cargo@v1
+      - name: Install cargo-nextest + just
+        uses: taiki-e/install-action@v2
         with:
-          command: nextest
-          args: run
-            --color=always
-            --features=gc-stress,gc-trace,vm-trace
-            --no-fail-fast
-            --workspace
+          tool: cargo-nextest,just
+      - name: Run tests
+        run: just test --no-fail-fast

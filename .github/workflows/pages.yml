@@ -1,24 +1,15 @@
 name: pages
-
 on:
-  # Runs on pushes targeting the default branch
   push:
     branches: ["main"]
-
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
-
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
   contents: read
   pages: write
   id-token: write
-
-# Allow one concurrent deployment
 concurrency:
   group: pages
   cancel-in-progress: true
-
 jobs:
   deploy:
     environment:
@@ -34,25 +25,25 @@ jobs:
         uses: actions/setup-node@v3
         with:
           cache: npm
-          cache-dependency-path: crates/lox-playground/ui/package-lock.json
+          cache-dependency-path: playground/package-lock.json
           node-version: 18
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.67.0
+          toolchain: 1.69.0
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@v1
-      - name: Install wasm-pack
-        uses: taiki-e/install-action@wasm-pack
-      - uses: actions-rs/cargo@v1
+      - name: Install just + wasm-pack
+        uses: taiki-e/install-action@v2
         with:
-          command: xtask
-          args: codegen
+          tool: just,wasm-pack
+      - name: Build playground
+        run: cd playground/ && just build
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v1
         with:
-          path: crates/lox-playground/ui/dist/
+          path: playground/dist/
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v1

@@ -1,29 +1,21 @@
 {
-    "compilerOptions": {
-      "module": "commonjs",
-      "moduleResolution": "node",
-      "newLine": "LF",
-      "outDir": "./dist/",
-      "target": "es5",
-      "sourceMap": true,
-      "declaration": true,
-      "jsx": "preserve",
-      "lib": [
-        "es2017",
-        "dom"
-      ],
-      "strict": true,
-      "noUnusedLocals": true,
-      "noUnusedParameters": true,
-      "noImplicitReturns": true,
-      "noFallthroughCasesInSwitch": true,
-        "esModuleInterop": true
-    },
-    "include": [
-      "src/**/*"
-    ],
-    "exclude": [
-      ".git",
-      "node_modules"
-    ]
-  }
+  "compilerOptions": {
+    "module": "es2022",
+    "moduleResolution": "node",
+    "newLine": "LF",
+    "outDir": "./dist/",
+    "target": "es5",
+    "sourceMap": true,
+    "declaration": true,
+    "jsx": "preserve",
+    "lib": ["es2017", "dom"],
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "esModuleInterop": true
+  },
+  "include": ["src/**/*"],
+  "exclude": [".git", "node_modules"]
+}

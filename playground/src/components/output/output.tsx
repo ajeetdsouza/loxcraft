@@ -2,13 +2,12 @@ import React from 'react';
 
 interface OutputProps {
   text: string;
-};
+}
 
 /**
  * Code execution output component
  */
-const Output = ({ text }: OutputProps) =>
-(
+const Output = ({ text }: OutputProps) => (
   <pre
     className="h-100 font-monospace fs-6 ms-1"
     // eslint-disable-next-line react/no-danger
@@ -16,6 +15,5 @@ const Output = ({ text }: OutputProps) =>
     id="output"
   />
 );
-
 
 export { Output, OutputProps };

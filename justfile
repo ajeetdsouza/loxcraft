@@ -1,24 +1,41 @@
+default:
+  @just --list
+
 build:
     cargo build --release
-    cd playground/ && npm run build
+
+build-all: build
+    cd playground/ && just build
 
 clean:
     cargo clean
-    cd playground/ && npm run clean
+
+clean-all: clean
+    cd playground/ && just clean
 
 fmt:
-    cargo +nightly fmt
-    cd playground/ && npm run fmt
+    cargo +nightly fmt --workspace
+
+fmt-all: fmt
+    cd playground/ && just fmt
 
 lint:
-    cargo clippy --all -- --deny=warnings
-    cd playground/ && npm run lint
+    cargo +nightly fmt --all -- --check
+    cargo clippy --all-features --all-targets --workspace -- --deny=warnings
 
-profile *args:
+lint-all: lint
+    cd playground/ && just lint
+
+run-pprof *args:
 	cargo run --features='pprof' --no-default-features --profile='pprof' -- {{args}}
 
+run-trace *args:
+	cargo run --features='gc-stress,gc-trace,vm-trace' -- {{args}}
+
 test *args:
+    cargo nextest run --features='gc-stress,gc-trace,vm-trace' --workspace {{args}}
+
+test-miri *args:
     MIRIFLAGS='-Zmiri-disable-isolation' cargo +nightly miri nextest run \
-        --all --features='gc-stress,gc-trace,vm-trace' --no-default-features \
-        {{args}}
-    cargo nextest run --all --features='gc-stress,gc-trace,vm-trace' {{args}}
+        --features='gc-stress,gc-trace,vm-trace' --no-default-features \
+        --workspace {{args}}

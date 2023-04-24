@@ -82,7 +82,7 @@ const Playground: React.FC = () => {
 
     webWorker.onmessage = (event) => {
       const msg: LoxOutMessage = JSON.parse(
-        event.data as string
+        event.data as string,
       ) as LoxOutMessage;
 
       switch (msg.type) {
