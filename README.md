@@ -13,6 +13,12 @@
 
 </div>
 
+## Installation
+
+```sh
+cargo install loxcraft --locked
+```
+
 ## Features
 
 - [x] Bytecode compiler + garbage collected runtime

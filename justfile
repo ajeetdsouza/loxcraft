@@ -1,5 +1,5 @@
 default:
-  @just --list
+    @just --list
 
 build:
     cargo build --release
@@ -14,7 +14,7 @@ clean-all: clean
     cd playground/ && just clean
 
 fmt:
-    cargo +nightly fmt --workspace
+    cargo +nightly fmt --all
 
 fmt-all: fmt
     cd playground/ && just fmt
