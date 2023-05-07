@@ -22,5 +22,5 @@ lint:
     npx prettier --check .
     npx eslint .
 
-serve: build
+run: build
     npx parcel serve --open --port 3000

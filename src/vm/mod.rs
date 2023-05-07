@@ -75,16 +75,25 @@ impl VM {
         let function = Compiler::compile(source, offset, &mut self.gc)?;
 
         #[cfg(feature = "pprof")]
-        let guard = pprof::ProfilerGuardBuilder::default().build().expect("could not start pprof");
+        let guard = pprof::ProfilerGuardBuilder::default()
+            .blocklist(&["libc", "libgcc", "pthread", "vdso"])
+            .build()
+            .expect("could not start pprof");
 
         self.run_function(function, stdout).map_err(|e| vec![e])?;
 
         #[cfg(feature = "pprof")]
         {
-            let report = guard.report().build().expect("could not build pprof report");
+            let report = guard.report().build().expect("error generating profiler report");
             let file =
                 std::fs::File::create("flamegraph.svg").expect("could not create flamegraph file");
-            report.flamegraph(file).expect("error writing to flamegraph");
+            report.flamegraph(file).expect("error writing to flamegraph file");
+
+            let profile = report.pprof().expect("error generating pprof report");
+            let mut content = Vec::new();
+            pprof::protos::Message::encode(&profile, &mut content)
+                .expect("error encoding pprof report");
+            std::fs::write("profile.pb", content).expect("error writing pprof report to file");
         }
 
         Ok(())
