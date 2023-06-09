@@ -3,9 +3,24 @@ authors = [
     "Ajeet D'Souza <98ajeet@gmail.com>",
     "Kartik Sharma <kartik.sharma522@gmail.com>",
 ]
+categories = ["development-tools"]
 description = "A compiler, VM, language server, and online playground for the Lox programming language"
 edition = "2021"
-keywords = ["compiler", "interpreter", "language", "lox", "vm"]
+keywords = [
+    "cli",
+    "compiler",
+    "interpreter",
+    "language",
+    "lox",
+    "lsp",
+    "parser",
+    "parsing",
+    "script",
+    "scripting",
+    "vm",
+    "wasm",
+    "webassembly",
+]
 license = "MIT"
 name = "loxcraft"
 repository = "https://github.com/ajeetdsouza/loxcraft"

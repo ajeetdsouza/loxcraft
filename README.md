@@ -64,10 +64,17 @@ Benchmarks were run with the following configuration:
 - Apple Clang: 14.0.0
 - Oracle JDK: 19.0.2
 
+## Contributors
+
+- [Ajeet D'Souza][ajeetdsouza]
+- [Kartik Sharma][crazystylus]
+
+[ajeetdsouza]: https://github.com/ajeetdsouza
 [benchmark suite]: https://github.com/ajeetdsouza/loxcraft/tree/main/res/benchmarks
 [benchmarks]: https://user-images.githubusercontent.com/1777663/216903842-5d626770-e599-491e-8e09-83b2f956cf34.svg
 [crates.io-badge]: https://img.shields.io/crates/v/loxcraft
 [crates.io]: https://crates.io/crates/loxcraft
+[crazystylus]: https://github.com/crazystylus
 [language server protocol]: https://microsoft.github.io/language-server-protocol/
 [lox playground]: https://ajeetdsouza.github.io/loxcraft/
 [lox programming language]: http://craftinginterpreters.com/
