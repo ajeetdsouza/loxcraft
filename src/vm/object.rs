@@ -35,28 +35,28 @@ impl Object {
     pub fn free(self) {
         match self.type_() {
             ObjectType::BoundMethod => {
-                unsafe { Box::from_raw(self.bound_method) };
+                let _ = unsafe { Box::from_raw(self.bound_method) };
             }
             ObjectType::Class => {
-                unsafe { Box::from_raw(self.class) };
+                let _ = unsafe { Box::from_raw(self.class) };
             }
             ObjectType::Closure => {
-                unsafe { Box::from_raw(self.closure) };
+                let _ = unsafe { Box::from_raw(self.closure) };
             }
             ObjectType::Function => {
-                unsafe { Box::from_raw(self.function) };
+                let _ = unsafe { Box::from_raw(self.function) };
             }
             ObjectType::Instance => {
-                unsafe { Box::from_raw(self.instance) };
+                let _ = unsafe { Box::from_raw(self.instance) };
             }
             ObjectType::Native => {
-                unsafe { Box::from_raw(self.native) };
+                let _ = unsafe { Box::from_raw(self.native) };
             }
             ObjectType::String => {
-                unsafe { Box::from_raw(self.string) };
+                let _ = unsafe { Box::from_raw(self.string) };
             }
             ObjectType::Upvalue => {
-                unsafe { Box::from_raw(self.upvalue) };
+                let _ = unsafe { Box::from_raw(self.upvalue) };
             }
         }
     }
