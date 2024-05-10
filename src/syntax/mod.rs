@@ -38,7 +38,9 @@ pub fn parse(source: &str, offset: usize) -> Result<Program, Vec<ErrorS>> {
 
     errors.extend(parser_errors.into_iter().map(|err| match err {
         ParseError::ExtraToken { token: (start, _, end) } => (
-            Error::SyntaxError(SyntaxError::ExtraToken { token: source[start..end].to_string() }),
+            Error::SyntaxError(SyntaxError::ExtraToken {
+                token: source[start - offset..end - offset].to_string(),
+            }),
             start..end,
         ),
         ParseError::InvalidToken { location } => {
@@ -49,7 +51,7 @@ pub fn parse(source: &str, offset: usize) -> Result<Program, Vec<ErrorS>> {
         }
         ParseError::UnrecognizedToken { token: (start, _, end), expected } => (
             Error::SyntaxError(SyntaxError::UnrecognizedToken {
-                token: source[start..end].to_string(),
+                token: source[start - offset..end - offset].to_string(),
                 expected,
             }),
             start..end,
