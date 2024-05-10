@@ -234,6 +234,8 @@ impl ObjectInstance {
     }
 }
 
+#[derive(Debug)]
+#[repr(C)]
 pub struct ObjectNative {
     pub common: ObjectCommon,
     pub native: Native,
