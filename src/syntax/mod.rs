@@ -16,7 +16,7 @@ pub fn is_complete(source: &str) -> bool {
     if let Err(e) = parser.parse(&mut errors, lexer) {
         errors.push(e);
     };
-    !errors.iter().any(|e| matches!(e, ParseError::UnrecognizedEOF { .. }))
+    !errors.iter().any(|e| matches!(e, ParseError::UnrecognizedEof { .. }))
 }
 
 pub fn parse(source: &str, offset: usize) -> Result<Program, Vec<ErrorS>> {
@@ -46,8 +46,8 @@ pub fn parse(source: &str, offset: usize) -> Result<Program, Vec<ErrorS>> {
         ParseError::InvalidToken { location } => {
             (Error::SyntaxError(SyntaxError::InvalidToken), location..location)
         }
-        ParseError::UnrecognizedEOF { location, expected } => {
-            (Error::SyntaxError(SyntaxError::UnrecognizedEOF { expected }), location..location)
+        ParseError::UnrecognizedEof { location, expected } => {
+            (Error::SyntaxError(SyntaxError::UnrecognizedEof { expected }), location..location)
         }
         ParseError::UnrecognizedToken { token: (start, _, end), expected } => (
             Error::SyntaxError(SyntaxError::UnrecognizedToken {

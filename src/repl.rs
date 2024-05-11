@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use nu_ansi_term::{Color, Style};
 use reedline::{
     EditCommand, Emacs, FileBackedHistory, KeyCode, KeyModifiers, PromptEditMode,
-    PromptHistorySearch, Reedline, ReedlineEvent, StyledText, ValidationResult,
+    PromptHistorySearch, Reedline, ReedlineEvent, Signal, StyledText, ValidationResult,
 };
 use tree_sitter_highlight::{self, HighlightConfiguration, HighlightEvent};
 use tree_sitter_lox::{self, HIGHLIGHTS_QUERY};
@@ -25,13 +25,13 @@ pub fn run() -> Result<()> {
         editor.sync_history().context("could not sync history file")?;
 
         match line {
-            Ok(reedline::Signal::Success(line)) => {
+            Ok(Signal::Success(line)) => {
                 if let Err(errors) = vm.run(&line, stdout) {
                     crate::error::report_errors(stderr, &vm.source, &errors)
                 }
             }
-            Ok(reedline::Signal::CtrlC) => eprintln!("^C"),
-            Ok(reedline::Signal::CtrlD) => break,
+            Ok(Signal::CtrlC) => eprintln!("^C"),
+            Ok(Signal::CtrlD) => break,
             Err(e) => {
                 eprintln!("error: {e:?}");
                 break;
@@ -129,7 +129,8 @@ impl reedline::Highlighter for Highlighter {
         let mut output = StyledText::new();
 
         let mut highlighter = tree_sitter_highlight::Highlighter::new();
-        let Ok(highlights) = highlighter.highlight(&self.config, line.as_bytes(), None, |_| None) else {
+        let Ok(highlights) = highlighter.highlight(&self.config, line.as_bytes(), None, |_| None)
+        else {
             let style = Style::new().fg(PALETTE[0].fg);
             output.push((style, line.to_string()));
             return output;

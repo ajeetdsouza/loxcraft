@@ -85,12 +85,12 @@ impl Gc {
             }
         }
 
-        self.strings.drain_filter(|_, &mut string| {
+        self.strings.retain(|_, &mut string| {
             if mem::take(unsafe { &mut (*string).common.is_marked }) {
-                false
+                true
             } else {
                 let _ = unsafe { Box::from_raw(string) };
-                true
+                false
             }
         });
     }

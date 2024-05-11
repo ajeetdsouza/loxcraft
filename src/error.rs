@@ -149,7 +149,7 @@ pub enum SyntaxError {
     #[error("unexpected input")]
     UnexpectedInput { token: String },
     #[error("unexpected end of file")]
-    UnrecognizedEOF { expected: Vec<String> },
+    UnrecognizedEof { expected: Vec<String> },
     #[error("unexpected {token:?}")]
     UnrecognizedToken { token: String, expected: Vec<String> },
     #[error("unterminated string")]
@@ -163,7 +163,7 @@ impl AsDiagnostic for SyntaxError {
             .with_message(self.to_string())
             .with_labels(vec![Label::primary((), span.clone())]);
         match self {
-            SyntaxError::UnrecognizedEOF { expected, .. }
+            SyntaxError::UnrecognizedEof { expected, .. }
             | SyntaxError::UnrecognizedToken { expected, .. } => {
                 diagnostic = diagnostic.with_notes(vec![format!("expected: {}", one_of(expected))]);
             }

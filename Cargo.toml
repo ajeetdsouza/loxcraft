@@ -53,24 +53,24 @@ arrayvec = "0.7.2"
 clap = { version = "4.0.0", features = ["derive"] }
 codespan-reporting = "0.11.1"
 dirs = { version = "5.0.0", optional = true }
-hashbrown = { version = "0.13.1", default-features = false, features = [
+hashbrown = { version = "0.14.5", default-features = false, features = [
     "inline-more",
 ] }
 iota = "0.2.2"
-lalrpop-util = "0.19.6"
+lalrpop-util = "0.20.2"
 logos = "0.12.0"
-nu-ansi-term = { version = "0.47.0", optional = true }
-pprof = { version = "0.11.1", features = [
+nu-ansi-term = { version = "0.50.0", optional = true }
+pprof = { version = "0.13.0", features = [
     "cpp",
     "flamegraph",
     "prost-codec",
 ], optional = true }
-reedline = { version = "0.18.0", optional = true }
+reedline = { version = "0.32.0", optional = true }
 rustc-hash = "1.1.0"
 termcolor = "1.1.3"
 thiserror = "1.0.34"
 tokio = { version = "1.17.0", features = ["io-std", "rt"], optional = true }
-tower-lsp = { version = "0.19.0", optional = true }
+tower-lsp = { version = "0.20.0", optional = true }
 tree-sitter = { version = "0.20.4", optional = true }
 tree-sitter-highlight = { version = "0.20.1", optional = true }
 tree-sitter-lox = { version = "0.1.0", optional = true }
@@ -83,7 +83,7 @@ mimalloc = { version = "0.1.27", default-features = false }
 
 [build-dependencies]
 build-deps = "0.1.4"
-lalrpop = { version = "0.19.1", default-features = false }
+lalrpop = { version = "0.20.2", default-features = false }
 
 [dev-dependencies]
 pretty_assertions = "1.1.0"

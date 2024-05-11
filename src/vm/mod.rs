@@ -563,7 +563,7 @@ impl VM {
             }
         };
 
-        unsafe { (*class).methods = (*super_).methods.clone() };
+        unsafe { (*class).methods.clone_from(&(*super_).methods) };
         Ok(())
     }
 
@@ -689,7 +689,7 @@ impl VM {
 
     fn call_native(&mut self, native: *mut ObjectNative, arg_count: usize) -> Result<()> {
         self.pop();
-        let value = match { unsafe { (*native).native } } {
+        let value = match unsafe { (*native).native } {
             Native::Clock => {
                 if arg_count != 0 {
                     return self.err(TypeError::ArityMismatch {

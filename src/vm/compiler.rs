@@ -22,7 +22,7 @@ pub struct Compiler {
 impl Compiler {
     /// Creates a compiler for a new script.
     pub fn new(gc: &mut Gc) -> Self {
-        let name = gc.alloc("");
+        let name = gc.alloc("<script>");
         Self {
             ctx: CompilerCtx {
                 function: gc.alloc(ObjectFunction::new(name, 0)),
@@ -347,18 +347,48 @@ impl Compiler {
                     .try_into()
                     .map_err(|_| (OverflowError::TooManyArgs.into(), span.clone()))?;
 
-                self.compile_expr(&call.callee, gc)?;
-                for arg in &call.args {
-                    self.compile_expr(arg, gc)?;
-                }
+                match &call.callee.0 {
+                    Expr::Get(get) => {
+                        self.compile_expr(&get.object, gc)?;
+                        for arg in &call.args {
+                            self.compile_expr(arg, gc)?;
+                        }
 
-                let ops = unsafe { &mut (*self.ctx.function).chunk.ops };
-                match ops.len().checked_sub(2) {
-                    Some(idx) if ops[idx] == op::GET_PROPERTY => ops[idx] = op::INVOKE,
-                    Some(idx) if ops[idx] == op::GET_SUPER => ops[idx] = op::SUPER_INVOKE,
-                    Some(_) | None => self.emit_u8(op::CALL, span),
+                        let name = gc.alloc(&get.name).into();
+                        self.emit_u8(op::INVOKE, span);
+                        self.emit_constant(name, span)?;
+                        self.emit_u8(arg_count, span);
+                    }
+                    Expr::Super(super_) => match self.class_ctx.last() {
+                        Some(class_ctx) if !class_ctx.has_super => {
+                            return Err((SyntaxError::SuperWithoutSuperclass.into(), span.clone()));
+                        }
+                        Some(_) => {
+                            self.get_variable("this", span, gc)?;
+                            for arg in &call.args {
+                                self.compile_expr(arg, gc)?;
+                            }
+                            self.get_variable("super", span, gc)?;
+
+                            let name = gc.alloc(&super_.name).into();
+                            self.emit_u8(op::SUPER_INVOKE, span);
+                            self.emit_constant(name, span)?;
+                            self.emit_u8(arg_count, span);
+                        }
+                        None => {
+                            return Err((SyntaxError::SuperOutsideClass.into(), span.clone()));
+                        }
+                    },
+                    _ => {
+                        self.compile_expr(&call.callee, gc)?;
+                        for arg in &call.args {
+                            self.compile_expr(arg, gc)?;
+                        }
+
+                        self.emit_u8(op::CALL, span);
+                        self.emit_u8(arg_count, span);
+                    }
                 }
-                self.emit_u8(arg_count, span);
             }
             Expr::Get(get) => {
                 self.compile_expr(&get.object, gc)?;
@@ -472,22 +502,19 @@ impl Compiler {
                 self.emit_u8(op::SET_PROPERTY, span);
                 self.emit_constant(name, span)?;
             }
-            Expr::Super(super_) => {
-                match self.class_ctx.last() {
-                    Some(class_ctx) => {
-                        if !class_ctx.has_super {
-                            return Err((SyntaxError::SuperWithoutSuperclass.into(), span.clone()));
-                        }
-                    }
-                    None => return Err((SyntaxError::SuperOutsideClass.into(), span.clone())),
+            Expr::Super(super_) => match self.class_ctx.last() {
+                Some(class_ctx) if !class_ctx.has_super => {
+                    return Err((SyntaxError::SuperWithoutSuperclass.into(), span.clone()));
                 }
-
-                let name = gc.alloc(&super_.name).into();
-                self.get_variable("this", span, gc)?;
-                self.get_variable("super", span, gc)?;
-                self.emit_u8(op::GET_SUPER, span);
-                self.emit_constant(name, span)?;
-            }
+                Some(_) => {
+                    let name = gc.alloc(&super_.name).into();
+                    self.get_variable("this", span, gc)?;
+                    self.get_variable("super", span, gc)?;
+                    self.emit_u8(op::GET_SUPER, span);
+                    self.emit_constant(name, span)?;
+                }
+                None => return Err((SyntaxError::SuperOutsideClass.into(), span.clone())),
+            },
             Expr::Var(var) => self.get_variable(&var.var.name, span, gc)?,
         }
         Ok(())
