@@ -33,17 +33,15 @@ jobs:
           profile: minimal
           toolchain: 1.69.0
       - name: Setup Rust cache
-        uses: Swatinem/rust-cache@v1
-      - name: Install just + wasm-pack
-        uses: taiki-e/install-action@v2
+        uses: Swatinem/rust-cache@v2
         with:
-          tool: just,wasm-pack
+          cache-directories: ./playground/rust/lox-wasm
       - name: Build playground
-        run: cd playground/ && just build
+        run: cd playground/ && npm ci && npm run build
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v1
         with:
-          path: playground/dist/
+          path: playground/out/
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v1

@@ -10,8 +10,6 @@ use wasm_bindgen::prelude::*;
 #[wasm_bindgen]
 #[allow(non_snake_case)]
 pub fn loxRun(source: &str) {
-    console_error_panic_hook::set_once();
-
     let output = &mut Output::new();
     match VM::default().run(source, output) {
         Ok(()) => postMessage(&Message::ExitSuccess.to_string()),
@@ -67,8 +65,7 @@ impl Write for Output {
     }
 }
 
-/// Provides a [`WriteColor`] implementation for HTML, using Bootstrap 5.1
-/// classes.
+/// Provides a [`WriteColor`] implementation for HTML, using Tailwind CSS classes.
 #[derive(Debug)]
 struct HtmlWriter<W> {
     writer: W,
@@ -107,37 +104,35 @@ impl<W: Write> WriteColor for HtmlWriter<W> {
         let mut classes = Vec::new();
         if let Some(fg) = spec.fg() {
             match fg {
-                Color::Black => classes.push("text-black"),
-                Color::Blue => classes.push("text-primary"),
-                Color::Green => classes.push("text-success"),
-                Color::Red => classes.push("text-danger"),
-                Color::White => classes.push("text-white"),
-                Color::Yellow => classes.push("text-warning"),
-                _ => (),
+                Color::Black => classes.push("text-zinc-950"),
+                Color::Blue => classes.push("text-blue-300"),
+                Color::Green => classes.push("text-lime-300"),
+                Color::Red => classes.push("text-red-500"),
+                Color::Yellow => classes.push("text-amber-300"),
+                Color::White | _ => classes.push("text-zinc-50"),
             };
         }
         if let Some(bg) = spec.bg() {
             match bg {
-                Color::Black => classes.push("bg-black"),
-                Color::Blue => classes.push("bg-primary"),
-                Color::Green => classes.push("bg-success"),
-                Color::Red => classes.push("bg-danger"),
-                Color::White => classes.push("bg-white"),
-                Color::Yellow => classes.push("bg-warning"),
-                _ => (),
+                Color::Black => classes.push("bg-zinc-950"),
+                Color::Blue => classes.push("bg-blue-300"),
+                Color::Green => classes.push("bg-lime-300"),
+                Color::Red => classes.push("bg-red-500"),
+                Color::Yellow => classes.push("bg-amber-300"),
+                Color::White | _ => classes.push("bg-zinc-50"),
             };
         }
         if spec.bold() {
-            classes.push("fw-bold");
+            classes.push("font-bold");
         }
         if spec.dimmed() {
-            classes.push("opacity-75");
+            classes.push("text-opacity-75");
         }
         if spec.italic() {
-            classes.push("fst-italic");
+            classes.push("italic");
         }
         if spec.underline() {
-            classes.push("text-decoration-underline");
+            classes.push("underline");
         }
 
         if !classes.is_empty() {

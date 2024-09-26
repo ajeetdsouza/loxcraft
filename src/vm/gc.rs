@@ -141,7 +141,7 @@ where
                     eprintln!("allocate string: {string}");
                 }
                 let object = Box::into_raw(Box::new(ObjectString::new(unsafe {
-                    mem::transmute(string.as_str())
+                    mem::transmute::<&str, &str>(string.as_str())
                 })));
                 entry.insert(string, object);
                 object

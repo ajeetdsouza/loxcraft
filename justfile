@@ -29,9 +29,6 @@ lint-all: lint
 run-playground:
     cd playground/ && just run
 
-run-pprof *args:
-    cargo run --features='pprof' --no-default-features --profile='pprof' -- {{args}}
-
 run-trace *args:
     cargo run --features='gc-stress,gc-trace,vm-trace' -- {{args}}
 
