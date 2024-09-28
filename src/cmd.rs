@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 
 use anyhow::{Context, Result, bail};
 use clap::Parser;
@@ -43,8 +43,17 @@ impl Cmd {
             Cmd::Repl => bail!("loxcraft was not compiled with the `repl` feature"),
 
             Cmd::Run { path } => {
-                let source = fs::read_to_string(path)
-                    .with_context(|| format!("could not read file: {path}"))?;
+                let source = if path == "-" {
+                    let mut source = String::new();
+                    io::stdin()
+                        .read_to_string(&mut source)
+                        .context("could not read source from stdin")?;
+                    source
+                } else {
+                    fs::read_to_string(path)
+                        .with_context(|| format!("could not read source from file: {path}"))?
+                };
+
                 let mut vm = VM::default();
                 let stdout = &mut io::stdout().lock();
                 if let Err(e) = vm.run(&source, stdout) {
