@@ -11,8 +11,14 @@ use crate::vm::VM;
 #[command(about, author, disable_help_subcommand = true, propagate_version = true, version)]
 pub enum Cmd {
     Lsp,
+    Playground {
+        #[arg(long, default_value = "4000")]
+        port: u16,
+    },
     Repl,
-    Run { path: String },
+    Run {
+        path: String,
+    },
 }
 
 impl Cmd {
@@ -22,12 +28,19 @@ impl Cmd {
             #[cfg(feature = "lsp")]
             Cmd::Lsp => crate::lsp::serve(),
             #[cfg(not(feature = "lsp"))]
-            Cmd::Lsp => bail!("loxcraft was not compiled with the lsp feature"),
+            Cmd::Lsp => bail!("loxcraft was not compiled with the `lsp` feature"),
+
+            #[cfg(feature = "playground")]
+            Cmd::Playground { port } => crate::playground::serve(*port),
+            #[cfg(not(feature = "playground"))]
+            Cmd::Playground { .. } => {
+                bail!("loxcraft was not compiled with the `playground` feature")
+            }
 
             #[cfg(feature = "repl")]
             Cmd::Repl => crate::repl::run(),
             #[cfg(not(feature = "repl"))]
-            Cmd::Repl => bail!("loxcraft was not compiled with the repl feature"),
+            Cmd::Repl => bail!("loxcraft was not compiled with the `repl` feature"),
 
             Cmd::Run { path } => {
                 let source = fs::read_to_string(path)

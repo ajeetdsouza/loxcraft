@@ -3,7 +3,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "npm run build:wasm && next build",
-    "build:wasm": "cd rust/lox-wasm && wasm-pack build --target=web",
+    "build:wasm": "cd rust/lox-wasm && wasm-pack build --release --target=web",
     "fmt": "prettier --write .",
     "lint": "next lint",
     "start": "next start"

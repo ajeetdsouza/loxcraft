@@ -1,5 +1,4 @@
 const nextConfig = {
-  basePath: "/loxcraft",
   output: "export",
 };
 

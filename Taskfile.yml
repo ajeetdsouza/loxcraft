@@ -4,11 +4,8 @@ run: once
 tasks:
   build:
     deps:
-      - build-loxcraft
       - build-playground
-  build-loxcraft:
-    cmd: cargo build --all-features --all-targets --workspace
-    internal: true
+    cmd: cargo build --features=playground {{.CLI_ARGS}}
   build-playground:
     deps:
       - setup-playground
@@ -34,6 +31,11 @@ tasks:
     cmd: cargo +nightly fmt --all
     dir: playground/rust/lox-wasm
     internal: true
+
+  install:
+    deps:
+      - build-playground
+    cmd: cargo install --features=playground --force --locked --path=.
 
   lint:
     deps:
