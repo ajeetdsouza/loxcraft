@@ -24,20 +24,24 @@ jobs:
           components: rustfmt
           profile: minimal
           toolchain: nightly
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: playground/package.json
       - name: Install Node
         uses: actions/setup-node@v3
         with:
-          cache: npm
-          cache-dependency-path: playground/package-lock.json
+          cache: pnpm
+          cache-dependency-path: playground/pnpm-lock.yaml
           node-version: 18
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@v1
-      - name: Install just + wasm-pack
-        uses: taiki-e/install-action@v2
+      - name: Install Task
+        uses: arduino/setup-task@v2
         with:
-          tool: just,wasm-pack
+          version: 3.x
       - name: Run linters
-        run: just lint-all
+        run: task lint
   test-miri:
     runs-on: ubuntu-latest
     strategy:
@@ -54,12 +58,14 @@ jobs:
           toolchain: nightly
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@v1
-      - name: Install cargo-nextest + just
+      - name: Install cargo-nextest
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-nextest,just
+          tool: cargo-nextest
+      - name: Install Task
+        uses: arduino/setup-task@v2
       - name: Run tests
-        run: just test-miri --no-fail-fast --partition=count:${{ matrix.partition }}/8 --test-threads=num-cpus
+        run: task test-miri -- --no-fail-fast --partition=count:${{ matrix.partition }}/8 --test-threads=num-cpus
   test:
     runs-on: ubuntu-latest
     steps:
@@ -72,9 +78,11 @@ jobs:
           toolchain: stable
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@v1
-      - name: Install cargo-nextest + just
+      - name: Install cargo-nextest
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-nextest,just
+          tool: cargo-nextest
+      - name: Install Task
+        uses: arduino/setup-task@v2
       - name: Run tests
-        run: just test --no-fail-fast
+        run: task test -- --no-fail-fast

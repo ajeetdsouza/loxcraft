@@ -4,6 +4,8 @@
     "dev": "next dev",
     "build": "npm run build:wasm && next build",
     "build:wasm": "cd rust/lox-wasm && wasm-pack build --target=web",
+    "fmt": "prettier --write .",
+    "lint": "next lint",
     "start": "next start"
   },
   "dependencies": {
@@ -29,9 +31,13 @@
     "@types/react": "18.2.33",
     "@types/react-dom": "18.2.14",
     "autoprefixer": "^10.4.20",
+    "eslint": "8.57.1",
+    "eslint-config-next": "14.2.13",
     "postcss": "^8.4.47",
+    "prettier": "^3.3.3",
     "tailwindcss": "^3.4.13",
     "typescript": "^5.2.2",
     "wasm-pack": "^0.13.0"
-  }
+  },
+  "packageManager": "pnpm@9.7.1+sha512.faf344af2d6ca65c4c5c8c2224ea77a81a5e8859cbc4e06b1511ddce2f0151512431dd19e6aff31f2c6a8f5f2aced9bd2273e1fed7dd4de1868984059d2c4247"
 }

@@ -109,7 +109,7 @@ impl<W: Write> WriteColor for HtmlWriter<W> {
                 Color::Green => classes.push("text-lime-300"),
                 Color::Red => classes.push("text-red-500"),
                 Color::Yellow => classes.push("text-amber-300"),
-                Color::White | _ => classes.push("text-zinc-50"),
+                _ => classes.push("text-zinc-50"),
             };
         }
         if let Some(bg) = spec.bg() {
@@ -119,7 +119,7 @@ impl<W: Write> WriteColor for HtmlWriter<W> {
                 Color::Green => classes.push("bg-lime-300"),
                 Color::Red => classes.push("bg-red-500"),
                 Color::Yellow => classes.push("bg-amber-300"),
-                Color::White | _ => classes.push("bg-zinc-50"),
+                _ => classes.push("bg-zinc-50"),
             };
         }
         if spec.bold() {

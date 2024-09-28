@@ -1,0 +1,80 @@
+version: "3"
+run: once
+
+tasks:
+  build:
+    deps:
+      - build-loxcraft
+      - build-playground
+  build-loxcraft:
+    cmd: cargo build --all-features --all-targets --workspace
+    internal: true
+  build-playground:
+    deps:
+      - setup-playground
+    cmd: pnpm run build
+    dir: playground
+    internal: true
+
+  fmt:
+    deps:
+      - fmt-loxcraft
+      - fmt-playground
+      - fmt-lox-wasm
+  fmt-loxcraft:
+    cmd: cargo +nightly fmt --all
+    internal: true
+  fmt-playground:
+    deps:
+      - setup-playground
+    cmd: pnpm run fmt
+    dir: playground
+    internal: true
+  fmt-lox-wasm:
+    cmd: cargo +nightly fmt --all
+    dir: playground/rust/lox-wasm
+    internal: true
+
+  lint:
+    deps:
+      - lint-loxcraft-clippy
+      - lint-loxcraft-rustfmt
+      - lint-playground
+      - lint-lox-wasm-clippy
+      - lint-lox-wasm-rustfmt
+  lint-loxcraft-clippy:
+    cmd: cargo clippy --all-features --all-targets --workspace -- --deny=warnings
+    internal: true
+  lint-loxcraft-rustfmt:
+    cmd: cargo +nightly fmt --all -- --check
+    internal: true
+  lint-playground:
+    deps:
+      - setup-playground
+    cmd: pnpm run lint
+    dir: playground
+    internal: true
+  lint-lox-wasm-clippy:
+    cmd: cargo clippy --all-features --all-targets --workspace -- --deny=warnings
+    dir: playground/rust/lox-wasm
+    internal: true
+  lint-lox-wasm-rustfmt:
+    cmd: cargo +nightly fmt --all -- --check
+    dir: playground/rust/lox-wasm
+    internal: true
+
+  setup:
+    deps:
+      - setup-playground
+  setup-playground:
+    cmd: pnpm install --prefer-frozen-lockfile
+    dir: playground
+    internal: true
+
+  test:
+    cmd: cargo nextest run --features='gc-stress,gc-trace,vm-trace' --workspace {{.CLI_ARGS}}
+
+  test-miri:
+    cmd: >
+      MIRIFLAGS='-Zmiri-disable-isolation'
+      cargo +nightly miri nextest run --features='gc-stress,gc-trace,vm-trace' --no-default-features --workspace {{.CLI_ARGS}}

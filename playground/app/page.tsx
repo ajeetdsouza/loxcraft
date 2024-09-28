@@ -9,14 +9,12 @@ import {
 } from "@/components/ui/resizable";
 import { Github, Loader2, Lock, Play } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import "ace-builds/src-noconflict/theme-tomorrow_night_bright";
 import dynamic from "next/dynamic";
 import React from "react";
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
-import Head from "next/head";
+import { persist } from "zustand/middleware";
 
 type LoxOutMessageOutput = {
   type: "Output";
@@ -134,8 +132,8 @@ const useStore = create<State & Action>()(
         editorText: state.editorText,
         outputText: state.outputText,
       }),
-    }
-  )
+    },
+  ),
 );
 
 function Page() {

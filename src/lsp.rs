@@ -6,7 +6,7 @@ use tower_lsp::lsp_types::{
     InitializeParams, InitializeResult, Position, Range, ServerCapabilities, ServerInfo,
     TextDocumentSyncKind,
 };
-use tower_lsp::{jsonrpc, Client, LanguageServer, LspService, Server};
+use tower_lsp::{Client, LanguageServer, LspService, Server, jsonrpc};
 
 use crate::types::Span;
 use crate::vm::{Compiler, Gc};

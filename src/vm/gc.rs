@@ -1,8 +1,8 @@
 use std::hash::BuildHasherDefault;
 use std::mem;
 
-use hashbrown::hash_map::RawEntryMut;
 use hashbrown::HashMap;
+use hashbrown::hash_map::RawEntryMut;
 use rustc_hash::FxHasher;
 
 use crate::vm::object::{Object, ObjectString, ObjectType};

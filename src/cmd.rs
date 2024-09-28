@@ -1,7 +1,7 @@
 use std::fs;
 use std::io::{self, Write};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::Parser;
 
 use crate::error::ErrorS;
