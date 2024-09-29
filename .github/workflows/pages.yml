@@ -41,7 +41,7 @@ jobs:
         with:
           cache-directories: ./playground/rust/lox-wasm
       - name: Build playground
-        run: pnpm install && pnpm run build
+        run: pnpm install && BASE_PATH=/loxcraft pnpm run build
         working-directory: playground
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v1

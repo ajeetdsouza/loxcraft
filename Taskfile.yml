@@ -9,7 +9,10 @@ tasks:
   build-playground:
     deps:
       - setup-playground
-    cmd: pnpm run build
+    cmds:
+      - pnpm run build:wasm
+      - pnpm install --prefer-frozen-lockfile
+      - pnpm run build
     dir: playground
 
   fmt:
