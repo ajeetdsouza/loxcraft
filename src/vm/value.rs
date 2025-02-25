@@ -24,18 +24,13 @@ impl Debug for Value {
 
 impl Display for Value {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        if self.is_nil() {
-            write!(f, "nil")
-        } else if self.is_true() {
-            write!(f, "true")
-        } else if self.is_false() {
-            write!(f, "false")
-        } else if self.is_number() {
-            write!(f, "{}", self.as_number())
-        } else if self.is_object() {
-            write!(f, "{}", self.as_object())
-        } else {
-            util::unreachable()
+        match *self {
+            Self::NIL => write!(f, "nil"),
+            Self::TRUE => write!(f, "true"),
+            Self::FALSE => write!(f, "false"),
+            _ if self.is_number() => write!(f, "{}", self.as_number()),
+            _ if self.is_object() => write!(f, "{}", self.as_object()),
+            _ => util::unreachable(),
         }
     }
 }
@@ -104,20 +99,6 @@ impl Value {
         self.0 & (Self::QNAN | Self::SIGN_BIT) == (Self::QNAN | Self::SIGN_BIT)
     }
 
-    pub fn is_false(self) -> bool {
-        Self(self.0) == Self::FALSE
-    }
-
-    pub fn is_true(self) -> bool {
-        Self(self.0) == Self::TRUE
-    }
-
-    /// # Safety
-    /// This is undefined behavior if the [`Value`] is not of type [`ValueType::Bool`].
-    pub fn as_bool(self) -> bool {
-        self == Self::TRUE
-    }
-
     /// # Safety
     /// This is undefined behavior if the [`Value`] is not of type [`ValueType::Number`].
     pub fn as_number(self) -> f64 {
@@ -169,12 +150,6 @@ mod tests {
 
     #[test]
     fn convert_to_and_from_values() {
-        let value = false;
-        assert_eq!(Value::from(value).as_bool(), value);
-
-        let value = true;
-        assert_eq!(Value::from(value).as_bool(), value);
-
         let value = 0.0;
         assert_eq!(Value::from(value).as_number(), value);
 

@@ -10,11 +10,11 @@ use wasm_bindgen::prelude::*;
 #[wasm_bindgen]
 #[allow(non_snake_case)]
 pub fn loxRun(source: &str) {
-    let output = &mut Output::new();
-    match VM::default().run(source, output) {
+    let writer = Output::new();
+    let mut writer = HtmlWriter::new(writer);
+    match VM::default().run(source, &mut writer) {
         Ok(()) => postMessage(&Message::ExitSuccess.to_string()),
         Err(errors) => {
-            let mut writer = HtmlWriter::new(output);
             for e in errors.iter() {
                 report_error(&mut writer, source, e);
             }

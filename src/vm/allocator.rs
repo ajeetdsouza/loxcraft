@@ -28,21 +28,21 @@ impl<T> Allocator<T> {
 unsafe impl<T: GlobalAlloc> GlobalAlloc for Allocator<T> {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         self.allocated_bytes.fetch_add(layout.size(), Ordering::Relaxed);
-        self.inner.alloc(layout)
+        unsafe { self.inner.alloc(layout) }
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         self.allocated_bytes.fetch_sub(layout.size(), Ordering::Relaxed);
-        self.inner.dealloc(ptr, layout)
+        unsafe { self.inner.dealloc(ptr, layout) }
     }
 
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
         self.allocated_bytes.fetch_add(layout.size(), Ordering::Relaxed);
-        self.inner.alloc_zeroed(layout)
+        unsafe { self.inner.alloc_zeroed(layout) }
     }
 
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
         self.allocated_bytes.fetch_add(new_size.wrapping_sub(layout.size()), Ordering::Relaxed);
-        self.inner.realloc(ptr, layout, new_size)
+        unsafe { self.inner.realloc(ptr, layout, new_size) }
     }
 }

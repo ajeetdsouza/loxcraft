@@ -32,21 +32,21 @@ jobs:
           cache-dependency-path: playground/pnpm-lock.yaml
           node-version: 18
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: 1.69.0
+        uses: dtolnay/rust-toolchain@1.85
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@v2
         with:
           cache-directories: ./playground/rust/lox-wasm
+      - name: Install Task
+        uses: arduino/setup-task@v2
+        with:
+          version: 3.x
       - name: Build playground
-        run: pnpm install && BASE_PATH=/loxcraft pnpm run build
-        working-directory: playground
+        run: BASE_PATH=/loxcraft task build-playground
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v1
+        uses: actions/upload-pages-artifact@v3
         with:
           path: playground/out/
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v1
+        uses: actions/deploy-pages@v4

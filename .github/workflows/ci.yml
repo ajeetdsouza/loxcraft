@@ -6,24 +6,24 @@ on:
   workflow_dispatch:
 env:
   CARGO_TERM_COLOR: always
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          components: clippy
-          profile: minimal
-          toolchain: 1.78.0
       - name: Install Rust (nightly)
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@nightly
         with:
           components: rustfmt
-          profile: minimal
           toolchain: nightly
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.85
+        with:
+          components: clippy
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -51,11 +51,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@nightly
         with:
           components: miri
-          profile: minimal
-          toolchain: nightly
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@v1
       - name: Install cargo-nextest
@@ -72,12 +70,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
+        uses: dtolnay/rust-toolchain@1.85
       - name: Setup Rust cache
-        uses: Swatinem/rust-cache@v1
+        uses: Swatinem/rust-cache@v2
       - name: Install cargo-nextest
         uses: taiki-e/install-action@v2
         with:

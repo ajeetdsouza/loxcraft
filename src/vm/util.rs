@@ -23,6 +23,7 @@ pub fn now() -> f64 {
         .as_secs_f64()
 }
 
+#[inline(always)]
 pub const fn unreachable() -> ! {
     if cfg!(debug_assertions) { unreachable!() } else { unsafe { hint::unreachable_unchecked() } }
 }
