@@ -31,7 +31,7 @@ cargo install loxcraft --locked
 
 ![Screenshot of REPL](https://user-images.githubusercontent.com/1777663/216910834-4ea40427-34d7-43e0-8ba0-06638dfb0fa2.png)
 
-![Screenshot of online playground](https://user-images.githubusercontent.com/1777663/201918922-39b567fe-9375-4990-8224-e540cf3266bc.png)
+![Screenshot of online playground](https://github.com/user-attachments/assets/3e798ad4-a299-40e0-9d3d-41b3eeeda44b)
 
 ## Benchmarks
 
