@@ -620,10 +620,8 @@ impl Compiler {
             offset.try_into().map_err(|_| (OverflowError::JumpTooLarge.into(), span.clone()))?;
         let offset = u16::to_le_bytes(offset);
         unsafe {
-            [
-                (*self.ctx.function).chunk.ops[offset_idx],
-                (*self.ctx.function).chunk.ops[offset_idx + 1],
-            ] = offset
+            let ops = &mut (*self.ctx.function).chunk.ops;
+            [ops[offset_idx], ops[offset_idx + 1]] = offset
         };
         Ok(())
     }

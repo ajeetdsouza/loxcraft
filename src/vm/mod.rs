@@ -248,7 +248,7 @@ impl VM {
 
     fn op_get_upvalue(&mut self) -> Result<()> {
         let upvalue_idx = self.read_u8() as usize;
-        let object = *unsafe { (*self.frame.closure).upvalues.get_unchecked(upvalue_idx) };
+        let object = *unsafe { (&(*self.frame.closure).upvalues).get_unchecked(upvalue_idx) };
         let value = unsafe { *(*object).location };
         self.push(value);
         Ok(())
@@ -256,7 +256,7 @@ impl VM {
 
     fn op_set_upvalue(&mut self) -> Result<()> {
         let upvalue_idx = self.read_u8() as usize;
-        let object = *unsafe { (*self.frame.closure).upvalues.get_unchecked(upvalue_idx) };
+        let object = *unsafe { (&(*self.frame.closure).upvalues).get_unchecked(upvalue_idx) };
         let value = unsafe { (*object).location };
         unsafe { *value = *self.peek(0) };
         Ok(())
@@ -504,7 +504,7 @@ impl VM {
                 let location = unsafe { self.frame.stack.add(upvalue_idx) };
                 self.capture_upvalue(location)
             } else {
-                unsafe { *(*self.frame.closure).upvalues.get_unchecked(upvalue_idx) }
+                *unsafe { (&(*self.frame.closure).upvalues).get_unchecked(upvalue_idx) }
             };
             upvalues.push(upvalue);
         }
@@ -727,7 +727,7 @@ impl VM {
     fn read_value(&mut self) -> Value {
         let constant_idx = self.read_u8() as usize;
         let function = unsafe { (*self.frame.closure).function };
-        *unsafe { (*function).chunk.constants.get_unchecked(constant_idx) }
+        *unsafe { (&(*function).chunk.constants).get_unchecked(constant_idx) }
     }
 
     /// Pushes a [`Value`] to the stack.
@@ -776,7 +776,7 @@ impl VM {
     fn err(&self, err: impl Into<Error>) -> Result<()> {
         let function = unsafe { (*self.frame.closure).function };
         let idx = unsafe { self.frame.ip.offset_from((*function).chunk.ops.as_ptr()) } as usize;
-        let span = unsafe { (*function).chunk.spans[idx - 1].clone() };
+        let span = unsafe { (&(*function).chunk.spans)[idx - 1].clone() };
         Err((err.into(), span))
     }
 }
