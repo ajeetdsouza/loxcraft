@@ -6,6 +6,7 @@ mod object;
 mod op;
 mod util;
 mod value;
+pub mod vecmap;
 
 use std::hash::BuildHasherDefault;
 use std::io::Write;

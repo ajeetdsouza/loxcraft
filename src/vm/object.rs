@@ -1,12 +1,9 @@
 use std::fmt::{self, Debug, Display, Formatter};
-use std::hash::BuildHasherDefault;
 use std::mem;
-
-use hashbrown::HashMap;
-use rustc_hash::FxHasher;
 
 use crate::vm::chunk::Chunk;
 use crate::vm::value::Value;
+use crate::vm::vecmap::FxVecMap;
 
 const _: () = assert!(mem::size_of::<Object>() == 4 || mem::size_of::<Object>() == 8);
 
@@ -177,13 +174,13 @@ impl ObjectBoundMethod {
 pub struct ObjectClass {
     pub common: ObjectCommon,
     pub name: *mut ObjectString,
-    pub methods: HashMap<*mut ObjectString, *mut ObjectClosure, BuildHasherDefault<FxHasher>>,
+    pub methods: FxVecMap<*mut ObjectString, *mut ObjectClosure>,
 }
 
 impl ObjectClass {
     pub fn new(name: *mut ObjectString) -> Self {
         let common = ObjectCommon { type_: ObjectType::Class, is_marked: false };
-        Self { common, name, methods: HashMap::default() }
+        Self { common, name, methods: FxVecMap::default() }
     }
 }
 
@@ -224,13 +221,13 @@ impl ObjectFunction {
 pub struct ObjectInstance {
     pub common: ObjectCommon,
     pub class: *mut ObjectClass,
-    pub fields: HashMap<*mut ObjectString, Value, BuildHasherDefault<FxHasher>>,
+    pub fields: FxVecMap<*mut ObjectString, Value>,
 }
 
 impl ObjectInstance {
     pub fn new(class: *mut ObjectClass) -> Self {
         let common = ObjectCommon { type_: ObjectType::Instance, is_marked: false };
-        Self { common, class, fields: HashMap::default() }
+        Self { common, class, fields: FxVecMap::default() }
     }
 }
 
