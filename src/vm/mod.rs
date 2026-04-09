@@ -22,6 +22,7 @@ use rustc_hash::FxHasher;
 use crate::error::{
     AttributeError, Error, ErrorS, IoError, NameError, OverflowError, Result, TypeError,
 };
+use crate::syntax::ast::{OpInfix, OpPrefix};
 use crate::vm::allocator::GLOBAL;
 use crate::vm::gc::GcAlloc;
 use crate::vm::object::{
@@ -29,6 +30,24 @@ use crate::vm::object::{
     ObjectNative, ObjectString, ObjectType, ObjectUpvalue,
 };
 use crate::vm::value::Value;
+
+macro_rules! binary_op_number {
+    ($self:ident, $op:tt, $op_infix:expr) => {{
+        let b = $self.pop();
+        let a_ptr = $self.peek(0);
+        let a = unsafe { *a_ptr };
+        if a.is_number() && b.is_number() {
+            unsafe { *a_ptr = Value::from(a.as_number() $op b.as_number()) };
+            Ok(())
+        } else {
+            $self.err(TypeError::UnsupportedOperandInfix {
+                op: $op_infix,
+                lt_type: a.type_().to_string(),
+                rt_type: b.type_().to_string(),
+            })
+        }
+    }};
+}
 
 const GC_HEAP_GROW_FACTOR: usize = 2;
 const FRAMES_MAX: usize = 64;
@@ -281,14 +300,12 @@ impl VM {
 
         match unsafe { (*instance).fields.get(&name) } {
             Some(&field) => {
-                self.pop();
-                self.push(field);
+                unsafe { *self.peek(0) = field };
             }
             None => match unsafe { (*(*instance).class).methods.get(&name) } {
                 Some(&method) => {
                     let bound_method = self.alloc(ObjectBoundMethod::new(instance, method));
-                    self.pop();
-                    self.push(bound_method.into());
+                    unsafe { *self.peek(0) = Value::from(bound_method) };
                 }
                 None => {
                     return self.err(AttributeError::NoSuchAttribute {
@@ -329,8 +346,7 @@ impl VM {
             Some(&method) => {
                 let instance = unsafe { (*self.peek(0)).as_object().instance };
                 let bound_method = self.alloc(ObjectBoundMethod::new(instance, method));
-                self.pop();
-                self.push(bound_method.into());
+                unsafe { *self.peek(0) = Value::from(bound_method) };
             }
             None => {
                 return self.err(AttributeError::NoSuchAttribute {
@@ -343,85 +359,91 @@ impl VM {
     }
 
     fn op_equal(&mut self) -> Result<()> {
-        self.binary_op(|a, b| Value::from(a == b));
+        let b = self.pop();
+        let a_ptr = self.peek(0);
+        unsafe { *a_ptr = Value::from(*a_ptr == b) };
         Ok(())
     }
 
     fn op_not_equal(&mut self) -> Result<()> {
-        self.binary_op(|a, b| Value::from(a != b));
+        let b = self.pop();
+        let a_ptr = self.peek(0);
+        unsafe { *a_ptr = Value::from(*a_ptr != b) };
         Ok(())
     }
 
     fn op_greater(&mut self) -> Result<()> {
-        self.binary_op_number(|a, b| Value::from(a > b), ">")
+        binary_op_number!(self, >, OpInfix::Greater)
     }
 
     fn op_greater_equal(&mut self) -> Result<()> {
-        self.binary_op_number(|a, b| Value::from(a >= b), ">=")
+        binary_op_number!(self, >=, OpInfix::GreaterEqual)
     }
 
     fn op_less(&mut self) -> Result<()> {
-        self.binary_op_number(|a, b| Value::from(a < b), "<")
+        binary_op_number!(self, <, OpInfix::Less)
     }
 
     fn op_less_equal(&mut self) -> Result<()> {
-        self.binary_op_number(|a, b| Value::from(a <= b), "<=")
+        binary_op_number!(self, <=, OpInfix::LessEqual)
     }
 
     fn op_add(&mut self) -> Result<()> {
         let b = self.pop();
-        let a = self.pop();
+        let a_ptr = self.peek(0);
+        let a = unsafe { *a_ptr };
 
         if a.is_number() && b.is_number() {
-            self.push((a.as_number() + b.as_number()).into());
+            unsafe { *a_ptr = Value::from(a.as_number() + b.as_number()) };
             return Ok(());
         }
 
         if a.is_object() && b.is_object() {
-            let a = a.as_object();
-            let b = b.as_object();
+            let a_obj = a.as_object();
+            let b_obj = b.as_object();
 
-            if a.type_() == ObjectType::String && b.type_() == ObjectType::String {
-                let result = unsafe { [(*a.string).value, (*b.string).value] }.concat();
+            if a_obj.type_() == ObjectType::String && b_obj.type_() == ObjectType::String {
+                let result = unsafe { [(*a_obj.string).value, (*b_obj.string).value] }.concat();
                 let result = Value::from(self.alloc(result));
-                self.push(result);
+                unsafe { *a_ptr = result };
                 return Ok(());
             }
         }
 
         self.err(TypeError::UnsupportedOperandInfix {
-            op: "+".to_string(),
+            op: OpInfix::Add,
             lt_type: a.type_().to_string(),
             rt_type: b.type_().to_string(),
         })
     }
 
     fn op_subtract(&mut self) -> Result<()> {
-        self.binary_op_number(|a, b| Value::from(a - b), "-")
+        binary_op_number!(self, -, OpInfix::Subtract)
     }
 
     fn op_multiply(&mut self) -> Result<()> {
-        self.binary_op_number(|a, b| Value::from(a * b), "*")
+        binary_op_number!(self, *, OpInfix::Multiply)
     }
 
     fn op_divide(&mut self) -> Result<()> {
-        self.binary_op_number(|a, b| Value::from(a / b), "/")
+        binary_op_number!(self, /, OpInfix::Divide)
     }
 
     fn op_not(&mut self) -> Result<()> {
-        let value = self.pop();
-        self.push(!value);
+        let a_ptr = self.peek(0);
+        unsafe { *a_ptr = !*a_ptr };
         Ok(())
     }
 
     fn op_negate(&mut self) -> Result<()> {
-        let value = self.pop();
+        let a_ptr = self.peek(0);
+        let value = unsafe { *a_ptr };
         if value.is_number() {
-            self.push(Value::from(-value.as_number()));
+            unsafe { *a_ptr = Value::from(-value.as_number()) };
             Ok(())
         } else {
             self.err(TypeError::UnsupportedOperandPrefix {
-                op: "-".to_string(),
+                op: OpPrefix::Negate,
                 rt_type: value.type_().to_string(),
             })
         }
@@ -510,8 +532,8 @@ impl VM {
             upvalues.push(upvalue);
         }
 
-        let closure = self.alloc(ObjectClosure::new(function, upvalues));
-        self.push(closure.into());
+        let closure = Value::from(self.alloc(ObjectClosure::new(function, upvalues)));
+        self.push(closure);
         Ok(())
     }
 
@@ -524,7 +546,7 @@ impl VM {
 
     fn op_class(&mut self) -> Result<()> {
         let name = unsafe { self.read_value().as_object().string };
-        let class = self.alloc(ObjectClass::new(name)).into();
+        let class = Value::from(self.alloc(ObjectClass::new(name)));
         self.push(class);
         Ok(())
     }
@@ -623,7 +645,7 @@ impl VM {
         method: *mut ObjectBoundMethod,
         arg_count: usize,
     ) -> Result<()> {
-        unsafe { *self.peek(arg_count) = (*method).this.into() };
+        unsafe { *self.peek(arg_count) = Value::from((*method).this) };
         self.call_closure(unsafe { (*method).closure }, arg_count)
     }
 
@@ -678,36 +700,11 @@ impl VM {
                         got_args: arg_count,
                     });
                 }
-                util::now().into()
+                Value::from(util::now())
             }
         };
         self.push(value);
         Ok(())
-    }
-
-    /// Binary operator that acts on any [`Value`].
-    fn binary_op(&mut self, op: fn(Value, Value) -> Value) {
-        let b = self.pop();
-        let a = self.pop();
-        self.push(op(a, b));
-    }
-
-    /// Binary operator that acts on numbers.
-    fn binary_op_number(&mut self, op: fn(f64, f64) -> Value, op_str: &str) -> Result<()> {
-        let b = self.pop();
-        let a = self.pop();
-
-        if a.is_number() && b.is_number() {
-            let value = op(a.as_number(), b.as_number());
-            self.push(value);
-            Ok(())
-        } else {
-            self.err(TypeError::UnsupportedOperandInfix {
-                op: op_str.to_string(),
-                lt_type: a.type_().to_string(),
-                rt_type: b.type_().to_string(),
-            })
-        }
     }
 
     /// Reads an instruction / byte from the current [`Chunk`].
@@ -739,7 +736,7 @@ impl VM {
 
     /// Pops a [`Value`] from the stack.
     fn pop(&mut self) -> Value {
-        self.stack_top = unsafe { self.stack_top.sub(1) };
+        self.stack_top = self.peek(0);
         unsafe { *self.stack_top }
     }
 

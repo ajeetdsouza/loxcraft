@@ -2,7 +2,7 @@ use std::ops::Index;
 
 use arrayvec::ArrayVec;
 
-use crate::error::{OverflowError, Result};
+use crate::error::{Error, OverflowError, Result};
 use crate::types::Span;
 use crate::vm::op;
 use crate::vm::value::Value;
@@ -32,7 +32,7 @@ impl Chunk {
                 self.constants.len() - 1
             }
         };
-        Ok(idx.try_into().expect("constant index overflow"))
+        Ok(u8::try_from(idx).expect("constant index overflow"))
     }
 
     pub fn debug(&self, name: &str) {

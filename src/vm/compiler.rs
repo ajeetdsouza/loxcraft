@@ -3,7 +3,7 @@ use std::mem;
 
 use arrayvec::ArrayVec;
 
-use crate::error::{ErrorS, NameError, OverflowError, Result, SyntaxError};
+use crate::error::{Error, ErrorS, NameError, OverflowError, Result, SyntaxError};
 use crate::syntax::ast::{
     Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Stmt, StmtFun, StmtReturn, StmtS,
 };
@@ -66,7 +66,7 @@ impl Compiler {
             Stmt::Class(class) => {
                 let has_super = class.super_.is_some();
 
-                let name = gc.alloc(&class.name).into();
+                let name = Value::from(gc.alloc(&class.name));
                 self.emit_u8(op::CLASS, span);
                 self.emit_constant(name, span)?;
 
@@ -115,7 +115,7 @@ impl Compiler {
                         };
                         self.compile_function(method, span, type_, gc)?;
 
-                        let name = gc.alloc(&method.name).into();
+                        let name = Value::from(gc.alloc(&method.name));
                         self.emit_u8(op::METHOD, span);
                         self.emit_constant(name, span)?;
                     }
@@ -178,7 +178,7 @@ impl Compiler {
             Stmt::Fun(fun) => {
                 self.compile_function(fun, span, FunctionType::Function, gc)?;
                 if self.is_global() {
-                    let name = gc.alloc(&fun.name).into();
+                    let name = Value::from(gc.alloc(&fun.name));
                     self.emit_u8(op::DEFINE_GLOBAL, span);
                     self.emit_constant(name, span)?;
                 } else {
@@ -235,13 +235,13 @@ impl Compiler {
             Stmt::Var(var) => {
                 let name = &var.var.name;
                 if self.is_global() {
-                    let name = gc.alloc(name);
+                    let name = Value::from(gc.alloc(name));
                     match &var.value {
                         Some(value) => self.compile_expr(value, gc)?,
                         None => self.emit_u8(op::NIL, span),
                     }
                     self.emit_u8(op::DEFINE_GLOBAL, span);
-                    self.emit_constant(name.into(), span)?;
+                    self.emit_constant(name, span)?;
                 } else {
                     self.declare_local(name, span)?;
                     match &var.value {
@@ -321,12 +321,12 @@ impl Compiler {
         }
 
         let (function, upvalues) = self.end_ctx();
-        let value = function.into();
+        let value = Value::from(function);
         self.emit_u8(op::CLOSURE, span);
         self.emit_constant(value, span)?;
 
         for upvalue in &upvalues {
-            self.emit_u8(upvalue.is_local.into(), span);
+            self.emit_u8(u8::from(upvalue.is_local), span);
             self.emit_u8(upvalue.idx, span);
         }
 
@@ -354,7 +354,7 @@ impl Compiler {
                             self.compile_expr(arg, gc)?;
                         }
 
-                        let name = gc.alloc(&get.name).into();
+                        let name = Value::from(gc.alloc(&get.name));
                         self.emit_u8(op::INVOKE, span);
                         self.emit_constant(name, span)?;
                         self.emit_u8(arg_count, span);
@@ -370,7 +370,7 @@ impl Compiler {
                             }
                             self.get_variable("super", span, gc)?;
 
-                            let name = gc.alloc(&super_.name).into();
+                            let name = Value::from(gc.alloc(&super_.name));
                             self.emit_u8(op::SUPER_INVOKE, span);
                             self.emit_constant(name, span)?;
                             self.emit_u8(arg_count, span);
@@ -393,7 +393,7 @@ impl Compiler {
             Expr::Get(get) => {
                 self.compile_expr(&get.object, gc)?;
 
-                let name = gc.alloc(&get.name).into();
+                let name = Value::from(gc.alloc(&get.name));
                 self.emit_u8(op::GET_PROPERTY, span);
                 self.emit_constant(name, span)?;
             }
@@ -475,14 +475,14 @@ impl Compiler {
                 ExprLiteral::Bool(false) => self.emit_u8(op::FALSE, span),
                 ExprLiteral::Nil => self.emit_u8(op::NIL, span),
                 ExprLiteral::Number(number) => {
-                    let value = (*number).into();
+                    let value = Value::from(*number);
                     self.emit_u8(op::CONSTANT, span);
                     self.emit_constant(value, span)?;
                 }
                 ExprLiteral::String(string) => {
                     let string = gc.alloc(string);
                     unsafe { (*string).common.is_marked = true };
-                    let value = string.into();
+                    let value = Value::from(string);
                     self.emit_u8(op::CONSTANT, span);
                     self.emit_constant(value, span)?;
                 }
@@ -498,7 +498,7 @@ impl Compiler {
                 self.compile_expr(&set.value, gc)?;
                 self.compile_expr(&set.object, gc)?;
 
-                let name = gc.alloc(&set.name).into();
+                let name = Value::from(gc.alloc(&set.name));
                 self.emit_u8(op::SET_PROPERTY, span);
                 self.emit_constant(name, span)?;
             }
@@ -507,7 +507,7 @@ impl Compiler {
                     return Err((SyntaxError::SuperWithoutSuperclass.into(), span.clone()));
                 }
                 Some(_) => {
-                    let name = gc.alloc(&super_.name).into();
+                    let name = Value::from(gc.alloc(&super_.name));
                     self.get_variable("this", span, gc)?;
                     self.get_variable("super", span, gc)?;
                     self.emit_u8(op::GET_SUPER, span);
@@ -544,9 +544,9 @@ impl Compiler {
             self.emit_u8(op::GET_UPVALUE, span);
             self.emit_u8(upvalue_idx, span);
         } else {
-            let name = gc.alloc(name);
+            let name = Value::from(gc.alloc(name));
             self.emit_u8(op::GET_GLOBAL, span);
-            self.emit_constant(name.into(), span)?;
+            self.emit_constant(name, span)?;
         }
         Ok(())
     }
@@ -559,9 +559,9 @@ impl Compiler {
             self.emit_u8(op::SET_UPVALUE, span);
             self.emit_u8(upvalue_idx, span);
         } else {
-            let name = gc.alloc(name);
+            let name = Value::from(gc.alloc(name));
             self.emit_u8(op::SET_GLOBAL, span);
-            self.emit_constant(name.into(), span)?;
+            self.emit_constant(name, span)?;
         }
         Ok(())
     }
@@ -616,8 +616,8 @@ impl Compiler {
     fn patch_jump(&mut self, offset_idx: usize, span: &Span) -> Result<()> {
         // The extra -2 is to account for the space taken by the offset.
         let offset = unsafe { (*self.ctx.function).chunk.ops.len() - 2 - offset_idx };
-        let offset =
-            offset.try_into().map_err(|_| (OverflowError::JumpTooLarge.into(), span.clone()))?;
+        let offset = u16::try_from(offset)
+            .map_err(|_| (OverflowError::JumpTooLarge.into(), span.clone()))?;
         let offset = u16::to_le_bytes(offset);
         unsafe {
             let ops = &mut (*self.ctx.function).chunk.ops;
@@ -634,8 +634,8 @@ impl Compiler {
         // The extra +3 is to account for the space taken by the instruction and
         // the offset.
         let offset = unsafe { (*self.ctx.function).chunk.ops.len() } + 3 - start_idx;
-        let offset =
-            offset.try_into().map_err(|_| (OverflowError::JumpTooLarge.into(), span.clone()))?;
+        let offset = u16::try_from(offset)
+            .map_err(|_| (OverflowError::JumpTooLarge.into(), span.clone()))?;
         let offset = u16::to_le_bytes(offset);
 
         self.emit_u8(op::LOOP, span);
@@ -701,7 +701,7 @@ impl CompilerCtx {
                     if capture {
                         local.is_captured = true;
                     }
-                    Ok(Some(idx.try_into().expect("local index overflow")))
+                    Ok(Some(u8::try_from(idx).expect("local index overflow")))
                 } else {
                     Err((
                         NameError::AccessInsideInitializer { name: name.to_string() }.into(),
@@ -748,13 +748,13 @@ impl CompilerCtx {
                 let upvalues = self.upvalues.len();
                 unsafe {
                     (*self.function).upvalue_count =
-                        upvalues.try_into().expect("upvalue index overflow")
+                        u16::try_from(upvalues).expect("upvalue index overflow")
                 };
                 upvalues - 1
             }
         };
 
-        Ok(upvalue_idx.try_into().expect("upvalue index overflow"))
+        Ok(u8::try_from(upvalue_idx).expect("upvalue index overflow"))
     }
 }
 

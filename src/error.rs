@@ -6,6 +6,7 @@ use codespan_reporting::term;
 use termcolor::WriteColor;
 use thiserror::Error;
 
+use crate::syntax::ast::{OpInfix, OpPrefix};
 use crate::types::{Span, Spanned};
 
 pub type Result<T, E = ErrorS> = std::result::Result<T, E>;
@@ -184,9 +185,9 @@ pub enum TypeError {
     #[error(r#"superclass should be of type "class", not {type_:?}"#)]
     SuperclassInvalidType { type_: String },
     #[error("unsupported operand type(s) for {op}: {lt_type:?} and {rt_type:?}")]
-    UnsupportedOperandInfix { op: String, lt_type: String, rt_type: String },
+    UnsupportedOperandInfix { op: OpInfix, lt_type: String, rt_type: String },
     #[error("unsupported operand type for {op}: {rt_type:?}")]
-    UnsupportedOperandPrefix { op: String, rt_type: String },
+    UnsupportedOperandPrefix { op: OpPrefix, rt_type: String },
 }
 
 impl AsDiagnostic for TypeError {
