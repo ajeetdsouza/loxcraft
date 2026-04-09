@@ -15,9 +15,9 @@ use tree_sitter_lox::{self, HIGHLIGHTS_QUERY};
 use crate::vm::VM;
 
 pub fn run() -> Result<()> {
-    let mut vm = VM::default();
+    let mut stdout = io::stdout().lock();
+    let mut vm = VM::new(&mut stdout);
     let mut editor = editor().context("could not start REPL")?;
-    let stdout = &mut io::stdout().lock();
     let stderr = &mut io::stderr().lock();
 
     loop {
@@ -26,7 +26,7 @@ pub fn run() -> Result<()> {
 
         match line {
             Ok(Signal::Success(line)) => {
-                if let Err(errors) = vm.run(&line, stdout) {
+                if let Err(errors) = vm.run(&line) {
                     crate::error::report_errors(stderr, &vm.source, &errors)
                 }
             }

@@ -40,7 +40,7 @@ macro_rules! binary_op_number {
             unsafe { *a_ptr = Value::from(a.as_number() $op b.as_number()) };
             Ok(())
         } else {
-            $self.err($ip, TypeError::UnsupportedOperandInfix {
+            $self.err(*$ip, TypeError::UnsupportedOperandInfix {
                 op: $op_infix,
                 lt_type: a.type_().to_string(),
                 rt_type: b.type_().to_string(),
@@ -54,8 +54,7 @@ const FRAMES_MAX: usize = 64;
 const STACK_MAX: usize = FRAMES_MAX * STACK_MAX_PER_FRAME;
 const STACK_MAX_PER_FRAME: usize = u8::MAX as usize + 1;
 
-#[derive(Debug)]
-pub struct VM {
+pub struct VM<'a> {
     pub globals: HashMap<*mut ObjectString, Value, BuildHasherDefault<FxHasher>>,
     pub open_upvalues: Vec<*mut ObjectUpvalue>,
 
@@ -82,10 +81,41 @@ pub struct VM {
 
     init_string: *mut ObjectString,
     pub source: String,
+
+    stdout: &'a mut dyn Write,
 }
 
-impl VM {
-    pub fn run(&mut self, source: &str, stdout: &mut impl Write) -> Result<(), Vec<ErrorS>> {
+impl<'a> VM<'a> {
+    pub fn new(stdout: &'a mut dyn Write) -> Self {
+        let mut gc = Gc::default();
+
+        let mut globals = HashMap::with_capacity_and_hasher(256, BuildHasherDefault::default());
+        let clock_string = gc.alloc("clock");
+        let clock_native = Value::from(gc.alloc(ObjectNative::new(Native::Clock)));
+        globals.insert(clock_string, clock_native);
+
+        let init_string = gc.alloc("init");
+
+        Self {
+            globals,
+            open_upvalues: Vec::with_capacity(256),
+            gc,
+            next_gc: 1024 * 1024,
+            frames: ArrayVec::new(),
+            frame: CallFrame {
+                closure: ptr::null_mut(),
+                ip: ptr::null_mut(),
+                stack: ptr::null_mut(),
+            },
+            stack: Box::new([Value::default(); STACK_MAX]),
+            stack_top: ptr::null_mut(),
+            init_string,
+            source: String::new(),
+            stdout,
+        }
+    }
+
+    pub fn run(&mut self, source: &str) -> Result<(), Vec<ErrorS>> {
         let offset = self.source.len();
 
         self.source.reserve(source.len() + 1);
@@ -93,17 +123,13 @@ impl VM {
         self.source.push('\n');
 
         let function = Compiler::compile(source, offset, &mut self.gc)?;
-        match self.run_function(function, stdout) {
+        match self.run_function(function) {
             Ok(()) | Err((Error::Halt, _)) => Ok(()),
             Err(e) => Err(vec![e]),
         }
     }
 
-    fn run_function(
-        &mut self,
-        function: *mut ObjectFunction,
-        stdout: &mut impl Write,
-    ) -> Result<()> {
+    fn run_function(&mut self, function: *mut ObjectFunction) -> Result<()> {
         self.stack_top = self.stack.as_mut_ptr();
 
         self.frames.clear();
@@ -123,10 +149,10 @@ impl VM {
 
             match Self::read_u8(&mut ip) {
                 op::CONSTANT => self.op_constant(&mut ip),
-                op::NIL => self.op_nil(),
-                op::TRUE => self.op_true(),
-                op::FALSE => self.op_false(),
-                op::POP => self.op_pop(),
+                op::NIL => self.op_nil(&mut ip),
+                op::TRUE => self.op_true(&mut ip),
+                op::FALSE => self.op_false(&mut ip),
+                op::POP => self.op_pop(&mut ip),
                 op::GET_LOCAL => self.op_get_local(&mut ip),
                 op::SET_LOCAL => self.op_set_local(&mut ip),
                 op::GET_GLOBAL => self.op_get_global(&mut ip),
@@ -137,19 +163,19 @@ impl VM {
                 op::GET_PROPERTY => self.op_get_property(&mut ip),
                 op::SET_PROPERTY => self.op_set_property(&mut ip),
                 op::GET_SUPER => self.op_get_super(&mut ip),
-                op::EQUAL => self.op_equal(),
-                op::NOT_EQUAL => self.op_not_equal(),
-                op::GREATER => self.op_greater(ip),
-                op::GREATER_EQUAL => self.op_greater_equal(ip),
-                op::LESS => self.op_less(ip),
-                op::LESS_EQUAL => self.op_less_equal(ip),
-                op::ADD => self.op_add(ip),
-                op::SUBTRACT => self.op_subtract(ip),
-                op::MULTIPLY => self.op_multiply(ip),
-                op::DIVIDE => self.op_divide(ip),
-                op::NOT => self.op_not(),
-                op::NEGATE => self.op_negate(ip),
-                op::PRINT => self.op_print(ip, stdout),
+                op::EQUAL => self.op_equal(&mut ip),
+                op::NOT_EQUAL => self.op_not_equal(&mut ip),
+                op::GREATER => self.op_greater(&mut ip),
+                op::GREATER_EQUAL => self.op_greater_equal(&mut ip),
+                op::LESS => self.op_less(&mut ip),
+                op::LESS_EQUAL => self.op_less_equal(&mut ip),
+                op::ADD => self.op_add(&mut ip),
+                op::SUBTRACT => self.op_subtract(&mut ip),
+                op::MULTIPLY => self.op_multiply(&mut ip),
+                op::DIVIDE => self.op_divide(&mut ip),
+                op::NOT => self.op_not(&mut ip),
+                op::NEGATE => self.op_negate(&mut ip),
+                op::PRINT => self.op_print(&mut ip),
                 op::JUMP => self.op_jump(&mut ip),
                 op::JUMP_IF_FALSE => self.op_jump_if_false(&mut ip),
                 op::LOOP => self.op_loop(&mut ip),
@@ -157,10 +183,10 @@ impl VM {
                 op::INVOKE => self.op_invoke(&mut ip),
                 op::SUPER_INVOKE => self.op_super_invoke(&mut ip),
                 op::CLOSURE => self.op_closure(&mut ip),
-                op::CLOSE_UPVALUE => self.op_close_upvalue(),
+                op::CLOSE_UPVALUE => self.op_close_upvalue(&mut ip),
                 op::RETURN => self.op_return(&mut ip),
                 op::CLASS => self.op_class(&mut ip),
-                op::INHERIT => self.op_inherit(ip),
+                op::INHERIT => self.op_inherit(&mut ip),
                 op::METHOD => self.op_method(&mut ip),
                 _ => util::unreachable(),
             }?;
@@ -183,22 +209,22 @@ impl VM {
         Ok(())
     }
 
-    fn op_nil(&mut self) -> Result<()> {
+    fn op_nil(&mut self, _ip: &mut *const u8) -> Result<()> {
         self.push(Value::NIL);
         Ok(())
     }
 
-    fn op_true(&mut self) -> Result<()> {
+    fn op_true(&mut self, _ip: &mut *const u8) -> Result<()> {
         self.push(Value::TRUE);
         Ok(())
     }
 
-    fn op_false(&mut self) -> Result<()> {
+    fn op_false(&mut self, _ip: &mut *const u8) -> Result<()> {
         self.push(Value::FALSE);
         Ok(())
     }
 
-    fn op_pop(&mut self) -> Result<()> {
+    fn op_pop(&mut self, _ip: &mut *const u8) -> Result<()> {
         self.pop();
         Ok(())
     }
@@ -356,37 +382,37 @@ impl VM {
         Ok(())
     }
 
-    fn op_equal(&mut self) -> Result<()> {
+    fn op_equal(&mut self, _ip: &mut *const u8) -> Result<()> {
         let b = self.pop();
         let a_ptr = self.peek(0);
         unsafe { *a_ptr = Value::from(*a_ptr == b) };
         Ok(())
     }
 
-    fn op_not_equal(&mut self) -> Result<()> {
+    fn op_not_equal(&mut self, _ip: &mut *const u8) -> Result<()> {
         let b = self.pop();
         let a_ptr = self.peek(0);
         unsafe { *a_ptr = Value::from(*a_ptr != b) };
         Ok(())
     }
 
-    fn op_greater(&mut self, ip: *const u8) -> Result<()> {
+    fn op_greater(&mut self, ip: &mut *const u8) -> Result<()> {
         binary_op_number!(self, ip, >, OpInfix::Greater)
     }
 
-    fn op_greater_equal(&mut self, ip: *const u8) -> Result<()> {
+    fn op_greater_equal(&mut self, ip: &mut *const u8) -> Result<()> {
         binary_op_number!(self, ip, >=, OpInfix::GreaterEqual)
     }
 
-    fn op_less(&mut self, ip: *const u8) -> Result<()> {
+    fn op_less(&mut self, ip: &mut *const u8) -> Result<()> {
         binary_op_number!(self, ip, <, OpInfix::Less)
     }
 
-    fn op_less_equal(&mut self, ip: *const u8) -> Result<()> {
+    fn op_less_equal(&mut self, ip: &mut *const u8) -> Result<()> {
         binary_op_number!(self, ip, <=, OpInfix::LessEqual)
     }
 
-    fn op_add(&mut self, ip: *const u8) -> Result<()> {
+    fn op_add(&mut self, ip: &mut *const u8) -> Result<()> {
         let b = self.pop();
         let a_ptr = self.peek(0);
         let a = unsafe { *a_ptr };
@@ -409,7 +435,7 @@ impl VM {
         }
 
         self.err(
-            ip,
+            *ip,
             TypeError::UnsupportedOperandInfix {
                 op: OpInfix::Add,
                 lt_type: a.type_().to_string(),
@@ -418,25 +444,25 @@ impl VM {
         )
     }
 
-    fn op_subtract(&mut self, ip: *const u8) -> Result<()> {
+    fn op_subtract(&mut self, ip: &mut *const u8) -> Result<()> {
         binary_op_number!(self, ip, -, OpInfix::Subtract)
     }
 
-    fn op_multiply(&mut self, ip: *const u8) -> Result<()> {
+    fn op_multiply(&mut self, ip: &mut *const u8) -> Result<()> {
         binary_op_number!(self, ip, *, OpInfix::Multiply)
     }
 
-    fn op_divide(&mut self, ip: *const u8) -> Result<()> {
+    fn op_divide(&mut self, ip: &mut *const u8) -> Result<()> {
         binary_op_number!(self, ip, /, OpInfix::Divide)
     }
 
-    fn op_not(&mut self) -> Result<()> {
+    fn op_not(&mut self, _ip: &mut *const u8) -> Result<()> {
         let a_ptr = self.peek(0);
         unsafe { *a_ptr = !*a_ptr };
         Ok(())
     }
 
-    fn op_negate(&mut self, ip: *const u8) -> Result<()> {
+    fn op_negate(&mut self, ip: &mut *const u8) -> Result<()> {
         let a_ptr = self.peek(0);
         let value = unsafe { *a_ptr };
         if value.is_number() {
@@ -444,7 +470,7 @@ impl VM {
             Ok(())
         } else {
             self.err(
-                ip,
+                *ip,
                 TypeError::UnsupportedOperandPrefix {
                     op: OpPrefix::Negate,
                     rt_type: value.type_().to_string(),
@@ -453,10 +479,10 @@ impl VM {
         }
     }
 
-    fn op_print(&mut self, ip: *const u8, stdout: &mut impl Write) -> Result<()> {
+    fn op_print(&mut self, ip: &mut *const u8) -> Result<()> {
         let value = self.pop();
-        writeln!(stdout, "{value}")
-            .or_else(|_| self.err(ip, IoError::WriteError { file: "stdout".to_string() }))
+        writeln!(self.stdout, "{value}")
+            .or_else(|_| self.err(*ip, IoError::WriteError { file: "stdout".to_string() }))
     }
 
     fn op_jump(&mut self, ip: &mut *const u8) -> Result<()> {
@@ -547,7 +573,7 @@ impl VM {
         Ok(())
     }
 
-    fn op_close_upvalue(&mut self) -> Result<()> {
+    fn op_close_upvalue(&mut self, _ip: &mut *const u8) -> Result<()> {
         let last = self.peek(0);
         self.close_upvalues(last);
         self.pop();
@@ -577,7 +603,7 @@ impl VM {
         Ok(())
     }
 
-    fn op_inherit(&mut self, ip: *const u8) -> Result<()> {
+    fn op_inherit(&mut self, ip: &mut *const u8) -> Result<()> {
         let class = unsafe { self.pop().as_object().class };
         let super_ = {
             let value = unsafe { *self.peek(0) };
@@ -587,7 +613,7 @@ impl VM {
                 unsafe { object.class }
             } else {
                 return self.err(
-                    ip,
+                    *ip,
                     TypeError::SuperclassInvalidType { type_: value.type_().to_string() },
                 );
             }
@@ -833,36 +859,6 @@ impl VM {
         let idx = unsafe { ip.offset_from((*function).chunk.ops.as_ptr()) } as usize;
         let span = unsafe { (&(*function).chunk.spans)[idx - 1].clone() };
         Err((err.into(), span))
-    }
-}
-
-impl Default for VM {
-    fn default() -> Self {
-        let mut gc = Gc::default();
-
-        let mut globals = HashMap::with_capacity_and_hasher(256, BuildHasherDefault::default());
-        let clock_string = gc.alloc("clock");
-        let clock_native = Value::from(gc.alloc(ObjectNative::new(Native::Clock)));
-        globals.insert(clock_string, clock_native);
-
-        let init_string = gc.alloc("init");
-
-        Self {
-            globals,
-            open_upvalues: Vec::with_capacity(256),
-            gc,
-            next_gc: 1024 * 1024,
-            frames: ArrayVec::new(),
-            frame: CallFrame {
-                closure: ptr::null_mut(),
-                ip: ptr::null_mut(),
-                stack: ptr::null_mut(),
-            },
-            stack: Box::new([Value::default(); STACK_MAX]),
-            stack_top: ptr::null_mut(),
-            init_string,
-            source: String::new(),
-        }
     }
 }
 

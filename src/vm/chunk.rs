@@ -2,7 +2,7 @@ use std::ops::Index;
 
 use arrayvec::ArrayVec;
 
-use crate::error::{Error, OverflowError, Result};
+use crate::error::{OverflowError, Result};
 use crate::types::Span;
 use crate::vm::op;
 use crate::vm::value::Value;

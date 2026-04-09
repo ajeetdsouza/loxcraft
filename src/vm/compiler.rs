@@ -3,7 +3,7 @@ use std::mem;
 
 use arrayvec::ArrayVec;
 
-use crate::error::{Error, ErrorS, NameError, OverflowError, Result, SyntaxError};
+use crate::error::{ErrorS, NameError, OverflowError, Result, SyntaxError};
 use crate::syntax::ast::{
     Expr, ExprLiteral, ExprS, OpInfix, OpPrefix, Stmt, StmtFun, StmtReturn, StmtS,
 };

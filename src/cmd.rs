@@ -54,9 +54,9 @@ impl Cmd {
                         .with_context(|| format!("could not read source from file: {path}"))?
                 };
 
-                let mut vm = VM::default();
-                let stdout = &mut io::stdout().lock();
-                if let Err(e) = vm.run(&source, stdout) {
+                let mut stdout = io::stdout().lock();
+                let mut vm = VM::new(&mut stdout);
+                if let Err(e) = vm.run(&source) {
                     report_err(&source, e);
                     bail!("program exited with errors");
                 }

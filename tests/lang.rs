@@ -25,7 +25,7 @@ fn lox(path: &str) {
     }
 
     let mut got_output = Vec::new();
-    if let Err(e) = VM::default().run(&source, &mut got_output) {
+    if let Err(e) = VM::new(&mut got_output).run(&source) {
         let (e, _) = e.first().expect("received empty error");
         writeln!(&mut got_output, "{e}").expect("could not write to output");
     }
