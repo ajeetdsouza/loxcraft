@@ -719,9 +719,9 @@ impl VM {
 
     /// Reads a 16-bit value from the current [`Chunk`].
     fn read_u16(&mut self) -> u16 {
-        let byte1 = self.read_u8();
-        let byte2 = self.read_u8();
-        u16::from_le_bytes([byte1, byte2])
+        let value = unsafe { (self.frame.ip as *const u16).read_unaligned() };
+        self.frame.ip = unsafe { self.frame.ip.add(2) };
+        u16::from_le(value)
     }
 
     /// Reads a [`Value`] from the current [`Chunk`].
