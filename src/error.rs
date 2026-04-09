@@ -16,6 +16,8 @@ pub type ErrorS = Spanned<Error>;
 pub enum Error {
     #[error("AttributeError: {0}")]
     AttributeError(AttributeError),
+    #[error("")]
+    Halt,
     #[error("IOError: {0}")]
     IoError(IoError),
     #[error("NameError: {0}")]
@@ -32,6 +34,7 @@ impl AsDiagnostic for Error {
     fn as_diagnostic(&self, span: &Span) -> Diagnostic<()> {
         match self {
             Error::AttributeError(e) => e.as_diagnostic(span),
+            Error::Halt => unreachable!(),
             Error::IoError(e) => e.as_diagnostic(span),
             Error::NameError(e) => e.as_diagnostic(span),
             Error::OverflowError(e) => e.as_diagnostic(span),

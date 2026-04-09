@@ -1,7 +1,8 @@
-use hashbrown::{HashMap, hash_map};
-use rustc_hash::FxHasher;
 use std::hash::{BuildHasher, BuildHasherDefault, Hash};
 use std::slice;
+
+use hashbrown::{HashMap, hash_map};
+use rustc_hash::FxHasher;
 
 /// Max entries before spilling from Vec to HashMap.
 const VEC_MAP_SPILL: usize = 16;
@@ -24,14 +25,12 @@ impl<K, V, S> Default for VecMap<K, V, S> {
 }
 
 impl<K: Eq + Hash, V, S: BuildHasher + Default> VecMap<K, V, S> {
-
     pub fn get(&self, key: &K) -> Option<&V> {
         match self {
             Self::Vec(vec) => vec.iter().find(|(k, _)| k == key).map(|(_, v)| v),
             Self::Map(map) => map.get(key),
         }
     }
-
 
     pub fn insert(&mut self, key: K, value: V) {
         match self {
@@ -54,7 +53,6 @@ impl<K: Eq + Hash, V, S: BuildHasher + Default> VecMap<K, V, S> {
             }
         }
     }
-
 
     pub fn contains_key(&self, key: &K) -> bool {
         self.get(key).is_some()
@@ -82,7 +80,6 @@ pub enum VecMapIter<'a, K, V> {
 
 impl<'a, K, V> Iterator for VecMapIter<'a, K, V> {
     type Item = (&'a K, &'a V);
-
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {

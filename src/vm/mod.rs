@@ -93,9 +93,10 @@ impl VM {
         self.source.push('\n');
 
         let function = Compiler::compile(source, offset, &mut self.gc)?;
-        self.run_function(function, stdout).map_err(|e| vec![e])?;
-
-        Ok(())
+        match self.run_function(function, stdout) {
+            Ok(()) | Err((Error::Halt, _)) => Ok(()),
+            Err(e) => Err(vec![e]),
+        }
     }
 
     fn run_function(
@@ -157,20 +158,7 @@ impl VM {
                 op::SUPER_INVOKE => self.op_super_invoke(&mut ip),
                 op::CLOSURE => self.op_closure(&mut ip),
                 op::CLOSE_UPVALUE => self.op_close_upvalue(),
-                op::RETURN => {
-                    let value = self.pop();
-                    self.close_upvalues(self.frame.stack);
-
-                    self.stack_top = self.frame.stack;
-                    match self.frames.pop() {
-                        Some(frame) => self.frame = frame,
-                        None => break,
-                    }
-                    self.push(value);
-                    ip = self.frame.ip;
-
-                    Ok(())
-                }
+                op::RETURN => self.op_return(&mut ip),
                 op::CLASS => self.op_class(&mut ip),
                 op::INHERIT => self.op_inherit(ip),
                 op::METHOD => self.op_method(&mut ip),
@@ -187,12 +175,6 @@ impl VM {
                 eprintln!();
             }
         }
-
-        debug_assert_eq!(
-            self.frame.stack, self.stack_top,
-            "VM finished executing but stack is not empty"
-        );
-        Ok(())
     }
 
     fn op_constant(&mut self, ip: &mut *const u8) -> Result<()> {
@@ -572,6 +554,22 @@ impl VM {
         Ok(())
     }
 
+    fn op_return(&mut self, ip: &mut *const u8) -> Result<()> {
+        let value = self.pop();
+        self.close_upvalues(self.frame.stack);
+        self.stack_top = self.frame.stack;
+
+        match self.frames.pop() {
+            Some(frame) => {
+                self.frame = frame;
+                *ip = self.frame.ip;
+                self.push(value);
+                Ok(())
+            }
+            None => Err((Error::Halt, 0..0)),
+        }
+    }
+
     fn op_class(&mut self, ip: &mut *const u8) -> Result<()> {
         let name = unsafe { self.read_value(ip).as_object().string };
         let class = Value::from(self.alloc(ObjectClass::new(name)));
@@ -653,12 +651,7 @@ impl VM {
         }
     }
 
-    fn call_value(
-        &mut self,
-        ip: &mut *const u8,
-        value: Value,
-        arg_count: usize,
-    ) -> Result<()> {
+    fn call_value(&mut self, ip: &mut *const u8, value: Value, arg_count: usize) -> Result<()> {
         if value.is_object() {
             let object = value.as_object();
             match object.type_() {
@@ -666,14 +659,9 @@ impl VM {
                     self.call_bound_method(ip, unsafe { object.bound_method }, arg_count)
                 }
                 ObjectType::Class => self.call_class(ip, unsafe { object.class }, arg_count),
-                ObjectType::Closure => {
-                    self.call_closure(ip, unsafe { object.closure }, arg_count)
-                }
+                ObjectType::Closure => self.call_closure(ip, unsafe { object.closure }, arg_count),
                 ObjectType::Native => self.call_native(*ip, unsafe { object.native }, arg_count),
-                _ => self.err(
-                    *ip,
-                    TypeError::NotCallable { type_: value.type_().to_string() },
-                ),
+                _ => self.err(*ip, TypeError::NotCallable { type_: value.type_().to_string() }),
             }
         } else {
             self.err(*ip, TypeError::NotCallable { type_: value.type_().to_string() })
