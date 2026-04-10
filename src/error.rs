@@ -232,5 +232,6 @@ pub fn report_error(writer: &mut impl WriteColor, source: &str, (error, span): &
     let file = SimpleFile::new("<script>", source);
     let config = term::Config::default();
     let diagnostic = error.as_diagnostic(span);
-    term::emit(writer, &config, &file, &diagnostic).expect("failed to write to output");
+    term::emit_to_write_style(writer, &config, &file, &diagnostic)
+        .expect("failed to write to output");
 }

@@ -1,5 +1,3 @@
-use std::num::ParseFloatError;
-
 use logos::Logos;
 
 use crate::error::{Error, ErrorS, SyntaxError};
@@ -25,7 +23,7 @@ impl Iterator for Lexer<'_> {
         }
 
         match self.inner.next()? {
-            Token::Error => {
+            Err(()) => {
                 let mut span = self.inner.span();
 
                 // Check for unterminated string.
@@ -34,12 +32,14 @@ impl Iterator for Lexer<'_> {
                 }
 
                 // Recover error.
-                while let Some(token) = self.inner.next() {
+                while let Some(result) = self.inner.next() {
                     let span_new = self.inner.span();
                     if span.end == span_new.start {
                         span.end = span_new.end;
                     } else {
-                        self.pending = Some((span_new.start, token, span_new.end));
+                        if let Ok(token) = result {
+                            self.pending = Some((span_new.start, token, span_new.end));
+                        }
                         break;
                     }
                 }
@@ -51,7 +51,7 @@ impl Iterator for Lexer<'_> {
                     span,
                 )))
             }
-            token => {
+            Ok(token) => {
                 let span = self.inner.span();
                 Some(Ok((span.start, token, span.end)))
             }
@@ -60,6 +60,8 @@ impl Iterator for Lexer<'_> {
 }
 
 #[derive(Clone, Debug, Logos, PartialEq)]
+#[logos(skip(r"[ \r\n\t\f]+"))]
+#[logos(skip(r"//.*", allow_greedy = true))]
 pub enum Token {
     // Single-character tokens.
     #[token("(")]
@@ -104,12 +106,12 @@ pub enum Token {
     LessEqual,
 
     // Literals.
-    #[regex("[a-zA-Z_][a-zA-Z0-9_]*", lex_identifier)]
+    #[regex("[a-zA-Z_][a-zA-Z0-9_]*", lex_string)]
     Identifier(String),
-    #[regex(r#""[^"]*""#, lex_string)]
+    #[regex(r#""[^"]*""#, lex_quoted)]
     String(String),
-    #[regex(r#"[0-9]+(\.[0-9]+)?"#, lex_number)]
-    Number(f64),
+    #[regex(r#"[0-9]+(\.[0-9]+)?"#, lex_string)]
+    Number(String),
 
     // Keywords.
     #[token("and")]
@@ -144,24 +146,14 @@ pub enum Token {
     Var,
     #[token("while")]
     While,
-
-    #[regex(r"//.*", logos::skip)]
-    #[regex(r"[ \r\n\t\f]+", logos::skip)]
-    #[error]
-    Error,
 }
 
-fn lex_number(lexer: &mut logos::Lexer<Token>) -> Result<f64, ParseFloatError> {
-    let slice = lexer.slice();
-    slice.parse::<f64>()
-}
-
-fn lex_string(lexer: &mut logos::Lexer<Token>) -> String {
+fn lex_quoted(lexer: &mut logos::Lexer<Token>) -> String {
     let slice = lexer.slice();
     slice[1..slice.len() - 1].to_string()
 }
 
-fn lex_identifier(lexer: &mut logos::Lexer<Token>) -> String {
+fn lex_string(lexer: &mut logos::Lexer<Token>) -> String {
     let slice = lexer.slice();
     slice.to_string()
 }

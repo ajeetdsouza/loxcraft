@@ -177,7 +177,7 @@ ExprPrimary: ast::Expr = {
     "false" => ast::Expr::Literal(ast::ExprLiteral::Bool(false)),
     "true" => ast::Expr::Literal(ast::ExprLiteral::Bool(true)),
     string => ast::Expr::Literal(ast::ExprLiteral::String(<>)),
-    number => ast::Expr::Literal(ast::ExprLiteral::Number(<>)),
+    <n:number> => ast::Expr::Literal(ast::ExprLiteral::Number(n.parse::<f64>().unwrap())),
 
     // Variables
     ExprVar,
@@ -254,7 +254,7 @@ extern {
         // Literals.
         identifier => lexer::Token::Identifier(<String>),
         string => lexer::Token::String(<String>),
-        number => lexer::Token::Number(<f64>),
+        number => lexer::Token::Number(<String>),
 
         // Keywords.
         "and" => lexer::Token::And,
