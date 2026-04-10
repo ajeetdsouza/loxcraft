@@ -24,7 +24,6 @@ keywords = [
 license = "MIT"
 name = "loxcraft"
 repository = "https://github.com/ajeetdsouza/loxcraft"
-rust-version = "1.85.0"
 version = "0.1.1"
 
 [badges]

@@ -21,7 +21,7 @@ tasks:
       - fmt-playground
       - fmt-lox-wasm
   fmt-loxcraft:
-    cmd: cargo +nightly fmt --all
+    cmd: cargo fmt --all
     internal: true
   fmt-playground:
     deps:
@@ -30,7 +30,7 @@ tasks:
     dir: playground
     internal: true
   fmt-lox-wasm:
-    cmd: cargo +nightly fmt --all
+    cmd: cargo fmt --all
     dir: playground/rust/lox-wasm
     internal: true
 
@@ -50,7 +50,7 @@ tasks:
     cmd: cargo clippy --all-features --all-targets --workspace -- --deny=warnings
     internal: true
   lint-loxcraft-rustfmt:
-    cmd: cargo +nightly fmt --all -- --check
+    cmd: cargo fmt --all -- --check
     internal: true
   lint-playground:
     deps:
@@ -63,7 +63,7 @@ tasks:
     dir: playground/rust/lox-wasm
     internal: true
   lint-lox-wasm-rustfmt:
-    cmd: cargo +nightly fmt --all -- --check
+    cmd: cargo fmt --all -- --check
     dir: playground/rust/lox-wasm
     internal: true
 
@@ -81,4 +81,4 @@ tasks:
   test-miri:
     cmd: >
       MIRIFLAGS='-Zmiri-disable-isolation'
-      cargo +nightly miri nextest run --features='gc-stress,gc-trace,vm-trace' --no-default-features --workspace {{.CLI_ARGS}}
+      cargo miri nextest run --features='gc-stress,gc-trace,vm-trace' --no-default-features --workspace {{.CLI_ARGS}}

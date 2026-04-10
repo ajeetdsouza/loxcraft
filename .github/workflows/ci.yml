@@ -15,15 +15,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
-      - name: Install Rust (nightly)
-        uses: dtolnay/rust-toolchain@nightly
-        with:
-          components: rustfmt
-          toolchain: nightly
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.85
+        uses: dtolnay/rust-toolchain@master
         with:
-          components: clippy
+          components: rustfmt, clippy
+          toolchain: nightly-2026-04-06
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -35,7 +31,7 @@ jobs:
           cache-dependency-path: playground/pnpm-lock.yaml
           node-version: 18
       - name: Setup Rust cache
-        uses: Swatinem/rust-cache@v1
+        uses: Swatinem/rust-cache@v2
       - name: Install Task
         uses: arduino/setup-task@v2
         with:
@@ -51,11 +47,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@master
         with:
           components: miri
+          toolchain: nightly-2026-04-06
       - name: Setup Rust cache
-        uses: Swatinem/rust-cache@v1
+        uses: Swatinem/rust-cache@v2
       - name: Install cargo-nextest
         uses: taiki-e/install-action@v2
         with:
@@ -70,7 +67,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.85
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-04-06
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@v2
       - name: Install cargo-nextest

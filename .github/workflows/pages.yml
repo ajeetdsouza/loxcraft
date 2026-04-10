@@ -32,7 +32,9 @@ jobs:
           cache-dependency-path: playground/pnpm-lock.yaml
           node-version: 18
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.85
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-04-06
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@v2
         with:

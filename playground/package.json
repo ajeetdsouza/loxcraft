@@ -2,8 +2,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
-    "build:wasm": "cd rust/lox-wasm && rustup run nightly wasm-pack build --release --target=web",
+    "build": "next build && touch out/.gitkeep",
+    "build:wasm": "cd rust/lox-wasm && wasm-pack build --release --target=web",
     "fmt": "prettier --write .",
     "lint": "next lint",
     "start": "next start"
