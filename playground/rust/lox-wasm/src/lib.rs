@@ -12,7 +12,7 @@ use wasm_bindgen::prelude::*;
 pub fn loxRun(source: &str) {
     let writer = Output::new();
     let mut writer = HtmlWriter::new(writer);
-    match VM::default().run(source, &mut writer) {
+    match VM::new(&mut writer).run(source) {
         Ok(()) => postMessage(&Message::ExitSuccess.to_string()),
         Err(errors) => {
             for e in errors.iter() {
