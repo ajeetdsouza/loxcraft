@@ -38,7 +38,7 @@ macro_rules! binary_op_number {
         let a = unsafe { *a_ptr };
         if a.is_number() && b.is_number() {
             unsafe { *a_ptr = Value::from(a.as_number() $op b.as_number()) };
-            Ok(())
+            $self.dispatch($ip)
         } else {
             $self.err(*$ip, TypeError::UnsupportedOperandInfix {
                 op: $op_infix,
@@ -140,100 +140,92 @@ impl<'a> VM<'a> {
         };
         let mut ip = self.frame.ip;
 
-        loop {
-            if cfg!(feature = "vm-trace") {
-                let function = unsafe { (*self.frame.closure).function };
-                let idx = unsafe { ip.offset_from((*function).chunk.ops.as_ptr()) };
-                unsafe { (*function).chunk.debug_op(idx as usize) };
-            }
+        self.dispatch(&mut ip)
+    }
 
-            match Self::read_u8(&mut ip) {
-                op::CONSTANT => self.op_constant(&mut ip),
-                op::NIL => self.op_nil(&mut ip),
-                op::TRUE => self.op_true(&mut ip),
-                op::FALSE => self.op_false(&mut ip),
-                op::POP => self.op_pop(&mut ip),
-                op::GET_LOCAL => self.op_get_local(&mut ip),
-                op::SET_LOCAL => self.op_set_local(&mut ip),
-                op::GET_GLOBAL => self.op_get_global(&mut ip),
-                op::DEFINE_GLOBAL => self.op_define_global(&mut ip),
-                op::SET_GLOBAL => self.op_set_global(&mut ip),
-                op::GET_UPVALUE => self.op_get_upvalue(&mut ip),
-                op::SET_UPVALUE => self.op_set_upvalue(&mut ip),
-                op::GET_PROPERTY => self.op_get_property(&mut ip),
-                op::SET_PROPERTY => self.op_set_property(&mut ip),
-                op::GET_SUPER => self.op_get_super(&mut ip),
-                op::EQUAL => self.op_equal(&mut ip),
-                op::NOT_EQUAL => self.op_not_equal(&mut ip),
-                op::GREATER => self.op_greater(&mut ip),
-                op::GREATER_EQUAL => self.op_greater_equal(&mut ip),
-                op::LESS => self.op_less(&mut ip),
-                op::LESS_EQUAL => self.op_less_equal(&mut ip),
-                op::ADD => self.op_add(&mut ip),
-                op::SUBTRACT => self.op_subtract(&mut ip),
-                op::MULTIPLY => self.op_multiply(&mut ip),
-                op::DIVIDE => self.op_divide(&mut ip),
-                op::NOT => self.op_not(&mut ip),
-                op::NEGATE => self.op_negate(&mut ip),
-                op::PRINT => self.op_print(&mut ip),
-                op::JUMP => self.op_jump(&mut ip),
-                op::JUMP_IF_FALSE => self.op_jump_if_false(&mut ip),
-                op::LOOP => self.op_loop(&mut ip),
-                op::CALL => self.op_call(&mut ip),
-                op::INVOKE => self.op_invoke(&mut ip),
-                op::SUPER_INVOKE => self.op_super_invoke(&mut ip),
-                op::CLOSURE => self.op_closure(&mut ip),
-                op::CLOSE_UPVALUE => self.op_close_upvalue(&mut ip),
-                op::RETURN => self.op_return(&mut ip),
-                op::CLASS => self.op_class(&mut ip),
-                op::INHERIT => self.op_inherit(&mut ip),
-                op::METHOD => self.op_method(&mut ip),
-                _ => util::unreachable(),
-            }?;
-
-            if cfg!(feature = "vm-trace") {
-                eprint!("     ");
-                let mut stack_ptr = self.frame.stack;
-                while stack_ptr < self.stack_top {
-                    eprint!("[ {} ]", unsafe { *stack_ptr });
-                    stack_ptr = unsafe { stack_ptr.add(1) };
-                }
-                eprintln!();
-            }
+    fn dispatch(&mut self, ip: &mut *const u8) -> Result<()> {
+        if cfg!(feature = "vm-trace") {
+            let function = unsafe { (*self.frame.closure).function };
+            let idx = unsafe { ip.offset_from((*function).chunk.ops.as_ptr()) };
+            unsafe { (*function).chunk.debug_op(idx as usize) };
         }
+
+        become match Self::read_u8(ip) {
+            op::CONSTANT => Self::op_constant,
+            op::NIL => Self::op_nil,
+            op::TRUE => Self::op_true,
+            op::FALSE => Self::op_false,
+            op::POP => Self::op_pop,
+            op::GET_LOCAL => Self::op_get_local,
+            op::SET_LOCAL => Self::op_set_local,
+            op::GET_GLOBAL => Self::op_get_global,
+            op::DEFINE_GLOBAL => Self::op_define_global,
+            op::SET_GLOBAL => Self::op_set_global,
+            op::GET_UPVALUE => Self::op_get_upvalue,
+            op::SET_UPVALUE => Self::op_set_upvalue,
+            op::GET_PROPERTY => Self::op_get_property,
+            op::SET_PROPERTY => Self::op_set_property,
+            op::GET_SUPER => Self::op_get_super,
+            op::EQUAL => Self::op_equal,
+            op::NOT_EQUAL => Self::op_not_equal,
+            op::GREATER => Self::op_greater,
+            op::GREATER_EQUAL => Self::op_greater_equal,
+            op::LESS => Self::op_less,
+            op::LESS_EQUAL => Self::op_less_equal,
+            op::ADD => Self::op_add,
+            op::SUBTRACT => Self::op_subtract,
+            op::MULTIPLY => Self::op_multiply,
+            op::DIVIDE => Self::op_divide,
+            op::NOT => Self::op_not,
+            op::NEGATE => Self::op_negate,
+            op::PRINT => Self::op_print,
+            op::JUMP => Self::op_jump,
+            op::JUMP_IF_FALSE => Self::op_jump_if_false,
+            op::LOOP => Self::op_loop,
+            op::CALL => Self::op_call,
+            op::INVOKE => Self::op_invoke,
+            op::SUPER_INVOKE => Self::op_super_invoke,
+            op::CLOSURE => Self::op_closure,
+            op::CLOSE_UPVALUE => Self::op_close_upvalue,
+            op::RETURN => Self::op_return,
+            op::CLASS => Self::op_class,
+            op::INHERIT => Self::op_inherit,
+            op::METHOD => Self::op_method,
+            _ => util::unreachable(),
+        }(self, ip)
     }
 
     fn op_constant(&mut self, ip: &mut *const u8) -> Result<()> {
         let constant = self.read_value(ip);
         self.push(constant);
-        Ok(())
+        become self.dispatch(ip)
     }
 
-    fn op_nil(&mut self, _ip: &mut *const u8) -> Result<()> {
+    fn op_nil(&mut self, ip: &mut *const u8) -> Result<()> {
         self.push(Value::NIL);
-        Ok(())
+        become self.dispatch(ip)
     }
 
-    fn op_true(&mut self, _ip: &mut *const u8) -> Result<()> {
+    fn op_true(&mut self, ip: &mut *const u8) -> Result<()> {
         self.push(Value::TRUE);
-        Ok(())
+        become self.dispatch(ip)
     }
 
-    fn op_false(&mut self, _ip: &mut *const u8) -> Result<()> {
+    fn op_false(&mut self, ip: &mut *const u8) -> Result<()> {
         self.push(Value::FALSE);
-        Ok(())
+        become self.dispatch(ip)
     }
 
-    fn op_pop(&mut self, _ip: &mut *const u8) -> Result<()> {
+    fn op_pop(&mut self, ip: &mut *const u8) -> Result<()> {
         self.pop();
-        Ok(())
+        become self.dispatch(ip)
     }
 
     fn op_get_local(&mut self, ip: &mut *const u8) -> Result<()> {
         let stack_idx = Self::read_u8(ip) as usize;
         let local = unsafe { *self.frame.stack.add(stack_idx) };
         self.push(local);
-        Ok(())
+        become self.dispatch(ip)
     }
 
     fn op_set_local(&mut self, ip: &mut *const u8) -> Result<()> {
@@ -241,7 +233,7 @@ impl<'a> VM<'a> {
         let local = unsafe { self.frame.stack.add(stack_idx) };
         let value = self.peek(0);
         unsafe { *local = *value };
-        Ok(())
+        become self.dispatch(ip)
     }
 
     fn op_get_global(&mut self, ip: &mut *const u8) -> Result<()> {
@@ -249,7 +241,7 @@ impl<'a> VM<'a> {
         match self.globals.get(&name) {
             Some(&value) => {
                 self.push(value);
-                Ok(())
+                become self.dispatch(ip)
             }
             None => {
                 self.err(*ip, NameError::NotDefined { name: unsafe { (*name).value.to_string() } })
@@ -261,7 +253,7 @@ impl<'a> VM<'a> {
         let name = unsafe { self.read_value(ip).as_object().string };
         let value = self.pop();
         self.globals.insert(name, value);
-        Ok(())
+        become self.dispatch(ip)
     }
 
     fn op_set_global(&mut self, ip: &mut *const u8) -> Result<()> {
@@ -270,7 +262,7 @@ impl<'a> VM<'a> {
         match self.globals.entry(name) {
             Entry::Occupied(mut entry) => {
                 entry.insert(value);
-                Ok(())
+                become self.dispatch(ip)
             }
             Entry::Vacant(_) => {
                 self.err(*ip, NameError::NotDefined { name: unsafe { (*name).value.to_string() } })
@@ -283,7 +275,7 @@ impl<'a> VM<'a> {
         let object = *unsafe { (&(*self.frame.closure).upvalues).get_unchecked(upvalue_idx) };
         let value = unsafe { *(*object).location };
         self.push(value);
-        Ok(())
+        become self.dispatch(ip)
     }
 
     fn op_set_upvalue(&mut self, ip: &mut *const u8) -> Result<()> {
@@ -291,7 +283,7 @@ impl<'a> VM<'a> {
         let object = *unsafe { (&(*self.frame.closure).upvalues).get_unchecked(upvalue_idx) };
         let value = unsafe { (*object).location };
         unsafe { *value = *self.peek(0) };
-        Ok(())
+        become self.dispatch(ip)
     }
 
     fn op_get_property(&mut self, ip: &mut *const u8) -> Result<()> {
@@ -334,7 +326,7 @@ impl<'a> VM<'a> {
             },
         }
 
-        Ok(())
+        become self.dispatch(ip)
     }
 
     fn op_set_property(&mut self, ip: &mut *const u8) -> Result<()> {
@@ -357,7 +349,7 @@ impl<'a> VM<'a> {
         };
         let value = unsafe { *self.peek(0) };
         unsafe { (*instance).fields.insert(name, value) };
-        Ok(())
+        become self.dispatch(ip)
     }
 
     fn op_get_super(&mut self, ip: &mut *const u8) -> Result<()> {
@@ -379,21 +371,21 @@ impl<'a> VM<'a> {
                 );
             }
         }
-        Ok(())
+        become self.dispatch(ip)
     }
 
-    fn op_equal(&mut self, _ip: &mut *const u8) -> Result<()> {
+    fn op_equal(&mut self, ip: &mut *const u8) -> Result<()> {
         let b = self.pop();
         let a_ptr = self.peek(0);
         unsafe { *a_ptr = Value::from(*a_ptr == b) };
-        Ok(())
+        become self.dispatch(ip)
     }
 
-    fn op_not_equal(&mut self, _ip: &mut *const u8) -> Result<()> {
+    fn op_not_equal(&mut self, ip: &mut *const u8) -> Result<()> {
         let b = self.pop();
         let a_ptr = self.peek(0);
         unsafe { *a_ptr = Value::from(*a_ptr != b) };
-        Ok(())
+        become self.dispatch(ip)
     }
 
     fn op_greater(&mut self, ip: &mut *const u8) -> Result<()> {
@@ -419,7 +411,7 @@ impl<'a> VM<'a> {
 
         if a.is_number() && b.is_number() {
             unsafe { *a_ptr = Value::from(a.as_number() + b.as_number()) };
-            return Ok(());
+            become self.dispatch(ip);
         }
 
         if a.is_object() && b.is_object() {
@@ -430,7 +422,7 @@ impl<'a> VM<'a> {
                 let result = unsafe { [(*a_obj.string).value, (*b_obj.string).value] }.concat();
                 let result = Value::from(self.alloc(result));
                 unsafe { *a_ptr = result };
-                return Ok(());
+                become self.dispatch(ip);
             }
         }
 
@@ -456,10 +448,10 @@ impl<'a> VM<'a> {
         binary_op_number!(self, ip, /, OpInfix::Divide)
     }
 
-    fn op_not(&mut self, _ip: &mut *const u8) -> Result<()> {
+    fn op_not(&mut self, ip: &mut *const u8) -> Result<()> {
         let a_ptr = self.peek(0);
         unsafe { *a_ptr = !*a_ptr };
-        Ok(())
+        become self.dispatch(ip)
     }
 
     fn op_negate(&mut self, ip: &mut *const u8) -> Result<()> {
@@ -467,7 +459,7 @@ impl<'a> VM<'a> {
         let value = unsafe { *a_ptr };
         if value.is_number() {
             unsafe { *a_ptr = Value::from(-value.as_number()) };
-            Ok(())
+            become self.dispatch(ip)
         } else {
             self.err(
                 *ip,
@@ -482,13 +474,14 @@ impl<'a> VM<'a> {
     fn op_print(&mut self, ip: &mut *const u8) -> Result<()> {
         let value = self.pop();
         writeln!(self.stdout, "{value}")
-            .or_else(|_| self.err(*ip, IoError::WriteError { file: "stdout".to_string() }))
+            .or_else(|_| self.err(*ip, IoError::WriteError { file: "stdout".to_string() }))?;
+        become self.dispatch(ip)
     }
 
     fn op_jump(&mut self, ip: &mut *const u8) -> Result<()> {
         let offset = Self::read_u16(ip) as usize;
         *ip = unsafe { ip.add(offset) };
-        Ok(())
+        become self.dispatch(ip)
     }
 
     fn op_jump_if_false(&mut self, ip: &mut *const u8) -> Result<()> {
@@ -497,19 +490,20 @@ impl<'a> VM<'a> {
         if !(unsafe { *value }.to_bool()) {
             *ip = unsafe { ip.add(offset) };
         }
-        Ok(())
+        become self.dispatch(ip)
     }
 
     fn op_loop(&mut self, ip: &mut *const u8) -> Result<()> {
         let offset = Self::read_u16(ip) as usize;
         *ip = unsafe { ip.sub(offset) };
-        Ok(())
+        become self.dispatch(ip)
     }
 
     fn op_call(&mut self, ip: &mut *const u8) -> Result<()> {
         let arg_count = Self::read_u8(ip) as usize;
         let callee = unsafe { *self.peek(arg_count) };
-        self.call_value(ip, callee, arg_count)
+        self.call_value(ip, callee, arg_count)?;
+        become self.dispatch(ip)
     }
 
     fn op_invoke(&mut self, ip: &mut *const u8) -> Result<()> {
@@ -518,9 +512,15 @@ impl<'a> VM<'a> {
         let instance = unsafe { (*self.peek(arg_count)).as_object().instance };
 
         match unsafe { (*instance).fields.get(&name) } {
-            Some(&value) => self.call_value(ip, value, arg_count),
+            Some(&value) => {
+                self.call_value(ip, value, arg_count)?;
+                become self.dispatch(ip)
+            }
             None => match unsafe { (*(*instance).class).methods.get(&name) } {
-                Some(&method) => self.call_closure(ip, method, arg_count),
+                Some(&method) => {
+                    self.call_closure(ip, method, arg_count)?;
+                    become self.dispatch(ip)
+                }
                 None => self.err(
                     *ip,
                     AttributeError::NoSuchAttribute {
@@ -538,7 +538,10 @@ impl<'a> VM<'a> {
         let super_ = unsafe { self.pop().as_object().class };
 
         match unsafe { (*super_).methods.get(&name) } {
-            Some(&method) => self.call_closure(ip, method, arg_count),
+            Some(&method) => {
+                self.call_closure(ip, method, arg_count)?;
+                become self.dispatch(ip)
+            }
             None => self.err(
                 *ip,
                 AttributeError::NoSuchAttribute {
@@ -570,14 +573,14 @@ impl<'a> VM<'a> {
 
         let closure = Value::from(self.alloc(ObjectClosure::new(function, upvalues)));
         self.push(closure);
-        Ok(())
+        become self.dispatch(ip)
     }
 
-    fn op_close_upvalue(&mut self, _ip: &mut *const u8) -> Result<()> {
+    fn op_close_upvalue(&mut self, ip: &mut *const u8) -> Result<()> {
         let last = self.peek(0);
         self.close_upvalues(last);
         self.pop();
-        Ok(())
+        become self.dispatch(ip)
     }
 
     fn op_return(&mut self, ip: &mut *const u8) -> Result<()> {
@@ -590,7 +593,7 @@ impl<'a> VM<'a> {
                 self.frame = frame;
                 *ip = self.frame.ip;
                 self.push(value);
-                Ok(())
+                become self.dispatch(ip)
             }
             None => Err((Error::Halt, 0..0)),
         }
@@ -600,7 +603,7 @@ impl<'a> VM<'a> {
         let name = unsafe { self.read_value(ip).as_object().string };
         let class = Value::from(self.alloc(ObjectClass::new(name)));
         self.push(class);
-        Ok(())
+        become self.dispatch(ip)
     }
 
     fn op_inherit(&mut self, ip: &mut *const u8) -> Result<()> {
@@ -620,7 +623,7 @@ impl<'a> VM<'a> {
         };
 
         unsafe { (*class).methods.clone_from(&(*super_).methods) };
-        Ok(())
+        become self.dispatch(ip)
     }
 
     fn op_method(&mut self, ip: &mut *const u8) -> Result<()> {
@@ -628,7 +631,7 @@ impl<'a> VM<'a> {
         let method = unsafe { self.pop().as_object().closure };
         let class = unsafe { (*self.peek(0)).as_object().class };
         unsafe { (*class).methods.insert(name, method) };
-        Ok(())
+        become self.dispatch(ip)
     }
 
     fn alloc<T>(&mut self, object: impl GcAlloc<T>) -> T {
@@ -686,7 +689,7 @@ impl<'a> VM<'a> {
                 }
                 ObjectType::Class => self.call_class(ip, unsafe { object.class }, arg_count),
                 ObjectType::Closure => self.call_closure(ip, unsafe { object.closure }, arg_count),
-                ObjectType::Native => self.call_native(*ip, unsafe { object.native }, arg_count),
+                ObjectType::Native => self.call_native(ip, unsafe { object.native }, arg_count),
                 _ => self.err(*ip, TypeError::NotCallable { type_: value.type_().to_string() }),
             }
         } else {
@@ -766,7 +769,7 @@ impl<'a> VM<'a> {
 
     fn call_native(
         &mut self,
-        ip: *const u8,
+        ip: &mut *const u8,
         native: *mut ObjectNative,
         arg_count: usize,
     ) -> Result<()> {
@@ -775,7 +778,7 @@ impl<'a> VM<'a> {
             Native::Clock => {
                 if arg_count != 0 {
                     return self.err(
-                        ip,
+                        *ip,
                         TypeError::ArityMismatch {
                             name: "clock".to_string(),
                             exp_args: 0,

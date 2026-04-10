@@ -1,3 +1,6 @@
+#![allow(incomplete_features)]
+#![feature(explicit_tail_calls)]
+
 pub mod cmd;
 pub mod error;
 pub mod lsp;
