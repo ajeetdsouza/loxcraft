@@ -123,10 +123,7 @@ impl<'a> VM<'a> {
         self.source.push('\n');
 
         let function = Compiler::compile(source, offset, &mut self.gc)?;
-        match self.run_function(function) {
-            Ok(()) | Err((Error::Halt, _)) => Ok(()),
-            Err(e) => Err(vec![e]),
-        }
+        self.run_function(function).map_err(|e| vec![e])
     }
 
     fn run_function(&mut self, function: *mut ObjectFunction) -> Result<()> {
@@ -272,7 +269,7 @@ impl<'a> VM<'a> {
 
     fn op_get_upvalue(&mut self, ip: &mut *const u8) -> Result<()> {
         let upvalue_idx = Self::read_u8(ip) as usize;
-        let object = *unsafe { (&(*self.frame.closure).upvalues).get_unchecked(upvalue_idx) };
+        let object = *unsafe { (*self.frame.closure).upvalues.get_unchecked(upvalue_idx) };
         let value = unsafe { *(*object).location };
         self.push(value);
         become self.dispatch(ip)
@@ -280,7 +277,7 @@ impl<'a> VM<'a> {
 
     fn op_set_upvalue(&mut self, ip: &mut *const u8) -> Result<()> {
         let upvalue_idx = Self::read_u8(ip) as usize;
-        let object = *unsafe { (&(*self.frame.closure).upvalues).get_unchecked(upvalue_idx) };
+        let object = *unsafe { (*self.frame.closure).upvalues.get_unchecked(upvalue_idx) };
         let value = unsafe { (*object).location };
         unsafe { *value = *self.peek(0) };
         become self.dispatch(ip)
@@ -566,7 +563,7 @@ impl<'a> VM<'a> {
                 let location = unsafe { self.frame.stack.add(upvalue_idx) };
                 self.capture_upvalue(location)
             } else {
-                *unsafe { (&(*self.frame.closure).upvalues).get_unchecked(upvalue_idx) }
+                *unsafe { (*self.frame.closure).upvalues.get_unchecked(upvalue_idx) }
             };
             upvalues.push(upvalue);
         }
@@ -595,7 +592,7 @@ impl<'a> VM<'a> {
                 self.push(value);
                 become self.dispatch(ip)
             }
-            None => Err((Error::Halt, 0..0)),
+            None => Ok(()),
         }
     }
 
@@ -811,7 +808,7 @@ impl<'a> VM<'a> {
     fn read_value(&self, ip: &mut *const u8) -> Value {
         let constant_idx = Self::read_u8(ip) as usize;
         let function = unsafe { (*self.frame.closure).function };
-        *unsafe { (&(*function).chunk.constants).get_unchecked(constant_idx) }
+        *unsafe { (*function).chunk.constants.get_unchecked(constant_idx) }
     }
 
     /// Pushes a [`Value`] to the stack.

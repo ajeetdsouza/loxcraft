@@ -1,4 +1,4 @@
-#![allow(incomplete_features)]
+#![allow(dangerous_implicit_autorefs, incomplete_features)]
 #![feature(explicit_tail_calls)]
 
 pub mod cmd;

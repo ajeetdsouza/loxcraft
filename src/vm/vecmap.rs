@@ -71,6 +71,10 @@ impl<K: Eq + Hash, V, S: BuildHasher + Default> VecMap<K, V, S> {
             Self::Map(map) => map.len(),
         }
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 pub enum VecMapIter<'a, K, V> {
