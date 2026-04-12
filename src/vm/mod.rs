@@ -147,49 +147,49 @@ impl<'a> VM<'a> {
             unsafe { (*function).chunk.debug_op(idx as usize) };
         }
 
-        become match Self::read_u8(ip) {
-            op::CONSTANT => Self::op_constant,
-            op::NIL => Self::op_nil,
-            op::TRUE => Self::op_true,
-            op::FALSE => Self::op_false,
-            op::POP => Self::op_pop,
-            op::GET_LOCAL => Self::op_get_local,
-            op::SET_LOCAL => Self::op_set_local,
-            op::GET_GLOBAL => Self::op_get_global,
-            op::DEFINE_GLOBAL => Self::op_define_global,
-            op::SET_GLOBAL => Self::op_set_global,
-            op::GET_UPVALUE => Self::op_get_upvalue,
-            op::SET_UPVALUE => Self::op_set_upvalue,
-            op::GET_PROPERTY => Self::op_get_property,
-            op::SET_PROPERTY => Self::op_set_property,
-            op::GET_SUPER => Self::op_get_super,
-            op::EQUAL => Self::op_equal,
-            op::NOT_EQUAL => Self::op_not_equal,
-            op::GREATER => Self::op_greater,
-            op::GREATER_EQUAL => Self::op_greater_equal,
-            op::LESS => Self::op_less,
-            op::LESS_EQUAL => Self::op_less_equal,
-            op::ADD => Self::op_add,
-            op::SUBTRACT => Self::op_subtract,
-            op::MULTIPLY => Self::op_multiply,
-            op::DIVIDE => Self::op_divide,
-            op::NOT => Self::op_not,
-            op::NEGATE => Self::op_negate,
-            op::PRINT => Self::op_print,
-            op::JUMP => Self::op_jump,
-            op::JUMP_IF_FALSE => Self::op_jump_if_false,
-            op::LOOP => Self::op_loop,
-            op::CALL => Self::op_call,
-            op::INVOKE => Self::op_invoke,
-            op::SUPER_INVOKE => Self::op_super_invoke,
-            op::CLOSURE => Self::op_closure,
-            op::CLOSE_UPVALUE => Self::op_close_upvalue,
-            op::RETURN => Self::op_return,
-            op::CLASS => Self::op_class,
-            op::INHERIT => Self::op_inherit,
-            op::METHOD => Self::op_method,
+        match Self::read_u8(ip) {
+            op::CONSTANT => become Self::op_constant(self, ip),
+            op::NIL => become Self::op_nil(self, ip),
+            op::TRUE => become Self::op_true(self, ip),
+            op::FALSE => become Self::op_false(self, ip),
+            op::POP => become Self::op_pop(self, ip),
+            op::GET_LOCAL => become Self::op_get_local(self, ip),
+            op::SET_LOCAL => become Self::op_set_local(self, ip),
+            op::GET_GLOBAL => become Self::op_get_global(self, ip),
+            op::DEFINE_GLOBAL => become Self::op_define_global(self, ip),
+            op::SET_GLOBAL => become Self::op_set_global(self, ip),
+            op::GET_UPVALUE => become Self::op_get_upvalue(self, ip),
+            op::SET_UPVALUE => become Self::op_set_upvalue(self, ip),
+            op::GET_PROPERTY => become Self::op_get_property(self, ip),
+            op::SET_PROPERTY => become Self::op_set_property(self, ip),
+            op::GET_SUPER => become Self::op_get_super(self, ip),
+            op::EQUAL => become Self::op_equal(self, ip),
+            op::NOT_EQUAL => become Self::op_not_equal(self, ip),
+            op::GREATER => become Self::op_greater(self, ip),
+            op::GREATER_EQUAL => become Self::op_greater_equal(self, ip),
+            op::LESS => become Self::op_less(self, ip),
+            op::LESS_EQUAL => become Self::op_less_equal(self, ip),
+            op::ADD => become Self::op_add(self, ip),
+            op::SUBTRACT => become Self::op_subtract(self, ip),
+            op::MULTIPLY => become Self::op_multiply(self, ip),
+            op::DIVIDE => become Self::op_divide(self, ip),
+            op::NOT => become Self::op_not(self, ip),
+            op::NEGATE => become Self::op_negate(self, ip),
+            op::PRINT => become Self::op_print(self, ip),
+            op::JUMP => become Self::op_jump(self, ip),
+            op::JUMP_IF_FALSE => become Self::op_jump_if_false(self, ip),
+            op::LOOP => become Self::op_loop(self, ip),
+            op::CALL => become Self::op_call(self, ip),
+            op::INVOKE => become Self::op_invoke(self, ip),
+            op::SUPER_INVOKE => become Self::op_super_invoke(self, ip),
+            op::CLOSURE => become Self::op_closure(self, ip),
+            op::CLOSE_UPVALUE => become Self::op_close_upvalue(self, ip),
+            op::RETURN => become Self::op_return(self, ip),
+            op::CLASS => become Self::op_class(self, ip),
+            op::INHERIT => become Self::op_inherit(self, ip),
+            op::METHOD => become Self::op_method(self, ip),
             _ => util::unreachable(),
-        }(self, ip)
+        }
     }
 
     fn op_constant(&mut self, ip: &mut *const u8) -> Result<()> {
@@ -592,7 +592,10 @@ impl<'a> VM<'a> {
                 self.push(value);
                 become self.dispatch(ip)
             }
-            None => Ok(()),
+            None => {
+                unlikely();
+                Ok(())
+            }
         }
     }
 
@@ -640,6 +643,7 @@ impl<'a> VM<'a> {
         self.gc.alloc(object)
     }
 
+    #[cold]
     fn gc(&mut self) {
         if cfg!(feature = "gc-trace") {
             eprintln!("-- gc begin");
@@ -854,6 +858,7 @@ impl<'a> VM<'a> {
     /// Wraps an [`Error`] in a span using the offset of the last executed
     /// instruction.
     #[cold]
+    #[inline(never)]
     fn err(&self, ip: *const u8, err: impl Into<Error>) -> Result<()> {
         let function = unsafe { (*self.frame.closure).function };
         let idx = unsafe { ip.offset_from((*function).chunk.ops.as_ptr()) } as usize;
@@ -873,3 +878,7 @@ pub struct CallFrame {
     ip: *const u8,
     stack: *mut Value,
 }
+
+#[cold]
+#[inline(always)]
+fn unlikely() {}
