@@ -38,9 +38,9 @@ macro_rules! binary_op_number {
         let a = unsafe { *a_ptr };
         if a.is_number() && b.is_number() {
             unsafe { *a_ptr = Value::from(a.as_number() $op b.as_number()) };
-            $self.dispatch($ip)
+            become $self.dispatch($ip)
         } else {
-            $self.err(*$ip, TypeError::UnsupportedOperandInfix {
+            $self.err($ip, TypeError::UnsupportedOperandInfix {
                 op: $op_infix,
                 lt_type: a.type_().to_string(),
                 rt_type: b.type_().to_string(),
@@ -135,19 +135,17 @@ impl<'a> VM<'a> {
             ip: unsafe { (*function).chunk.ops.as_ptr() },
             stack: self.stack_top,
         };
-        let mut ip = self.frame.ip;
-
-        self.dispatch(&mut ip)
+        self.dispatch(self.frame.ip)
     }
 
-    fn dispatch(&mut self, ip: &mut *const u8) -> Result<()> {
+    fn dispatch(&mut self, mut ip: *const u8) -> Result<()> {
         if cfg!(feature = "vm-trace") {
             let function = unsafe { (*self.frame.closure).function };
             let idx = unsafe { ip.offset_from((*function).chunk.ops.as_ptr()) };
             unsafe { (*function).chunk.debug_op(idx as usize) };
         }
 
-        match Self::read_u8(ip) {
+        match Self::read_u8(&mut ip) {
             op::CONSTANT => become Self::op_constant(self, ip),
             op::NIL => become Self::op_nil(self, ip),
             op::TRUE => become Self::op_true(self, ip),
@@ -192,69 +190,69 @@ impl<'a> VM<'a> {
         }
     }
 
-    fn op_constant(&mut self, ip: &mut *const u8) -> Result<()> {
-        let constant = self.read_value(ip);
+    fn op_constant(&mut self, mut ip: *const u8) -> Result<()> {
+        let constant = self.read_value(&mut ip);
         self.push(constant);
         become self.dispatch(ip)
     }
 
-    fn op_nil(&mut self, ip: &mut *const u8) -> Result<()> {
+    fn op_nil(&mut self, mut ip: *const u8) -> Result<()> {
         self.push(Value::NIL);
         become self.dispatch(ip)
     }
 
-    fn op_true(&mut self, ip: &mut *const u8) -> Result<()> {
+    fn op_true(&mut self, mut ip: *const u8) -> Result<()> {
         self.push(Value::TRUE);
         become self.dispatch(ip)
     }
 
-    fn op_false(&mut self, ip: &mut *const u8) -> Result<()> {
+    fn op_false(&mut self, mut ip: *const u8) -> Result<()> {
         self.push(Value::FALSE);
         become self.dispatch(ip)
     }
 
-    fn op_pop(&mut self, ip: &mut *const u8) -> Result<()> {
+    fn op_pop(&mut self, mut ip: *const u8) -> Result<()> {
         self.pop();
         become self.dispatch(ip)
     }
 
-    fn op_get_local(&mut self, ip: &mut *const u8) -> Result<()> {
-        let stack_idx = Self::read_u8(ip) as usize;
+    fn op_get_local(&mut self, mut ip: *const u8) -> Result<()> {
+        let stack_idx = Self::read_u8(&mut ip) as usize;
         let local = unsafe { *self.frame.stack.add(stack_idx) };
         self.push(local);
         become self.dispatch(ip)
     }
 
-    fn op_set_local(&mut self, ip: &mut *const u8) -> Result<()> {
-        let stack_idx = Self::read_u8(ip) as usize;
+    fn op_set_local(&mut self, mut ip: *const u8) -> Result<()> {
+        let stack_idx = Self::read_u8(&mut ip) as usize;
         let local = unsafe { self.frame.stack.add(stack_idx) };
         let value = self.peek(0);
         unsafe { *local = *value };
         become self.dispatch(ip)
     }
 
-    fn op_get_global(&mut self, ip: &mut *const u8) -> Result<()> {
-        let name = unsafe { self.read_value(ip).as_object().string };
+    fn op_get_global(&mut self, mut ip: *const u8) -> Result<()> {
+        let name = unsafe { self.read_value(&mut ip).as_object().string };
         match self.globals.get(&name) {
             Some(&value) => {
                 self.push(value);
                 become self.dispatch(ip)
             }
             None => {
-                self.err(*ip, NameError::NotDefined { name: unsafe { (*name).value.to_string() } })
+                self.err(ip, NameError::NotDefined { name: unsafe { (*name).value.to_string() } })
             }
         }
     }
 
-    fn op_define_global(&mut self, ip: &mut *const u8) -> Result<()> {
-        let name = unsafe { self.read_value(ip).as_object().string };
+    fn op_define_global(&mut self, mut ip: *const u8) -> Result<()> {
+        let name = unsafe { self.read_value(&mut ip).as_object().string };
         let value = self.pop();
         self.globals.insert(name, value);
         become self.dispatch(ip)
     }
 
-    fn op_set_global(&mut self, ip: &mut *const u8) -> Result<()> {
-        let name = unsafe { self.read_value(ip).as_object().string };
+    fn op_set_global(&mut self, mut ip: *const u8) -> Result<()> {
+        let name = unsafe { self.read_value(&mut ip).as_object().string };
         let value = unsafe { *self.peek(0) };
         match self.globals.entry(name) {
             Entry::Occupied(mut entry) => {
@@ -262,29 +260,29 @@ impl<'a> VM<'a> {
                 become self.dispatch(ip)
             }
             Entry::Vacant(_) => {
-                self.err(*ip, NameError::NotDefined { name: unsafe { (*name).value.to_string() } })
+                self.err(ip, NameError::NotDefined { name: unsafe { (*name).value.to_string() } })
             }
         }
     }
 
-    fn op_get_upvalue(&mut self, ip: &mut *const u8) -> Result<()> {
-        let upvalue_idx = Self::read_u8(ip) as usize;
+    fn op_get_upvalue(&mut self, mut ip: *const u8) -> Result<()> {
+        let upvalue_idx = Self::read_u8(&mut ip) as usize;
         let object = *unsafe { (*self.frame.closure).upvalues.get_unchecked(upvalue_idx) };
         let value = unsafe { *(*object).location };
         self.push(value);
         become self.dispatch(ip)
     }
 
-    fn op_set_upvalue(&mut self, ip: &mut *const u8) -> Result<()> {
-        let upvalue_idx = Self::read_u8(ip) as usize;
+    fn op_set_upvalue(&mut self, mut ip: *const u8) -> Result<()> {
+        let upvalue_idx = Self::read_u8(&mut ip) as usize;
         let object = *unsafe { (*self.frame.closure).upvalues.get_unchecked(upvalue_idx) };
         let value = unsafe { (*object).location };
         unsafe { *value = *self.peek(0) };
         become self.dispatch(ip)
     }
 
-    fn op_get_property(&mut self, ip: &mut *const u8) -> Result<()> {
-        let name = unsafe { self.read_value(ip).as_object().string };
+    fn op_get_property(&mut self, mut ip: *const u8) -> Result<()> {
+        let name = unsafe { self.read_value(&mut ip).as_object().string };
         let instance = {
             let value = unsafe { *self.peek(0) };
             let object = value.as_object();
@@ -293,7 +291,7 @@ impl<'a> VM<'a> {
                 unsafe { object.instance }
             } else {
                 return self.err(
-                    *ip,
+                    ip,
                     AttributeError::NoSuchAttribute {
                         type_: value.type_().to_string(),
                         name: unsafe { (*name).value.to_string() },
@@ -313,7 +311,7 @@ impl<'a> VM<'a> {
                 }
                 None => {
                     return self.err(
-                        *ip,
+                        ip,
                         AttributeError::NoSuchAttribute {
                             type_: unsafe { (*(*(*instance).class).name).value.to_string() },
                             name: unsafe { (*name).value.to_string() },
@@ -326,8 +324,8 @@ impl<'a> VM<'a> {
         become self.dispatch(ip)
     }
 
-    fn op_set_property(&mut self, ip: &mut *const u8) -> Result<()> {
-        let name = unsafe { self.read_value(ip).as_object().string };
+    fn op_set_property(&mut self, mut ip: *const u8) -> Result<()> {
+        let name = unsafe { self.read_value(&mut ip).as_object().string };
         let instance = {
             let value = self.pop();
             let object = value.as_object();
@@ -336,7 +334,7 @@ impl<'a> VM<'a> {
                 unsafe { object.instance }
             } else {
                 return self.err(
-                    *ip,
+                    ip,
                     AttributeError::NoSuchAttribute {
                         type_: value.type_().to_string(),
                         name: unsafe { (*name).value.to_string() },
@@ -349,8 +347,8 @@ impl<'a> VM<'a> {
         become self.dispatch(ip)
     }
 
-    fn op_get_super(&mut self, ip: &mut *const u8) -> Result<()> {
-        let name = unsafe { self.read_value(ip).as_object().string };
+    fn op_get_super(&mut self, mut ip: *const u8) -> Result<()> {
+        let name = unsafe { self.read_value(&mut ip).as_object().string };
         let super_ = unsafe { self.pop().as_object().class };
         match unsafe { (*super_).methods.get(&name) } {
             Some(&method) => {
@@ -360,7 +358,7 @@ impl<'a> VM<'a> {
             }
             None => {
                 return self.err(
-                    *ip,
+                    ip,
                     AttributeError::NoSuchAttribute {
                         type_: unsafe { (*(*super_).name).value.to_string() },
                         name: unsafe { (*name).value.to_string() },
@@ -371,37 +369,37 @@ impl<'a> VM<'a> {
         become self.dispatch(ip)
     }
 
-    fn op_equal(&mut self, ip: &mut *const u8) -> Result<()> {
+    fn op_equal(&mut self, mut ip: *const u8) -> Result<()> {
         let b = self.pop();
         let a_ptr = self.peek(0);
         unsafe { *a_ptr = Value::from(*a_ptr == b) };
         become self.dispatch(ip)
     }
 
-    fn op_not_equal(&mut self, ip: &mut *const u8) -> Result<()> {
+    fn op_not_equal(&mut self, mut ip: *const u8) -> Result<()> {
         let b = self.pop();
         let a_ptr = self.peek(0);
         unsafe { *a_ptr = Value::from(*a_ptr != b) };
         become self.dispatch(ip)
     }
 
-    fn op_greater(&mut self, ip: &mut *const u8) -> Result<()> {
+    fn op_greater(&mut self, mut ip: *const u8) -> Result<()> {
         binary_op_number!(self, ip, >, OpInfix::Greater)
     }
 
-    fn op_greater_equal(&mut self, ip: &mut *const u8) -> Result<()> {
+    fn op_greater_equal(&mut self, mut ip: *const u8) -> Result<()> {
         binary_op_number!(self, ip, >=, OpInfix::GreaterEqual)
     }
 
-    fn op_less(&mut self, ip: &mut *const u8) -> Result<()> {
+    fn op_less(&mut self, mut ip: *const u8) -> Result<()> {
         binary_op_number!(self, ip, <, OpInfix::Less)
     }
 
-    fn op_less_equal(&mut self, ip: &mut *const u8) -> Result<()> {
+    fn op_less_equal(&mut self, mut ip: *const u8) -> Result<()> {
         binary_op_number!(self, ip, <=, OpInfix::LessEqual)
     }
 
-    fn op_add(&mut self, ip: &mut *const u8) -> Result<()> {
+    fn op_add(&mut self, mut ip: *const u8) -> Result<()> {
         let b = self.pop();
         let a_ptr = self.peek(0);
         let a = unsafe { *a_ptr };
@@ -424,7 +422,7 @@ impl<'a> VM<'a> {
         }
 
         self.err(
-            *ip,
+            ip,
             TypeError::UnsupportedOperandInfix {
                 op: OpInfix::Add,
                 lt_type: a.type_().to_string(),
@@ -433,25 +431,25 @@ impl<'a> VM<'a> {
         )
     }
 
-    fn op_subtract(&mut self, ip: &mut *const u8) -> Result<()> {
+    fn op_subtract(&mut self, mut ip: *const u8) -> Result<()> {
         binary_op_number!(self, ip, -, OpInfix::Subtract)
     }
 
-    fn op_multiply(&mut self, ip: &mut *const u8) -> Result<()> {
+    fn op_multiply(&mut self, mut ip: *const u8) -> Result<()> {
         binary_op_number!(self, ip, *, OpInfix::Multiply)
     }
 
-    fn op_divide(&mut self, ip: &mut *const u8) -> Result<()> {
+    fn op_divide(&mut self, mut ip: *const u8) -> Result<()> {
         binary_op_number!(self, ip, /, OpInfix::Divide)
     }
 
-    fn op_not(&mut self, ip: &mut *const u8) -> Result<()> {
+    fn op_not(&mut self, mut ip: *const u8) -> Result<()> {
         let a_ptr = self.peek(0);
         unsafe { *a_ptr = !*a_ptr };
         become self.dispatch(ip)
     }
 
-    fn op_negate(&mut self, ip: &mut *const u8) -> Result<()> {
+    fn op_negate(&mut self, mut ip: *const u8) -> Result<()> {
         let a_ptr = self.peek(0);
         let value = unsafe { *a_ptr };
         if value.is_number() {
@@ -459,7 +457,7 @@ impl<'a> VM<'a> {
             become self.dispatch(ip)
         } else {
             self.err(
-                *ip,
+                ip,
                 TypeError::UnsupportedOperandPrefix {
                     op: OpPrefix::Negate,
                     rt_type: value.type_().to_string(),
@@ -468,58 +466,58 @@ impl<'a> VM<'a> {
         }
     }
 
-    fn op_print(&mut self, ip: &mut *const u8) -> Result<()> {
+    fn op_print(&mut self, mut ip: *const u8) -> Result<()> {
         let value = self.pop();
         writeln!(self.stdout, "{value}")
-            .or_else(|_| self.err(*ip, IoError::WriteError { file: "stdout".to_string() }))?;
+            .or_else(|_| self.err(ip, IoError::WriteError { file: "stdout".to_string() }))?;
         become self.dispatch(ip)
     }
 
-    fn op_jump(&mut self, ip: &mut *const u8) -> Result<()> {
-        let offset = Self::read_u16(ip) as usize;
-        *ip = unsafe { ip.add(offset) };
+    fn op_jump(&mut self, mut ip: *const u8) -> Result<()> {
+        let offset = Self::read_u16(&mut ip) as usize;
+        ip = unsafe { ip.add(offset) };
         become self.dispatch(ip)
     }
 
-    fn op_jump_if_false(&mut self, ip: &mut *const u8) -> Result<()> {
-        let offset = Self::read_u16(ip) as usize;
+    fn op_jump_if_false(&mut self, mut ip: *const u8) -> Result<()> {
+        let offset = Self::read_u16(&mut ip) as usize;
         let value = self.peek(0);
         if !(unsafe { *value }.to_bool()) {
-            *ip = unsafe { ip.add(offset) };
+            ip = unsafe { ip.add(offset) };
         }
         become self.dispatch(ip)
     }
 
-    fn op_loop(&mut self, ip: &mut *const u8) -> Result<()> {
-        let offset = Self::read_u16(ip) as usize;
-        *ip = unsafe { ip.sub(offset) };
+    fn op_loop(&mut self, mut ip: *const u8) -> Result<()> {
+        let offset = Self::read_u16(&mut ip) as usize;
+        ip = unsafe { ip.sub(offset) };
         become self.dispatch(ip)
     }
 
-    fn op_call(&mut self, ip: &mut *const u8) -> Result<()> {
-        let arg_count = Self::read_u8(ip) as usize;
+    fn op_call(&mut self, mut ip: *const u8) -> Result<()> {
+        let arg_count = Self::read_u8(&mut ip) as usize;
         let callee = unsafe { *self.peek(arg_count) };
-        self.call_value(ip, callee, arg_count)?;
+        self.call_value(&mut ip, callee, arg_count)?;
         become self.dispatch(ip)
     }
 
-    fn op_invoke(&mut self, ip: &mut *const u8) -> Result<()> {
-        let name = unsafe { self.read_value(ip).as_object().string };
-        let arg_count = Self::read_u8(ip) as usize;
+    fn op_invoke(&mut self, mut ip: *const u8) -> Result<()> {
+        let name = unsafe { self.read_value(&mut ip).as_object().string };
+        let arg_count = Self::read_u8(&mut ip) as usize;
         let instance = unsafe { (*self.peek(arg_count)).as_object().instance };
 
         match unsafe { (*instance).fields.get(&name) } {
             Some(&value) => {
-                self.call_value(ip, value, arg_count)?;
+                self.call_value(&mut ip, value, arg_count)?;
                 become self.dispatch(ip)
             }
             None => match unsafe { (*(*instance).class).methods.get(&name) } {
                 Some(&method) => {
-                    self.call_closure(ip, method, arg_count)?;
+                    self.call_closure(&mut ip, method, arg_count)?;
                     become self.dispatch(ip)
                 }
                 None => self.err(
-                    *ip,
+                    ip,
                     AttributeError::NoSuchAttribute {
                         type_: unsafe { (*(*(*instance).class).name).value.to_string() },
                         name: unsafe { (*name).value.to_string() },
@@ -529,18 +527,18 @@ impl<'a> VM<'a> {
         }
     }
 
-    fn op_super_invoke(&mut self, ip: &mut *const u8) -> Result<()> {
-        let name = unsafe { self.read_value(ip).as_object().string };
-        let arg_count = Self::read_u8(ip) as usize;
+    fn op_super_invoke(&mut self, mut ip: *const u8) -> Result<()> {
+        let name = unsafe { self.read_value(&mut ip).as_object().string };
+        let arg_count = Self::read_u8(&mut ip) as usize;
         let super_ = unsafe { self.pop().as_object().class };
 
         match unsafe { (*super_).methods.get(&name) } {
             Some(&method) => {
-                self.call_closure(ip, method, arg_count)?;
+                self.call_closure(&mut ip, method, arg_count)?;
                 become self.dispatch(ip)
             }
             None => self.err(
-                *ip,
+                ip,
                 AttributeError::NoSuchAttribute {
                     type_: unsafe { (*(*super_).name).value.to_string() },
                     name: unsafe { (*name).value.to_string() },
@@ -549,15 +547,15 @@ impl<'a> VM<'a> {
         }
     }
 
-    fn op_closure(&mut self, ip: &mut *const u8) -> Result<()> {
-        let function = unsafe { self.read_value(ip).as_object().function };
+    fn op_closure(&mut self, mut ip: *const u8) -> Result<()> {
+        let function = unsafe { self.read_value(&mut ip).as_object().function };
 
         let upvalue_count = unsafe { (*function).upvalue_count } as usize;
         let mut upvalues = Vec::with_capacity(upvalue_count);
 
         for _ in 0..upvalue_count {
-            let is_local = Self::read_u8(ip);
-            let upvalue_idx = Self::read_u8(ip) as usize;
+            let is_local = Self::read_u8(&mut ip);
+            let upvalue_idx = Self::read_u8(&mut ip) as usize;
 
             let upvalue = if is_local != 0 {
                 let location = unsafe { self.frame.stack.add(upvalue_idx) };
@@ -573,14 +571,14 @@ impl<'a> VM<'a> {
         become self.dispatch(ip)
     }
 
-    fn op_close_upvalue(&mut self, ip: &mut *const u8) -> Result<()> {
+    fn op_close_upvalue(&mut self, mut ip: *const u8) -> Result<()> {
         let last = self.peek(0);
         self.close_upvalues(last);
         self.pop();
         become self.dispatch(ip)
     }
 
-    fn op_return(&mut self, ip: &mut *const u8) -> Result<()> {
+    fn op_return(&mut self, mut ip: *const u8) -> Result<()> {
         let value = self.pop();
         self.close_upvalues(self.frame.stack);
         self.stack_top = self.frame.stack;
@@ -588,7 +586,7 @@ impl<'a> VM<'a> {
         match self.frames.pop() {
             Some(frame) => {
                 self.frame = frame;
-                *ip = self.frame.ip;
+                ip = self.frame.ip;
                 self.push(value);
                 become self.dispatch(ip)
             }
@@ -599,14 +597,14 @@ impl<'a> VM<'a> {
         }
     }
 
-    fn op_class(&mut self, ip: &mut *const u8) -> Result<()> {
-        let name = unsafe { self.read_value(ip).as_object().string };
+    fn op_class(&mut self, mut ip: *const u8) -> Result<()> {
+        let name = unsafe { self.read_value(&mut ip).as_object().string };
         let class = Value::from(self.alloc(ObjectClass::new(name)));
         self.push(class);
         become self.dispatch(ip)
     }
 
-    fn op_inherit(&mut self, ip: &mut *const u8) -> Result<()> {
+    fn op_inherit(&mut self, mut ip: *const u8) -> Result<()> {
         let class = unsafe { self.pop().as_object().class };
         let super_ = {
             let value = unsafe { *self.peek(0) };
@@ -616,7 +614,7 @@ impl<'a> VM<'a> {
                 unsafe { object.class }
             } else {
                 return self.err(
-                    *ip,
+                    ip,
                     TypeError::SuperclassInvalidType { type_: value.type_().to_string() },
                 );
             }
@@ -626,8 +624,8 @@ impl<'a> VM<'a> {
         become self.dispatch(ip)
     }
 
-    fn op_method(&mut self, ip: &mut *const u8) -> Result<()> {
-        let name = unsafe { self.read_value(ip).as_object().string };
+    fn op_method(&mut self, mut ip: *const u8) -> Result<()> {
+        let name = unsafe { self.read_value(&mut ip).as_object().string };
         let method = unsafe { self.pop().as_object().closure };
         let class = unsafe { (*self.peek(0)).as_object().class };
         unsafe { (*class).methods.insert(name, method) };
@@ -690,7 +688,7 @@ impl<'a> VM<'a> {
                 }
                 ObjectType::Class => self.call_class(ip, unsafe { object.class }, arg_count),
                 ObjectType::Closure => self.call_closure(ip, unsafe { object.closure }, arg_count),
-                ObjectType::Native => self.call_native(ip, unsafe { object.native }, arg_count),
+                ObjectType::Native => self.call_native(*ip, unsafe { object.native }, arg_count),
                 _ => self.err(*ip, TypeError::NotCallable { type_: value.type_().to_string() }),
             }
         } else {
@@ -770,7 +768,7 @@ impl<'a> VM<'a> {
 
     fn call_native(
         &mut self,
-        ip: &mut *const u8,
+        ip: *const u8,
         native: *mut ObjectNative,
         arg_count: usize,
     ) -> Result<()> {
@@ -779,7 +777,7 @@ impl<'a> VM<'a> {
             Native::Clock => {
                 if arg_count != 0 {
                     return self.err(
-                        *ip,
+                        ip,
                         TypeError::ArityMismatch {
                             name: "clock".to_string(),
                             exp_args: 0,
